@@ -44,8 +44,8 @@ while ($row = $stmt->fetch(PDO::FETCH_ASSOC)) {
     }
 }
 
-// Sort tags by count (descending), then alphabetically
-arsort($allTags);
+// Sort tags alphabetically (size will still be based on count)
+ksort($allTags);
 ?>
 <!DOCTYPE html>
 <html lang="en">
