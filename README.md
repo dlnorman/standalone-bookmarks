@@ -24,7 +24,7 @@ A lightweight, self-hosted bookmarks manager built with PHP and SQLite. Perfect 
 
 ### 1. Clone or download the files
 
-Upload the files to your server at the desired location (e.g., `/var/www/html/links`).
+Upload the files to your server at the desired location (e.g., `/var/www/html/bookmarks`).
 
 ### 2. Configure the application
 
@@ -38,8 +38,8 @@ nano config.php
 
 Important settings to change:
 - `db_path`: Set to production database path (e.g., `__DIR__ . '/bookmarks.db'`)
-- `site_url`: Your full site URL (e.g., `https://yourdomain.com/links`)
-- `base_path`: URL path where app is installed (e.g., `/links`)
+- `site_url`: Your full site URL (e.g., `https://yourdomain.com/bookmarks`)
+- `base_path`: URL path where app is installed (e.g., `/bookmarks`)
 - `username`: Your login username (default: `admin`)
 - `password`: **IMPORTANT** - Change this to a strong password
 - `session_timeout`: How long to stay logged in (default: 30 days)
@@ -90,7 +90,7 @@ Create or update `.htaccess`:
 Add to your server block:
 
 ```nginx
-location /links {
+location /bookmarks {
     index index.php;
 
     # Protect config and database
@@ -112,7 +112,7 @@ location /links {
 
 ### First Login
 
-Navigate to your installation URL (e.g., `https://yourdomain.com/links`). You'll be redirected to the login page.
+Navigate to your installation URL (e.g., `https://yourdomain.com/bookmarks`). You'll be redirected to the login page.
 
 Use the credentials you configured in `config.php`:
 - Username: (default: `admin`)
@@ -181,7 +181,7 @@ The export includes:
 
 Access your bookmarks RSS feed at:
 ```
-https://yourdomain.com/links/rss.php
+https://yourdomain.com/bookmarks/rss.php
 ```
 
 Add this URL to your RSS reader. The feed includes your most recent bookmarks (configurable in `config.php`).
@@ -193,7 +193,7 @@ Add this URL to your RSS reader. The feed includes your most recent bookmarks (c
 You can display recent bookmarks on your Hugo website using the JSON API:
 
 ```go
-{{ $url := "https://yourdomain.com/links/recent.php?limit=5" }}
+{{ $url := "https://yourdomain.com/bookmarks/recent.php?limit=5" }}
 {{ with try (resources.GetRemote $url) }}
   {{ with .Err }}
     <p>Error fetching bookmarks: {{ . }}</p>
@@ -297,7 +297,7 @@ Then navigate to `http://localhost:8000`.
 ## File Structure
 
 ```
-/links/
+/bookmarks/
 ├── config-example.php    # Example configuration (copy to config.php)
 ├── config.php           # Your configuration (gitignored)
 ├── auth.php            # Authentication helper functions

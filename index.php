@@ -525,7 +525,16 @@ $totalPages = ceil($total / $limit);
                 <div class="meta">
                     <div>
                         <?php if (!empty($bookmark['tags'])): ?>
-                            <span class="tags">Tags: <?= htmlspecialchars($bookmark['tags']) ?></span>
+                            <span class="tags">Tags:
+                            <?php
+                                $tagList = array_map('trim', explode(',', $bookmark['tags']));
+                                $tagLinks = [];
+                                foreach ($tagList as $tagItem) {
+                                    $tagLinks[] = '<a href="?tag=' . urlencode($tagItem) . '" style="color: #3498db; text-decoration: none;">' . htmlspecialchars($tagItem) . '</a>';
+                                }
+                                echo implode(', ', $tagLinks);
+                            ?>
+                            </span>
                         <?php endif; ?>
                         <span> &middot; <?= date($config['date_format'], strtotime($bookmark['created_at'])) ?></span>
                         <?php if (!empty($bookmark['archive_url'])): ?>

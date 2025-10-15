@@ -12,8 +12,8 @@ return [
 
     // Application settings
     'site_title' => 'My Bookmarks',
-    'site_url' => 'http://localhost/links',  // Change to your server URL (e.g., https://yourdomain.com/links)
-    'base_path' => '/links',  // URL path where app is installed
+    'site_url' => 'http://localhost/bookmarks',  // Change to your server URL (e.g., https://yourdomain.com/bookmarks)
+    'base_path' => '/bookmarks',  // URL path where app is installed
 
     // RSS feed settings
     'rss_title' => 'My Bookmarks Feed',

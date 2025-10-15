@@ -3,7 +3,7 @@
  * Recent bookmarks widget - embeddable in Hugo site
  *
  * Usage in Hugo (modern syntax):
- * {{ $url := "https://yourdomain.com/links/recent.php?limit=5" }}
+ * {{ $url := "https://yourdomain.com/bookmarks/recent.php?limit=5" }}
  * {{ $data := (resources.GetRemote $url).Content | transform.Unmarshal }}
  * {{ range $data }}
  *   <div>
