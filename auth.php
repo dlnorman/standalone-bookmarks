@@ -5,6 +5,13 @@
 
 // Start session if not already started
 if (session_status() === PHP_SESSION_NONE) {
+    // Load config to get session timeout
+    $config = require __DIR__ . '/config.php';
+
+    // Set session cookie lifetime to match session_timeout
+    ini_set('session.cookie_lifetime', $config['session_timeout']);
+    ini_set('session.gc_maxlifetime', $config['session_timeout']);
+
     session_start();
 }
 
