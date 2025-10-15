@@ -292,6 +292,50 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['submit'])) {
             color: #7f8c8d;
             margin-top: 5px;
         }
+
+        .tag-autocomplete {
+            position: relative;
+        }
+
+        .tag-suggestions {
+            position: absolute;
+            top: 100%;
+            left: 0;
+            right: 0;
+            background: white;
+            border: 1px solid #ddd;
+            border-top: none;
+            border-radius: 0 0 4px 4px;
+            max-height: 200px;
+            overflow-y: auto;
+            z-index: 1000;
+            display: none;
+            box-shadow: 0 4px 6px rgba(0,0,0,0.1);
+        }
+
+        .tag-suggestions.active {
+            display: block;
+        }
+
+        .tag-suggestion {
+            padding: 8px;
+            cursor: pointer;
+            border-bottom: 1px solid #f0f0f0;
+        }
+
+        .tag-suggestion:last-child {
+            border-bottom: none;
+        }
+
+        .tag-suggestion:hover,
+        .tag-suggestion.selected {
+            background: #e8f4f8;
+        }
+
+        .tag-suggestion-match {
+            font-weight: bold;
+            color: #3498db;
+        }
     </style>
 </head>
 <body>
@@ -335,9 +379,10 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['submit'])) {
                 <textarea id="description" name="description"><?= htmlspecialchars($description) ?></textarea>
             </div>
 
-            <div class="form-group">
+            <div class="form-group tag-autocomplete">
                 <label for="tags">Tags</label>
-                <input type="text" id="tags" name="tags" value="<?= htmlspecialchars($tags) ?>">
+                <input type="text" id="tags" name="tags" value="<?= htmlspecialchars($tags) ?>" autocomplete="off">
+                <div class="tag-suggestions" id="tags-suggestions"></div>
                 <div class="help-text">Comma-separated tags</div>
             </div>
 
@@ -354,5 +399,153 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['submit'])) {
             </div>
         </form>
     </div>
+
+    <script>
+        const BASE_PATH = <?= json_encode($config['base_path']) ?>;
+
+        // Tag autocomplete functionality
+        let allTagsCache = null;
+
+        async function fetchAllTags() {
+            if (allTagsCache) {
+                return allTagsCache;
+            }
+
+            try {
+                const response = await fetch(BASE_PATH + '/api.php?action=get_tags');
+                const data = await response.json();
+                allTagsCache = data.tags || [];
+                return allTagsCache;
+            } catch (err) {
+                console.error('Error fetching tags:', err);
+                return [];
+            }
+        }
+
+        function escapeHtml(text) {
+            const div = document.createElement('div');
+            div.textContent = text;
+            return div.innerHTML;
+        }
+
+        function initTagAutocomplete(inputId, suggestionsId) {
+            const input = document.getElementById(inputId);
+            const suggestionsDiv = document.getElementById(suggestionsId);
+
+            if (!input || !suggestionsDiv) return;
+
+            let selectedIndex = -1;
+
+            input.addEventListener('input', async function() {
+                const value = this.value;
+                const cursorPos = this.selectionStart;
+
+                // Find the current tag being typed (between commas)
+                const beforeCursor = value.substring(0, cursorPos);
+                const afterCursor = value.substring(cursorPos);
+                const lastComma = beforeCursor.lastIndexOf(',');
+                const nextComma = afterCursor.indexOf(',');
+
+                const currentTag = beforeCursor.substring(lastComma + 1).trim();
+
+                if (currentTag.length === 0) {
+                    suggestionsDiv.classList.remove('active');
+                    return;
+                }
+
+                // Fetch all tags
+                const allTags = await fetchAllTags();
+
+                // Filter tags that start with the current input (case-insensitive)
+                const matches = allTags.filter(tag =>
+                    tag.toLowerCase().startsWith(currentTag.toLowerCase()) &&
+                    tag.toLowerCase() !== currentTag.toLowerCase()
+                );
+
+                if (matches.length === 0) {
+                    suggestionsDiv.classList.remove('active');
+                    return;
+                }
+
+                // Display suggestions
+                selectedIndex = -1;
+                suggestionsDiv.innerHTML = matches.map((tag, index) => {
+                    const matchLen = currentTag.length;
+                    const highlighted = `<span class="tag-suggestion-match">${escapeHtml(tag.substring(0, matchLen))}</span>${escapeHtml(tag.substring(matchLen))}`;
+                    return `<div class="tag-suggestion" data-index="${index}" data-tag="${escapeHtml(tag)}">${highlighted}</div>`;
+                }).join('');
+
+                suggestionsDiv.classList.add('active');
+
+                // Add click handlers to suggestions
+                suggestionsDiv.querySelectorAll('.tag-suggestion').forEach(suggestionEl => {
+                    suggestionEl.addEventListener('click', function() {
+                        const tag = this.getAttribute('data-tag');
+                        insertTag(input, tag, lastComma, cursorPos, nextComma === -1 ? value.length : cursorPos + nextComma);
+                        suggestionsDiv.classList.remove('active');
+                    });
+                });
+            });
+
+            input.addEventListener('keydown', function(e) {
+                const suggestions = suggestionsDiv.querySelectorAll('.tag-suggestion');
+
+                if (!suggestionsDiv.classList.contains('active') || suggestions.length === 0) {
+                    return;
+                }
+
+                if (e.key === 'ArrowDown') {
+                    e.preventDefault();
+                    selectedIndex = Math.min(selectedIndex + 1, suggestions.length - 1);
+                    updateSelectedSuggestion(suggestions);
+                } else if (e.key === 'ArrowUp') {
+                    e.preventDefault();
+                    selectedIndex = Math.max(selectedIndex - 1, -1);
+                    updateSelectedSuggestion(suggestions);
+                } else if (e.key === 'Enter' || e.key === 'Tab') {
+                    if (selectedIndex >= 0) {
+                        e.preventDefault();
+                        suggestions[selectedIndex].click();
+                    }
+                } else if (e.key === 'Escape') {
+                    suggestionsDiv.classList.remove('active');
+                }
+            });
+
+            // Close suggestions when clicking outside
+            document.addEventListener('click', function(e) {
+                if (!input.contains(e.target) && !suggestionsDiv.contains(e.target)) {
+                    suggestionsDiv.classList.remove('active');
+                }
+            });
+
+            function updateSelectedSuggestion(suggestions) {
+                suggestions.forEach((el, index) => {
+                    if (index === selectedIndex) {
+                        el.classList.add('selected');
+                        el.scrollIntoView({ block: 'nearest' });
+                    } else {
+                        el.classList.remove('selected');
+                    }
+                });
+            }
+
+            function insertTag(input, tag, lastCommaPos, cursorPos, nextCommaPos) {
+                const value = input.value;
+                const beforeTag = value.substring(0, lastCommaPos + 1) + (lastCommaPos >= 0 ? ' ' : '');
+                const afterTag = value.substring(nextCommaPos);
+
+                input.value = beforeTag + tag + (afterTag.trim().length > 0 ? ', ' : '') + afterTag.trim();
+                const newCursorPos = beforeTag.length + tag.length + (afterTag.trim().length > 0 ? 2 : 0);
+                input.setSelectionRange(newCursorPos, newCursorPos);
+                input.focus();
+            }
+        }
+
+        // Initialize autocomplete when the page loads
+        document.addEventListener('DOMContentLoaded', function() {
+            initTagAutocomplete('tags', 'tags-suggestions');
+        });
+    </script>
 </body>
 </html>

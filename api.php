@@ -248,6 +248,30 @@ switch ($action) {
         echo json_encode($meta);
         break;
 
+    case 'get_tags':
+        // Get all unique tags for autocomplete
+        $stmt = $db->query("SELECT DISTINCT tags FROM bookmarks WHERE tags IS NOT NULL AND tags != ''");
+        $rows = $stmt->fetchAll(PDO::FETCH_ASSOC);
+
+        // Parse comma-separated tags and create unique list
+        $allTags = [];
+        foreach ($rows as $row) {
+            $tags = array_map('trim', explode(',', $row['tags']));
+            foreach ($tags as $tag) {
+                if (!empty($tag) && !in_array($tag, $allTags)) {
+                    $allTags[] = $tag;
+                }
+            }
+        }
+
+        // Sort alphabetically (case-insensitive)
+        usort($allTags, function($a, $b) {
+            return strcasecmp($a, $b);
+        });
+
+        echo json_encode(['tags' => $allTags]);
+        break;
+
     default:
         http_response_code(400);
         echo json_encode(['error' => 'Invalid action']);
