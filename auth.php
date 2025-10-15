@@ -8,8 +8,17 @@ if (session_status() === PHP_SESSION_NONE) {
     // Load config to get session timeout
     $config = require __DIR__ . '/config.php';
 
-    // Set session cookie lifetime to match session_timeout
-    ini_set('session.cookie_lifetime', $config['session_timeout']);
+    // Set session cookie parameters before starting session
+    session_set_cookie_params([
+        'lifetime' => $config['session_timeout'],
+        'path' => '/',
+        'domain' => '',
+        'secure' => isset($_SERVER['HTTPS']) && $_SERVER['HTTPS'] === 'on',
+        'httponly' => true,
+        'samesite' => 'Lax'
+    ]);
+
+    // Set server-side session lifetime
     ini_set('session.gc_maxlifetime', $config['session_timeout']);
 
     session_start();
