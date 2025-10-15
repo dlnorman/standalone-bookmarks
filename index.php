@@ -482,6 +482,8 @@ $totalPages = ceil($total / $limit);
                 <a href="#" onclick="showAddBookmark(); return false;" class="btn btn-primary">Add Bookmark</a>
                 <a href="<?= $config['base_path'] ?>/tags.php" class="btn">Tags</a>
                 <a href="<?= $config['base_path'] ?>/bookmarklet-setup.php" class="btn">Bookmarklet</a>
+                <a href="<?= $config['base_path'] ?>/import.php" class="btn">Import</a>
+                <a href="<?= $config['base_path'] ?>/export.php" class="btn">Export</a>
                 <a href="<?= $config['base_path'] ?>/logout.php" class="btn">Logout</a>
             <?php else: ?>
                 <a href="<?= $config['base_path'] ?>/login.php" class="btn btn-primary">Login</a>

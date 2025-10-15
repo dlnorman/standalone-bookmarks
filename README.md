@@ -7,6 +7,7 @@ A lightweight, self-hosted bookmarks manager built with PHP and SQLite. Perfect 
 - Simple and lightweight (PHP + SQLite, no framework dependencies)
 - Full-text search across titles, descriptions, tags, and URLs
 - Bookmarklet for quick bookmark addition with automatic metadata extraction
+- Import/Export bookmarks in Pinboard and Delicious format (Netscape Bookmark File Format)
 - RSS feed for your bookmarks
 - JSON API for embedding recent bookmarks in other sites (e.g., Hugo)
 - Responsive design works on desktop, tablet, and mobile
@@ -143,6 +144,39 @@ Once logged in:
 
 The bookmarklet will open a popup where you can review and edit before saving. Note: You need to be logged in to your bookmarks app for the bookmarklet to work.
 
+### Import Bookmarks
+
+Import bookmarks from Pinboard, Delicious, or any browser that exports the Netscape Bookmark File Format:
+
+1. Click "Import" in the web interface
+2. Select your bookmark file (HTML format)
+3. Click "Import Bookmarks" to upload
+
+The importer will:
+- Parse all bookmarks with their metadata (URL, title, description, tags, privacy settings, dates)
+- Automatically skip duplicate URLs
+- Preserve creation dates and privacy settings
+- Show a summary of added and skipped bookmarks
+
+**Compatible with:**
+- Pinboard (export from [pinboard.in/export/](https://pinboard.in/export/))
+- Delicious (HTML export)
+- Firefox, Chrome, Safari, Edge bookmark exports
+- Most other bookmarking services that use the standard format
+
+### Export Bookmarks
+
+Export all your bookmarks to use with other services:
+
+1. Click "Export" in the web interface
+2. Click "Download Bookmarks" to download the HTML file
+
+The export includes:
+- All URLs, titles, descriptions
+- Tags and privacy settings
+- Creation dates (as Unix timestamps)
+- Compatible format for importing into Pinboard, Delicious, browsers, and other services
+
 ### RSS Feed
 
 Access your bookmarks RSS feed at:
@@ -274,6 +308,8 @@ Then navigate to `http://localhost:8000`.
 ├── tags.php           # Tags view with tag cloud
 ├── api.php            # API endpoint for bookmark operations
 ├── bookmarklet.php    # Bookmarklet popup interface
+├── import.php         # Import bookmarks from Pinboard/Delicious
+├── export.php         # Export bookmarks to Pinboard/Delicious format
 ├── rss.php           # RSS feed generator
 ├── recent.php        # JSON API for recent bookmarks
 ├── .gitignore        # Git ignore rules
