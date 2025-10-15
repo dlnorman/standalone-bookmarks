@@ -142,6 +142,28 @@ function importBookmarks($db, $content) {
                 $createdAt,
                 $now
             ]);
+
+            $bookmarkId = $db->lastInsertId();
+
+            // Queue background jobs for thumbnail and archive
+            // Check if jobs table exists
+            $tables = $db->query("SELECT name FROM sqlite_master WHERE type='table' AND name='jobs'")->fetchAll();
+            if (!empty($tables)) {
+                // Queue archive job
+                $stmt = $db->prepare("
+                    INSERT INTO jobs (bookmark_id, job_type, payload, created_at, updated_at)
+                    VALUES (?, 'archive', ?, ?, ?)
+                ");
+                $stmt->execute([$bookmarkId, $url, $now, $now]);
+
+                // Queue thumbnail job
+                $stmt = $db->prepare("
+                    INSERT INTO jobs (bookmark_id, job_type, payload, created_at, updated_at)
+                    VALUES (?, 'thumbnail', ?, ?, ?)
+                ");
+                $stmt->execute([$bookmarkId, $url, $now, $now]);
+            }
+
             $added++;
         } catch (PDOException $e) {
             $errors[] = "Failed to import: {$url} - " . $e->getMessage();
