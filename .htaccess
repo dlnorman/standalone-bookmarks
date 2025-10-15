@@ -1,0 +1,14 @@
+# Protect config and database files
+<Files "config.php">
+    Require all denied
+</Files>
+
+<Files "*.db">
+    Require all denied
+</Files>
+
+# Optional: Pretty URLs
+RewriteEngine On
+RewriteCond %{REQUEST_FILENAME} !-f
+RewriteCond %{REQUEST_FILENAME} !-d
+RewriteRule ^(.*)$ index.php [L,QSA]

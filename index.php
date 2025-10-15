@@ -1,0 +1,729 @@
+<?php
+/**
+ * Main interface for bookmarks application
+ */
+
+// Load configuration
+if (!file_exists(__DIR__ . '/config.php')) {
+    die('Error: config.php not found. Please copy config-example.php to config.php and adjust settings.');
+}
+
+$config = require __DIR__ . '/config.php';
+require_once __DIR__ . '/auth.php';
+
+// Set timezone
+if (isset($config['timezone'])) {
+    date_default_timezone_set($config['timezone']);
+}
+
+// Check if user is authenticated (but don't force login)
+session_start();
+$isLoggedIn = is_logged_in();
+
+// Connect to database
+try {
+    $db = new PDO('sqlite:' . $config['db_path']);
+    $db->setAttribute(PDO::ATTR_ERRMODE, PDO::ERRMODE_EXCEPTION);
+} catch (PDOException $e) {
+    die('Database connection failed. Run init_db.php first.');
+}
+
+// Get parameters
+$search = $_GET['q'] ?? '';
+$tag = $_GET['tag'] ?? '';
+$page = max(1, intval($_GET['page'] ?? 1));
+$limit = $config['items_per_page'];
+$offset = ($page - 1) * $limit;
+
+// Fetch bookmarks
+if (!empty($tag)) {
+    // Filter by tag (case-insensitive)
+    $tagPattern = '%' . strtolower($tag) . '%';
+
+    if ($isLoggedIn) {
+        $stmt = $db->prepare("
+            SELECT * FROM bookmarks
+            WHERE LOWER(tags) LIKE ?
+            ORDER BY created_at DESC
+            LIMIT ? OFFSET ?
+        ");
+        $stmt->execute([$tagPattern, $limit, $offset]);
+
+        $countStmt = $db->prepare("
+            SELECT COUNT(*) as total FROM bookmarks
+            WHERE LOWER(tags) LIKE ?
+        ");
+        $countStmt->execute([$tagPattern]);
+    } else {
+        $stmt = $db->prepare("
+            SELECT * FROM bookmarks
+            WHERE LOWER(tags) LIKE ? AND private = 0
+            ORDER BY created_at DESC
+            LIMIT ? OFFSET ?
+        ");
+        $stmt->execute([$tagPattern, $limit, $offset]);
+
+        $countStmt = $db->prepare("
+            SELECT COUNT(*) as total FROM bookmarks
+            WHERE LOWER(tags) LIKE ? AND private = 0
+        ");
+        $countStmt->execute([$tagPattern]);
+    }
+} elseif (!empty($search)) {
+    $searchTerm = '%' . $search . '%';
+
+    if ($isLoggedIn) {
+        $stmt = $db->prepare("
+            SELECT * FROM bookmarks
+            WHERE title LIKE ? OR description LIKE ? OR tags LIKE ? OR url LIKE ?
+            ORDER BY created_at DESC
+            LIMIT ? OFFSET ?
+        ");
+        $stmt->execute([$searchTerm, $searchTerm, $searchTerm, $searchTerm, $limit, $offset]);
+
+        $countStmt = $db->prepare("
+            SELECT COUNT(*) as total FROM bookmarks
+            WHERE title LIKE ? OR description LIKE ? OR tags LIKE ? OR url LIKE ?
+        ");
+        $countStmt->execute([$searchTerm, $searchTerm, $searchTerm, $searchTerm]);
+    } else {
+        $stmt = $db->prepare("
+            SELECT * FROM bookmarks
+            WHERE (title LIKE ? OR description LIKE ? OR tags LIKE ? OR url LIKE ?) AND private = 0
+            ORDER BY created_at DESC
+            LIMIT ? OFFSET ?
+        ");
+        $stmt->execute([$searchTerm, $searchTerm, $searchTerm, $searchTerm, $limit, $offset]);
+
+        $countStmt = $db->prepare("
+            SELECT COUNT(*) as total FROM bookmarks
+            WHERE (title LIKE ? OR description LIKE ? OR tags LIKE ? OR url LIKE ?) AND private = 0
+        ");
+        $countStmt->execute([$searchTerm, $searchTerm, $searchTerm, $searchTerm]);
+    }
+} else {
+    if ($isLoggedIn) {
+        $stmt = $db->prepare("
+            SELECT * FROM bookmarks
+            ORDER BY created_at DESC
+            LIMIT ? OFFSET ?
+        ");
+        $stmt->execute([$limit, $offset]);
+
+        $countStmt = $db->query("SELECT COUNT(*) as total FROM bookmarks");
+    } else {
+        $stmt = $db->prepare("
+            SELECT * FROM bookmarks
+            WHERE private = 0
+            ORDER BY created_at DESC
+            LIMIT ? OFFSET ?
+        ");
+        $stmt->execute([$limit, $offset]);
+
+        $countStmt = $db->query("SELECT COUNT(*) as total FROM bookmarks WHERE private = 0");
+    }
+}
+
+$bookmarks = $stmt->fetchAll(PDO::FETCH_ASSOC);
+$total = $countStmt->fetch(PDO::FETCH_ASSOC)['total'];
+$totalPages = ceil($total / $limit);
+?>
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title><?= htmlspecialchars($config['site_title']) ?></title>
+    <style>
+        * {
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+            max-width: 900px;
+            margin: 0 auto;
+            padding: 20px;
+            line-height: 1.6;
+            background: #f5f5f5;
+            color: #333;
+        }
+
+        header {
+            background: white;
+            padding: 20px;
+            border-radius: 8px;
+            margin-bottom: 20px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        }
+
+        h1 {
+            margin: 0 0 15px 0;
+            font-size: 24px;
+            color: #2c3e50;
+        }
+
+        .search-form {
+            display: flex;
+            gap: 10px;
+            margin-bottom: 15px;
+        }
+
+        .search-form input[type="text"] {
+            flex: 1;
+            padding: 10px;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+            font-size: 14px;
+        }
+
+        .search-form button {
+            padding: 10px 20px;
+            background: #3498db;
+            color: white;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 14px;
+        }
+
+        .search-form button:hover {
+            background: #2980b9;
+        }
+
+        .actions {
+            display: flex;
+            gap: 10px;
+            flex-wrap: wrap;
+        }
+
+        .btn {
+            padding: 8px 15px;
+            background: #95a5a6;
+            color: white;
+            text-decoration: none;
+            border-radius: 4px;
+            font-size: 13px;
+            display: inline-block;
+        }
+
+        .btn:hover {
+            background: #7f8c8d;
+        }
+
+        .btn-primary {
+            background: #27ae60;
+        }
+
+        .btn-primary:hover {
+            background: #229954;
+        }
+
+        .bookmark {
+            background: white;
+            padding: 20px;
+            margin-bottom: 15px;
+            border-radius: 8px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        }
+
+        .bookmark h2 {
+            margin: 0 0 10px 0;
+            font-size: 18px;
+        }
+
+        .bookmark h2 a {
+            color: #2c3e50;
+            text-decoration: none;
+        }
+
+        .bookmark h2 a:hover {
+            color: #3498db;
+        }
+
+        .bookmark .url {
+            color: #7f8c8d;
+            font-size: 13px;
+            word-break: break-all;
+            margin-bottom: 10px;
+        }
+
+        .bookmark .description {
+            color: #555;
+            margin-bottom: 10px;
+        }
+
+        .bookmark .screenshot {
+            margin: 10px 0;
+        }
+
+        .bookmark .screenshot img {
+            max-width: 100%;
+            height: auto;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+            cursor: pointer;
+        }
+
+        .bookmark .screenshot img.thumbnail {
+            max-width: 300px;
+        }
+
+        .bookmark .meta {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            flex-wrap: wrap;
+            gap: 10px;
+            font-size: 13px;
+            color: #7f8c8d;
+        }
+
+        .bookmark.private {
+            border-left: 4px solid #e67e22;
+        }
+
+        .bookmark .private-badge {
+            display: inline-block;
+            padding: 2px 8px;
+            background: #e67e22;
+            color: white;
+            border-radius: 3px;
+            font-size: 11px;
+            font-weight: bold;
+            margin-left: 10px;
+        }
+
+        .bookmark .tags {
+            color: #3498db;
+        }
+
+        .bookmark .actions {
+            display: flex;
+            gap: 10px;
+        }
+
+        .bookmark .actions a {
+            color: #3498db;
+            text-decoration: none;
+            font-size: 13px;
+        }
+
+        .bookmark .actions a:hover {
+            text-decoration: underline;
+        }
+
+        .pagination {
+            display: flex;
+            justify-content: center;
+            gap: 10px;
+            margin-top: 20px;
+            flex-wrap: wrap;
+        }
+
+        .pagination a,
+        .pagination span {
+            padding: 8px 12px;
+            background: white;
+            color: #3498db;
+            text-decoration: none;
+            border-radius: 4px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        }
+
+        .pagination span {
+            background: #3498db;
+            color: white;
+        }
+
+        .pagination a:hover {
+            background: #ecf0f1;
+        }
+
+        .no-results {
+            background: white;
+            padding: 40px;
+            text-align: center;
+            border-radius: 8px;
+            color: #7f8c8d;
+        }
+
+        .edit-form {
+            margin-top: 15px;
+            padding: 15px;
+            background: #f8f9fa;
+            border-radius: 4px;
+            border: 1px solid #ddd;
+        }
+
+        .edit-form .form-group {
+            margin-bottom: 15px;
+        }
+
+        .edit-form label {
+            display: block;
+            margin-bottom: 5px;
+            font-weight: 500;
+            color: #2c3e50;
+            font-size: 14px;
+        }
+
+        .edit-form input[type="text"],
+        .edit-form textarea {
+            width: 100%;
+            padding: 8px;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+            font-size: 14px;
+            font-family: inherit;
+        }
+
+        .edit-form textarea {
+            resize: vertical;
+            min-height: 80px;
+        }
+
+        .edit-form .checkbox-group {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .edit-form .checkbox-group input[type="checkbox"] {
+            width: auto;
+            cursor: pointer;
+        }
+
+        .edit-form .checkbox-group label {
+            margin: 0;
+            cursor: pointer;
+            font-weight: normal;
+        }
+
+        .edit-form .form-actions {
+            display: flex;
+            gap: 10px;
+            margin-top: 15px;
+        }
+
+        .edit-form button {
+            padding: 8px 16px;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 14px;
+        }
+
+        .edit-form .btn-save {
+            background: #27ae60;
+            color: white;
+        }
+
+        .edit-form .btn-save:hover {
+            background: #229954;
+        }
+
+        .edit-form .btn-cancel {
+            background: #95a5a6;
+            color: white;
+        }
+
+        .edit-form .btn-cancel:hover {
+            background: #7f8c8d;
+        }
+
+        @media (max-width: 600px) {
+            body {
+                padding: 10px;
+            }
+
+            header {
+                padding: 15px;
+            }
+
+            .search-form {
+                flex-direction: column;
+            }
+
+            .bookmark {
+                padding: 15px;
+            }
+
+            .bookmark .meta {
+                flex-direction: column;
+                align-items: flex-start;
+            }
+        }
+    </style>
+</head>
+<body>
+    <header>
+        <h1><?= htmlspecialchars($config['site_title']) ?></h1>
+
+        <form method="get" action="" class="search-form">
+            <input type="text" name="q" placeholder="Search bookmarks..." value="<?= htmlspecialchars($search) ?>">
+            <button type="submit">Search</button>
+        </form>
+
+        <?php if (!empty($tag)): ?>
+            <div style="margin-bottom: 15px; padding: 10px; background: #e8f4f8; border-radius: 4px; color: #2c3e50;">
+                Showing bookmarks tagged with: <strong><?= htmlspecialchars($tag) ?></strong>
+            </div>
+        <?php endif; ?>
+
+        <div class="actions">
+            <?php if (!empty($search)): ?>
+                <a href="<?= $config['base_path'] ?>" class="btn">Clear Search</a>
+            <?php endif; ?>
+            <?php if (!empty($tag)): ?>
+                <a href="<?= $config['base_path'] ?>" class="btn">Clear Filter</a>
+            <?php endif; ?>
+            <?php if ($isLoggedIn): ?>
+                <a href="#" onclick="showAddBookmark(); return false;" class="btn btn-primary">Add Bookmark</a>
+                <a href="<?= $config['base_path'] ?>/tags.php" class="btn">Tags</a>
+                <a href="<?= $config['base_path'] ?>/bookmarklet-setup.php" class="btn">Bookmarklet</a>
+                <a href="<?= $config['base_path'] ?>/logout.php" class="btn">Logout</a>
+            <?php else: ?>
+                <a href="<?= $config['base_path'] ?>/login.php" class="btn btn-primary">Login</a>
+            <?php endif; ?>
+            <a href="<?= $config['base_path'] ?>/rss.php" class="btn">RSS Feed</a>
+        </div>
+    </header>
+
+    <?php if (empty($bookmarks)): ?>
+        <div class="no-results">
+            <?php if (!empty($search)): ?>
+                <p>No bookmarks found for "<?= htmlspecialchars($search) ?>"</p>
+            <?php else: ?>
+                <p>No bookmarks yet. Add your first bookmark!</p>
+            <?php endif; ?>
+        </div>
+    <?php else: ?>
+        <?php foreach ($bookmarks as $bookmark): ?>
+            <div class="bookmark<?= !empty($bookmark['private']) ? ' private' : '' ?>" id="bookmark-<?= $bookmark['id'] ?>">
+                <h2>
+                    <a href="<?= htmlspecialchars($bookmark['url']) ?>" target="_blank" rel="noopener noreferrer"><?= htmlspecialchars($bookmark['title']) ?></a>
+                    <?php if (!empty($bookmark['private'])): ?>
+                        <span class="private-badge">PRIVATE</span>
+                    <?php endif; ?>
+                </h2>
+                <div class="url"><?= htmlspecialchars($bookmark['url']) ?></div>
+                <?php if (!empty($bookmark['description'])): ?>
+                    <div class="description"><?= nl2br(htmlspecialchars($bookmark['description'])) ?></div>
+                <?php endif; ?>
+                <?php if (!empty($bookmark['screenshot'])): ?>
+                    <div class="screenshot">
+                        <img src="<?= $config['base_path'] . '/' . htmlspecialchars($bookmark['screenshot']) ?>"
+                             class="thumbnail"
+                             alt="Screenshot"
+                             onclick="this.classList.toggle('thumbnail')"
+                             title="Click to toggle size">
+                    </div>
+                <?php endif; ?>
+                <div class="meta">
+                    <div>
+                        <?php if (!empty($bookmark['tags'])): ?>
+                            <span class="tags">Tags: <?= htmlspecialchars($bookmark['tags']) ?></span>
+                        <?php endif; ?>
+                        <span> &middot; <?= date($config['date_format'], strtotime($bookmark['created_at'])) ?></span>
+                        <?php if (!empty($bookmark['archive_url'])): ?>
+                            <span> &middot; <a href="<?= htmlspecialchars($bookmark['archive_url']) ?>" target="_blank" rel="noopener noreferrer" style="color: #27ae60;">Archive</a></span>
+                        <?php endif; ?>
+                    </div>
+                    <?php if ($isLoggedIn): ?>
+                    <div class="actions">
+                        <a href="#" onclick="editBookmark(<?= $bookmark['id'] ?>); return false;">Edit</a>
+                        <a href="#" onclick="deleteBookmark(<?= $bookmark['id'] ?>); return false;">Delete</a>
+                    </div>
+                    <?php endif; ?>
+                </div>
+            </div>
+        <?php endforeach; ?>
+
+        <?php if ($totalPages > 1): ?>
+            <div class="pagination">
+                <?php
+                $paginationParams = ['q' => $search, 'tag' => $tag];
+                ?>
+                <?php if ($page > 1): ?>
+                    <a href="?<?= http_build_query(array_merge($paginationParams, ['page' => $page - 1])) ?>">Previous</a>
+                <?php endif; ?>
+
+                <?php for ($i = max(1, $page - 2); $i <= min($totalPages, $page + 2); $i++): ?>
+                    <?php if ($i == $page): ?>
+                        <span><?= $i ?></span>
+                    <?php else: ?>
+                        <a href="?<?= http_build_query(array_merge($paginationParams, ['page' => $i])) ?>"><?= $i ?></a>
+                    <?php endif; ?>
+                <?php endfor; ?>
+
+                <?php if ($page < $totalPages): ?>
+                    <a href="?<?= http_build_query(array_merge($paginationParams, ['page' => $page + 1])) ?>">Next</a>
+                <?php endif; ?>
+            </div>
+        <?php endif; ?>
+    <?php endif; ?>
+
+    <script>
+        const BASE_PATH = <?= json_encode($config['base_path']) ?>;
+        const IS_LOGGED_IN = <?= json_encode($isLoggedIn) ?>;
+
+        function showAddBookmark() {
+            if (!IS_LOGGED_IN) return;
+            const url = prompt('Enter URL:');
+            if (!url) return;
+
+            const title = prompt('Enter title:');
+            if (!title) return;
+
+            const description = prompt('Enter description (optional):') || '';
+            const tags = prompt('Enter tags (comma-separated, optional):') || '';
+            const isPrivate = confirm('Make this bookmark private? (Hidden from RSS feed and recent bookmarks)');
+
+            const formData = new FormData();
+            formData.append('action', 'add');
+            formData.append('url', url);
+            formData.append('title', title);
+            formData.append('description', description);
+            formData.append('tags', tags);
+            if (isPrivate) {
+                formData.append('private', '1');
+            }
+
+            fetch(BASE_PATH + '/api.php', {
+                method: 'POST',
+                body: formData
+            })
+            .then(r => r.json())
+            .then(data => {
+                if (data.success) {
+                    alert('Bookmark added successfully!');
+                    location.reload();
+                } else {
+                    alert('Error: ' + data.error);
+                }
+            })
+            .catch(err => alert('Error: ' + err));
+        }
+
+        function editBookmark(id) {
+            if (!IS_LOGGED_IN) return;
+            // Close any other open edit forms
+            const existingForms = document.querySelectorAll('.edit-form');
+            existingForms.forEach(form => form.remove());
+
+            const bookmarkElement = document.getElementById('bookmark-' + id);
+
+            fetch(BASE_PATH + '/api.php?action=get&id=' + id)
+            .then(r => r.json())
+            .then(bookmark => {
+                const formHtml = `
+                    <div class="edit-form">
+                        <div class="form-group">
+                            <label for="edit-url-${id}">URL</label>
+                            <input type="text" id="edit-url-${id}" value="${escapeHtml(bookmark.url)}" required>
+                        </div>
+                        <div class="form-group">
+                            <label for="edit-title-${id}">Title</label>
+                            <input type="text" id="edit-title-${id}" value="${escapeHtml(bookmark.title)}" required>
+                        </div>
+                        <div class="form-group">
+                            <label for="edit-description-${id}">Description</label>
+                            <textarea id="edit-description-${id}">${escapeHtml(bookmark.description || '')}</textarea>
+                        </div>
+                        <div class="form-group">
+                            <label for="edit-tags-${id}">Tags (comma-separated)</label>
+                            <input type="text" id="edit-tags-${id}" value="${escapeHtml(bookmark.tags || '')}">
+                        </div>
+                        <div class="form-group">
+                            <div class="checkbox-group">
+                                <input type="checkbox" id="edit-private-${id}" ${bookmark.private ? 'checked' : ''}>
+                                <label for="edit-private-${id}">Private (hidden from RSS feed and recent bookmarks)</label>
+                            </div>
+                        </div>
+                        <div class="form-actions">
+                            <button class="btn-save" onclick="saveBookmark(${id}); return false;">Save Changes</button>
+                            <button class="btn-cancel" onclick="cancelEdit(${id}); return false;">Cancel</button>
+                        </div>
+                    </div>
+                `;
+
+                bookmarkElement.insertAdjacentHTML('beforeend', formHtml);
+            })
+            .catch(err => alert('Error loading bookmark: ' + err));
+        }
+
+        function escapeHtml(text) {
+            const div = document.createElement('div');
+            div.textContent = text;
+            return div.innerHTML;
+        }
+
+        function cancelEdit(id) {
+            const form = document.querySelector(`#bookmark-${id} .edit-form`);
+            if (form) {
+                form.remove();
+            }
+        }
+
+        function saveBookmark(id) {
+            const url = document.getElementById(`edit-url-${id}`).value.trim();
+            const title = document.getElementById(`edit-title-${id}`).value.trim();
+            const description = document.getElementById(`edit-description-${id}`).value.trim();
+            const tags = document.getElementById(`edit-tags-${id}`).value.trim();
+            const isPrivate = document.getElementById(`edit-private-${id}`).checked;
+
+            if (!url || !title) {
+                alert('URL and title are required!');
+                return;
+            }
+
+            const formData = new FormData();
+            formData.append('action', 'edit');
+            formData.append('id', id);
+            formData.append('url', url);
+            formData.append('title', title);
+            formData.append('description', description);
+            formData.append('tags', tags);
+            formData.append('private', isPrivate ? '1' : '0');
+
+            fetch(BASE_PATH + '/api.php', {
+                method: 'POST',
+                body: formData
+            })
+            .then(r => r.json())
+            .then(data => {
+                if (data.success) {
+                    location.reload();
+                } else {
+                    alert('Error: ' + data.error);
+                }
+            })
+            .catch(err => alert('Error: ' + err));
+        }
+
+        function deleteBookmark(id) {
+            if (!IS_LOGGED_IN) return;
+            if (!confirm('Are you sure you want to delete this bookmark?')) return;
+
+            const formData = new FormData();
+            formData.append('action', 'delete');
+            formData.append('id', id);
+
+            fetch(BASE_PATH + '/api.php', {
+                method: 'POST',
+                body: formData
+            })
+            .then(r => r.json())
+            .then(data => {
+                if (data.success) {
+                    document.getElementById('bookmark-' + id).remove();
+                } else {
+                    alert('Error: ' + data.error);
+                }
+            })
+            .catch(err => alert('Error: ' + err));
+        }
+    </script>
+</body>
+</html>
