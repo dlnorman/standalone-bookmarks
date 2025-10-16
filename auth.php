@@ -40,14 +40,7 @@ function require_auth($config) {
         exit;
     }
 
-    // Check session timeout
-    if (isset($_SESSION['last_activity']) && (time() - $_SESSION['last_activity'] > $config['session_timeout'])) {
-        logout();
-        header('Location: ' . $config['base_path'] . '/login.php?timeout=1&redirect=' . urlencode($_SERVER['REQUEST_URI']));
-        exit;
-    }
-
-    // Update last activity time
+    // Update last activity time (for reference only, not used for timeout)
     $_SESSION['last_activity'] = time();
 }
 

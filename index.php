@@ -17,7 +17,7 @@ if (isset($config['timezone'])) {
 }
 
 // Check if user is authenticated (but don't force login)
-session_start();
+// Note: session_start() is already called in auth.php
 $isLoggedIn = is_logged_in();
 
 // Connect to database

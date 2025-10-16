@@ -17,7 +17,7 @@ if (isset($config['timezone'])) {
 }
 
 // Require authentication
-session_start();
+// Note: session_start() is already called in auth.php
 if (!is_logged_in()) {
     header('Location: ' . $config['base_path'] . '/login.php?redirect=' . urlencode($_SERVER['REQUEST_URI']));
     exit;
