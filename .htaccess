@@ -7,6 +7,19 @@
     Require all denied
 </Files>
 
+# Protect sessions directory
+<IfModule mod_authz_core.c>
+    <DirectoryMatch "^.*/sessions/">
+        Require all denied
+    </DirectoryMatch>
+</IfModule>
+<IfModule !mod_authz_core.c>
+    <DirectoryMatch "^.*/sessions/">
+        Order deny,allow
+        Deny from all
+    </DirectoryMatch>
+</IfModule>
+
 # Optional: Pretty URLs
 RewriteEngine On
 RewriteCond %{REQUEST_FILENAME} !-f
