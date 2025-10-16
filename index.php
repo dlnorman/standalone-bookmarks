@@ -127,6 +127,142 @@ if (!empty($tag)) {
 $bookmarks = $stmt->fetchAll(PDO::FETCH_ASSOC);
 $total = $countStmt->fetch(PDO::FETCH_ASSOC)['total'];
 $totalPages = ceil($total / $limit);
+
+/**
+ * Simple markdown parser without external dependencies
+ * Supports: headers, bold, italic, links, code blocks, inline code, lists, blockquotes
+ */
+function parseMarkdown($text) {
+    if (empty($text)) return '';
+
+    // Process code blocks first (before escaping, to preserve content)
+    $codeBlocks = [];
+    $text = preg_replace_callback('/```([a-z]*)\n(.*?)```/s', function($matches) use (&$codeBlocks) {
+        $lang = $matches[1] ? ' class="language-' . $matches[1] . '"' : '';
+        $placeholder = '___CODE_BLOCK_' . count($codeBlocks) . '___';
+        $codeBlocks[$placeholder] = '<pre><code' . $lang . '>' . htmlspecialchars(trim($matches[2]), ENT_QUOTES, 'UTF-8') . '</code></pre>';
+        return $placeholder;
+    }, $text);
+
+    // Split into lines for processing
+    $lines = explode("\n", $text);
+    $output = [];
+    $inList = false;
+    $inBlockquote = false;
+
+    foreach ($lines as $lineNum => $line) {
+        $trimmed = trim($line);
+
+        // Skip if line is a code block placeholder
+        if (strpos($line, '___CODE_BLOCK_') !== false) {
+            $output[] = $line;
+            continue;
+        }
+
+        // Headers (# through ######)
+        if (preg_match('/^(#{1,6})\s+(.+)$/', $trimmed, $matches)) {
+            $level = strlen($matches[1]);
+            $output[] = '<h' . $level . '>' . htmlspecialchars($matches[2], ENT_QUOTES, 'UTF-8') . '</h' . $level . '>';
+            continue;
+        }
+
+        // Unordered lists (- or *)
+        if (preg_match('/^[\*\-]\s+(.+)$/', $trimmed, $matches)) {
+            if (!$inList) {
+                $output[] = '<ul>';
+                $inList = true;
+            }
+            $output[] = '<li>' . htmlspecialchars($matches[1], ENT_QUOTES, 'UTF-8') . '</li>';
+            continue;
+        } elseif ($inList) {
+            $output[] = '</ul>';
+            $inList = false;
+        }
+
+        // Ordered lists (1. 2. etc.)
+        if (preg_match('/^\d+\.\s+(.+)$/', $trimmed, $matches)) {
+            if (!$inList) {
+                $output[] = '<ol>';
+                $inList = 'ol';
+            }
+            $output[] = '<li>' . htmlspecialchars($matches[1], ENT_QUOTES, 'UTF-8') . '</li>';
+            continue;
+        } elseif ($inList === 'ol') {
+            $output[] = '</ol>';
+            $inList = false;
+        }
+
+        // Blockquotes (including empty blockquote lines with just >)
+        if (preg_match('/^>\s*(.*)$/', $trimmed, $matches)) {
+            if (!$inBlockquote) {
+                $output[] = '<blockquote>';
+                $inBlockquote = true;
+            }
+            // Add content (or empty line if no content)
+            if (!empty($matches[1])) {
+                $output[] = htmlspecialchars($matches[1], ENT_QUOTES, 'UTF-8') . '<br>';
+            } else {
+                $output[] = '<br>'; // Empty blockquote line creates a line break
+            }
+            continue;
+        } elseif ($inBlockquote) {
+            $output[] = '</blockquote>';
+            $inBlockquote = false;
+        }
+
+        // Horizontal rules
+        if (preg_match('/^(\*\*\*|---|___)$/', $trimmed)) {
+            $output[] = '<hr>';
+            continue;
+        }
+
+        // Regular line - escape it
+        $output[] = htmlspecialchars($line, ENT_QUOTES, 'UTF-8');
+    }
+
+    // Close any open lists or blockquotes
+    if ($inList === 'ol') {
+        $output[] = '</ol>';
+    } elseif ($inList) {
+        $output[] = '</ul>';
+    }
+    if ($inBlockquote) {
+        $output[] = '</blockquote>';
+    }
+
+    $text = implode("\n", $output);
+
+    // Inline elements (process after block elements)
+    // Note: Content is already HTML-escaped at this point, so we work with escaped HTML
+
+    // Inline code (backticks) - process before bold/italic to avoid conflicts
+    $text = preg_replace('/`([^`]+)`/', '<code>$1</code>', $text);
+
+    // Bold (**text** or __text__)
+    $text = preg_replace('/\*\*(.+?)\*\*/', '<strong>$1</strong>', $text);
+    $text = preg_replace('/__(.+?)__/', '<strong>$1</strong>', $text);
+
+    // Italic (*text* or _text_)
+    $text = preg_replace('/\*(.+?)\*/', '<em>$1</em>', $text);
+    $text = preg_replace('/_(.+?)_/', '<em>$1</em>', $text);
+
+    // Links [text](url) - URL needs to be unescaped for href attribute
+    $text = preg_replace_callback('/\[([^\]]+)\]\(([^\)]+)\)/', function($matches) {
+        $text = $matches[1];
+        $url = htmlspecialchars_decode($matches[2], ENT_QUOTES);
+        return '<a href="' . htmlspecialchars($url, ENT_QUOTES, 'UTF-8') . '" target="_blank" rel="noopener noreferrer">' . $text . '</a>';
+    }, $text);
+
+    // Restore code blocks
+    foreach ($codeBlocks as $placeholder => $codeBlock) {
+        $text = str_replace($placeholder, $codeBlock, $text);
+    }
+
+    // Convert newlines to <br> (but not inside block elements)
+    $text = preg_replace('/\n(?!<\/(ul|ol|blockquote|pre|h[1-6])>)/', '<br>', $text);
+
+    return $text;
+}
 ?>
 <!DOCTYPE html>
 <html lang="en">
@@ -251,6 +387,93 @@ $totalPages = ceil($total / $limit);
         .bookmark .description {
             color: #555;
             margin-bottom: 10px;
+            line-height: 1.6;
+        }
+
+        /* Markdown styling within descriptions */
+        .bookmark .description h1,
+        .bookmark .description h2,
+        .bookmark .description h3,
+        .bookmark .description h4,
+        .bookmark .description h5,
+        .bookmark .description h6 {
+            margin: 15px 0 10px 0;
+            color: #2c3e50;
+            font-weight: 600;
+        }
+
+        .bookmark .description h1 { font-size: 1.5em; }
+        .bookmark .description h2 { font-size: 1.3em; }
+        .bookmark .description h3 { font-size: 1.1em; }
+        .bookmark .description h4 { font-size: 1em; }
+        .bookmark .description h5 { font-size: 0.9em; }
+        .bookmark .description h6 { font-size: 0.85em; }
+
+        .bookmark .description strong {
+            font-weight: 600;
+            color: #2c3e50;
+        }
+
+        .bookmark .description em {
+            font-style: italic;
+        }
+
+        .bookmark .description code {
+            background: #f4f4f4;
+            padding: 2px 6px;
+            border-radius: 3px;
+            font-family: 'Monaco', 'Menlo', 'Courier New', monospace;
+            font-size: 0.9em;
+            color: #c7254e;
+        }
+
+        .bookmark .description pre {
+            background: #f4f4f4;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+            padding: 12px;
+            overflow-x: auto;
+            margin: 10px 0;
+        }
+
+        .bookmark .description pre code {
+            background: none;
+            padding: 0;
+            color: #333;
+            font-size: 0.85em;
+        }
+
+        .bookmark .description ul,
+        .bookmark .description ol {
+            margin: 10px 0;
+            padding-left: 30px;
+        }
+
+        .bookmark .description li {
+            margin: 5px 0;
+        }
+
+        .bookmark .description blockquote {
+            border-left: 4px solid #3498db;
+            padding-left: 15px;
+            margin: 10px 0;
+            color: #666;
+            font-style: italic;
+        }
+
+        .bookmark .description hr {
+            border: none;
+            border-top: 2px solid #ddd;
+            margin: 15px 0;
+        }
+
+        .bookmark .description a {
+            color: #3498db;
+            text-decoration: none;
+        }
+
+        .bookmark .description a:hover {
+            text-decoration: underline;
         }
 
         .bookmark .screenshot {
@@ -626,7 +849,7 @@ $totalPages = ceil($total / $limit);
                 </h2>
                 <div class="url"><?= htmlspecialchars($bookmark['url']) ?></div>
                 <?php if (!empty($bookmark['description'])): ?>
-                    <div class="description"><?= nl2br(htmlspecialchars($bookmark['description'])) ?></div>
+                    <div class="description"><?= parseMarkdown($bookmark['description']) ?></div>
                 <?php endif; ?>
                 <?php if (!empty($bookmark['screenshot'])): ?>
                     <div class="screenshot">
