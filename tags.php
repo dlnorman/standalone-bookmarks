@@ -158,6 +158,65 @@ ksort($allTags);
             padding: 40px;
         }
 
+        .menu-dropdown {
+            position: relative;
+            display: inline-block;
+        }
+
+        .menu-trigger {
+            background: #95a5a6;
+            color: white;
+            border: none;
+            padding: 8px 15px;
+            border-radius: 4px;
+            font-size: 13px;
+            cursor: pointer;
+            display: inline-flex;
+            align-items: center;
+            gap: 5px;
+        }
+
+        .menu-trigger:hover {
+            background: #7f8c8d;
+        }
+
+        .menu-content {
+            display: none;
+            position: absolute;
+            right: 0;
+            top: 100%;
+            margin-top: 5px;
+            background: white;
+            min-width: 160px;
+            box-shadow: 0 4px 12px rgba(0,0,0,0.15);
+            border-radius: 4px;
+            z-index: 1000;
+            overflow: hidden;
+        }
+
+        .menu-content.active {
+            display: block;
+        }
+
+        .menu-content a {
+            display: block;
+            padding: 10px 15px;
+            color: #2c3e50;
+            text-decoration: none;
+            font-size: 13px;
+            transition: background 0.15s;
+        }
+
+        .menu-content a:hover {
+            background: #f8f9fa;
+        }
+
+        .menu-divider {
+            height: 1px;
+            background: #ecf0f1;
+            margin: 5px 0;
+        }
+
         @media (max-width: 600px) {
             body {
                 padding: 10px;
@@ -181,8 +240,22 @@ ksort($allTags);
     <header>
         <h1>Tags</h1>
         <div class="actions">
-            <a href="<?= $config['base_path'] ?>/" class="btn">Back to Bookmarks</a>
-            <a href="<?= $config['base_path'] ?>/logout.php" class="btn">Logout</a>
+            <a href="<?= $config['base_path'] ?>/" class="btn">← Back to Bookmarks</a>
+            <a href="<?= $config['base_path'] ?>/archive.php" class="btn">Archive</a>
+            <div class="menu-dropdown">
+                <button class="menu-trigger" onclick="toggleMenu(event)">
+                    <span>⚙</span> Menu
+                </button>
+                <div class="menu-content" id="mainMenu">
+                    <a href="<?= $config['base_path'] ?>/bookmarklet-setup.php">Bookmarklet</a>
+                    <a href="<?= $config['base_path'] ?>/rss.php">RSS Feed</a>
+                    <div class="menu-divider"></div>
+                    <a href="<?= $config['base_path'] ?>/import.php">Import</a>
+                    <a href="<?= $config['base_path'] ?>/export.php">Export</a>
+                    <div class="menu-divider"></div>
+                    <a href="<?= $config['base_path'] ?>/logout.php">Logout</a>
+                </div>
+            </div>
         </div>
     </header>
 
@@ -215,5 +288,22 @@ ksort($allTags);
             </div>
         <?php endif; ?>
     </div>
+
+    <script>
+        // Menu dropdown functionality
+        function toggleMenu(event) {
+            event.stopPropagation();
+            const menu = document.getElementById('mainMenu');
+            menu.classList.toggle('active');
+        }
+
+        // Close menu when clicking outside
+        document.addEventListener('click', function(event) {
+            const menu = document.getElementById('mainMenu');
+            if (menu && !event.target.closest('.menu-dropdown')) {
+                menu.classList.remove('active');
+            }
+        });
+    </script>
 </body>
 </html>
