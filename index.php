@@ -431,9 +431,9 @@ function parseMarkdown($text) {
             background: #f4f4f4;
             border: 1px solid #ddd;
             border-radius: 4px;
-            padding: 12px;
+            padding: 0 12px;
             overflow-x: auto;
-            margin: 10px 0;
+            margin: 0;
         }
 
         .bookmark .description pre code {
@@ -456,7 +456,7 @@ function parseMarkdown($text) {
         .bookmark .description blockquote {
             border-left: 4px solid #3498db;
             padding-left: 15px;
-            margin: 10px 0;
+            margin: 0;
             color: #666;
             font-style: italic;
         }
