@@ -806,6 +806,7 @@ function parseMarkdown($text) {
             <?php endif; ?>
             <?php if ($isLoggedIn): ?>
                 <a href="#" onclick="showAddBookmark(); return false;" class="btn btn-primary">Add Bookmark</a>
+                <a href="<?= $config['base_path'] ?>/dashboard.php" class="btn">Dashboard</a>
                 <a href="<?= $config['base_path'] ?>/archive.php" class="btn">Archive</a>
                 <a href="<?= $config['base_path'] ?>/tags.php" class="btn">Tags</a>
                 <div class="menu-dropdown">

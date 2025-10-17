@@ -34,8 +34,11 @@ try {
 // Get action
 $action = $_GET['action'] ?? $_POST['action'] ?? '';
 
-// Require authentication for all operations
-if (!is_logged_in()) {
+// Public endpoints that don't require authentication
+$publicEndpoints = ['dashboard_stats'];
+
+// Require authentication for all operations except public endpoints
+if (!in_array($action, $publicEndpoints) && !is_logged_in()) {
     http_response_code(401);
     echo json_encode(['error' => 'Authentication required']);
     exit;
@@ -270,6 +273,140 @@ switch ($action) {
         });
 
         echo json_encode(['tags' => $allTags]);
+        break;
+
+    case 'dashboard_stats':
+        // Get comprehensive dashboard statistics
+
+        // Basic stats
+        $basicStats = $db->query("
+            SELECT
+                COUNT(*) as total_bookmarks,
+                COUNT(CASE WHEN private = 0 THEN 1 END) as public_bookmarks,
+                COUNT(CASE WHEN private = 1 THEN 1 END) as private_bookmarks,
+                COUNT(CASE WHEN screenshot IS NOT NULL AND screenshot != '' THEN 1 END) as with_screenshots,
+                COUNT(CASE WHEN archive_url IS NOT NULL AND archive_url != '' THEN 1 END) as with_archives,
+                COUNT(CASE WHEN description IS NOT NULL AND description != '' THEN 1 END) as with_descriptions,
+                MIN(created_at) as first_bookmark,
+                MAX(created_at) as last_bookmark
+            FROM bookmarks
+        ")->fetch(PDO::FETCH_ASSOC);
+
+        // Activity timeline (last 90 days)
+        $timeline = $db->query("
+            SELECT DATE(created_at) as date, COUNT(*) as count
+            FROM bookmarks
+            WHERE created_at >= date('now', '-90 days')
+            GROUP BY DATE(created_at)
+            ORDER BY date ASC
+        ")->fetchAll(PDO::FETCH_ASSOC);
+
+        // Tag statistics with co-occurrence data
+        $tagRows = $db->query("
+            SELECT tags, created_at
+            FROM bookmarks
+            WHERE tags IS NOT NULL AND tags != ''
+        ")->fetchAll(PDO::FETCH_ASSOC);
+
+        $tagFrequency = [];
+        $tagCooccurrence = [];
+        $tagFirstSeen = [];
+
+        foreach ($tagRows as $row) {
+            $tags = array_map('trim', explode(',', $row['tags']));
+            $normalizedTags = array_map('strtolower', $tags);
+
+            // Track tag frequency and first appearance
+            foreach ($tags as $i => $tag) {
+                $normalizedTag = $normalizedTags[$i];
+
+                if (!isset($tagFrequency[$normalizedTag])) {
+                    $tagFrequency[$normalizedTag] = ['count' => 0, 'display' => $tag];
+                    $tagFirstSeen[$normalizedTag] = $row['created_at'];
+                }
+                $tagFrequency[$normalizedTag]['count']++;
+
+                // Update first seen if this is earlier
+                if ($row['created_at'] < $tagFirstSeen[$normalizedTag]) {
+                    $tagFirstSeen[$normalizedTag] = $row['created_at'];
+                }
+            }
+
+            // Track tag co-occurrence
+            if (count($tags) > 1) {
+                for ($i = 0; $i < count($normalizedTags); $i++) {
+                    for ($j = $i + 1; $j < count($normalizedTags); $j++) {
+                        $tag1 = $normalizedTags[$i];
+                        $tag2 = $normalizedTags[$j];
+
+                        // Create consistent key (alphabetically sorted)
+                        $key = ($tag1 < $tag2) ? "$tag1|$tag2" : "$tag2|$tag1";
+
+                        if (!isset($tagCooccurrence[$key])) {
+                            $tagCooccurrence[$key] = 0;
+                        }
+                        $tagCooccurrence[$key]++;
+                    }
+                }
+            }
+        }
+
+        // Sort tags by frequency and prepare output
+        uasort($tagFrequency, function($a, $b) {
+            return $b['count'] - $a['count'];
+        });
+
+        $topTags = array_slice($tagFrequency, 0, 30);
+        $tagStats = [];
+        foreach ($topTags as $normalizedTag => $data) {
+            $tagStats[] = [
+                'tag' => $data['display'],
+                'count' => $data['count'],
+                'first_seen' => $tagFirstSeen[$normalizedTag]
+            ];
+        }
+
+        // Prepare co-occurrence data (only for top tags)
+        $topTagNames = array_map('strtolower', array_column($tagStats, 'tag'));
+        $cooccurrenceData = [];
+        foreach ($tagCooccurrence as $key => $count) {
+            list($tag1, $tag2) = explode('|', $key);
+            // Only include if both tags are in top tags
+            if (in_array($tag1, $topTagNames) && in_array($tag2, $topTagNames)) {
+                $cooccurrenceData[] = [
+                    'source' => $tag1,
+                    'target' => $tag2,
+                    'count' => $count
+                ];
+            }
+        }
+
+        // Domain statistics
+        $domainStats = [];
+        $urlRows = $db->query("SELECT url FROM bookmarks")->fetchAll(PDO::FETCH_ASSOC);
+        foreach ($urlRows as $row) {
+            $url = $row['url'];
+            $host = parse_url($url, PHP_URL_HOST);
+            if ($host) {
+                // Remove www. prefix
+                $host = preg_replace('/^www\./', '', $host);
+                if (!isset($domainStats[$host])) {
+                    $domainStats[$host] = 0;
+                }
+                $domainStats[$host]++;
+            }
+        }
+        arsort($domainStats);
+        $topDomains = array_slice($domainStats, 0, 10);
+
+        // Prepare final output
+        echo json_encode([
+            'basic_stats' => $basicStats,
+            'timeline' => $timeline,
+            'tag_stats' => $tagStats,
+            'tag_cooccurrence' => $cooccurrenceData,
+            'top_domains' => $topDomains
+        ]);
         break;
 
     default:
