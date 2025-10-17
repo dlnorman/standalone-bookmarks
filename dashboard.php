@@ -498,12 +498,18 @@ $isLoggedIn = is_logged_in();
                 .domain(countExtent)
                 .range([8, 30]);
 
-            // Create force simulation
+            // Add margins to keep nodes within bounds
+            const margin = 40; // Margin from edges
+            const nodeRadius = 30; // Max node size
+
+            // Create force simulation with boundary constraints
             const simulation = d3.forceSimulation(nodes)
                 .force('link', d3.forceLink(links).id(d => d.id).distance(80))
                 .force('charge', d3.forceManyBody().strength(-200))
                 .force('center', d3.forceCenter(width / 2, height / 2))
-                .force('collision', d3.forceCollide().radius(d => sizeScale(d.count) + 5));
+                .force('collision', d3.forceCollide().radius(d => sizeScale(d.count) + 10))
+                .force('x', d3.forceX(width / 2).strength(0.05))
+                .force('y', d3.forceY(height / 2).strength(0.05));
 
             // Draw links
             const link = svg.append('g')
@@ -561,8 +567,15 @@ $isLoggedIn = is_logged_in();
                 link.classed('highlighted', false);
             });
 
-            // Update positions
+            // Update positions with boundary constraints
             simulation.on('tick', () => {
+                // Constrain node positions to boundaries
+                nodes.forEach(d => {
+                    const radius = sizeScale(d.count) + 20; // Node radius + text space
+                    d.x = Math.max(margin + radius, Math.min(width - margin - radius, d.x));
+                    d.y = Math.max(margin + radius, Math.min(height - margin - radius, d.y));
+                });
+
                 link
                     .attr('x1', d => d.source.x)
                     .attr('y1', d => d.source.y)
