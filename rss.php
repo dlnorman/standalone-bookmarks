@@ -9,6 +9,7 @@ if (!file_exists(__DIR__ . '/config.php')) {
 }
 
 $config = require __DIR__ . '/config.php';
+require_once __DIR__ . '/includes/markdown.php';
 
 // Set timezone
 if (isset($config['timezone'])) {
@@ -55,7 +56,7 @@ echo '<?xml version="1.0" encoding="UTF-8"?>' . "\n";
             <guid isPermaLink="false">bookmark-<?= $bookmark['id'] ?></guid>
             <pubDate><?= date(DATE_RSS, strtotime($bookmark['created_at'])) ?></pubDate>
             <?php if (!empty($bookmark['description'])): ?>
-            <description><?= htmlspecialchars($bookmark['description']) ?></description>
+            <description><![CDATA[<?= parseMarkdown($bookmark['description']) ?>]]></description>
             <?php endif; ?>
             <?php if (!empty($bookmark['screenshot'])): ?>
             <media:thumbnail url="<?= htmlspecialchars($config['site_url']) ?>/<?= htmlspecialchars($bookmark['screenshot']) ?>" />
