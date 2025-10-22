@@ -149,18 +149,40 @@ function parseMarkdown($text) {
     $output = [];
     $inList = false;
     $inBlockquote = false;
+    $inParagraph = false;
+    $paragraphLines = [];
 
     foreach ($lines as $lineNum => $line) {
         $trimmed = trim($line);
 
+        // Empty line - close any open paragraph
+        if (empty($trimmed)) {
+            if ($inParagraph) {
+                $output[] = '<p>' . implode(' ', $paragraphLines) . '</p>';
+                $paragraphLines = [];
+                $inParagraph = false;
+            }
+            continue;
+        }
+
         // Skip if line is a code block placeholder
         if (strpos($line, '___CODE_BLOCK_') !== false) {
+            if ($inParagraph) {
+                $output[] = '<p>' . implode(' ', $paragraphLines) . '</p>';
+                $paragraphLines = [];
+                $inParagraph = false;
+            }
             $output[] = $line;
             continue;
         }
 
         // Headers (# through ######)
         if (preg_match('/^(#{1,6})\s+(.+)$/', $trimmed, $matches)) {
+            if ($inParagraph) {
+                $output[] = '<p>' . implode(' ', $paragraphLines) . '</p>';
+                $paragraphLines = [];
+                $inParagraph = false;
+            }
             $level = strlen($matches[1]);
             $output[] = '<h' . $level . '>' . htmlspecialchars($matches[2], ENT_QUOTES, 'UTF-8') . '</h' . $level . '>';
             continue;
@@ -168,19 +190,29 @@ function parseMarkdown($text) {
 
         // Unordered lists (- or *)
         if (preg_match('/^[\*\-]\s+(.+)$/', $trimmed, $matches)) {
+            if ($inParagraph) {
+                $output[] = '<p>' . implode(' ', $paragraphLines) . '</p>';
+                $paragraphLines = [];
+                $inParagraph = false;
+            }
             if (!$inList) {
                 $output[] = '<ul>';
                 $inList = true;
             }
             $output[] = '<li>' . htmlspecialchars($matches[1], ENT_QUOTES, 'UTF-8') . '</li>';
             continue;
-        } elseif ($inList) {
+        } elseif ($inList === true) {
             $output[] = '</ul>';
             $inList = false;
         }
 
         // Ordered lists (1. 2. etc.)
         if (preg_match('/^\d+\.\s+(.+)$/', $trimmed, $matches)) {
+            if ($inParagraph) {
+                $output[] = '<p>' . implode(' ', $paragraphLines) . '</p>';
+                $paragraphLines = [];
+                $inParagraph = false;
+            }
             if (!$inList) {
                 $output[] = '<ol>';
                 $inList = 'ol';
@@ -194,6 +226,11 @@ function parseMarkdown($text) {
 
         // Blockquotes (including empty blockquote lines with just >)
         if (preg_match('/^>\s*(.*)$/', $trimmed, $matches)) {
+            if ($inParagraph) {
+                $output[] = '<p>' . implode(' ', $paragraphLines) . '</p>';
+                $paragraphLines = [];
+                $inParagraph = false;
+            }
             if (!$inBlockquote) {
                 $output[] = '<blockquote>';
                 $inBlockquote = true;
@@ -212,25 +249,36 @@ function parseMarkdown($text) {
 
         // Horizontal rules
         if (preg_match('/^(\*\*\*|---|___)$/', $trimmed)) {
+            if ($inParagraph) {
+                $output[] = '<p>' . implode(' ', $paragraphLines) . '</p>';
+                $paragraphLines = [];
+                $inParagraph = false;
+            }
             $output[] = '<hr>';
             continue;
         }
 
-        // Regular line - escape it
-        $output[] = htmlspecialchars($line, ENT_QUOTES, 'UTF-8');
+        // Regular line - add to paragraph
+        $inParagraph = true;
+        $paragraphLines[] = htmlspecialchars($trimmed, ENT_QUOTES, 'UTF-8');
+    }
+
+    // Close any open paragraph
+    if ($inParagraph) {
+        $output[] = '<p>' . implode(' ', $paragraphLines) . '</p>';
     }
 
     // Close any open lists or blockquotes
     if ($inList === 'ol') {
         $output[] = '</ol>';
-    } elseif ($inList) {
+    } elseif ($inList === true) {
         $output[] = '</ul>';
     }
     if ($inBlockquote) {
         $output[] = '</blockquote>';
     }
 
-    $text = implode("\n", $output);
+    $text = implode('', $output);
 
     // Inline elements (process after block elements)
     // Note: Content is already HTML-escaped at this point, so we work with escaped HTML
@@ -257,9 +305,6 @@ function parseMarkdown($text) {
     foreach ($codeBlocks as $placeholder => $codeBlock) {
         $text = str_replace($placeholder, $codeBlock, $text);
     }
-
-    // Convert newlines to <br> (but not inside block elements)
-    $text = preg_replace('/\n(?!<\/(ul|ol|blockquote|pre|h[1-6])>)/', '<br>', $text);
 
     return $text;
 }
@@ -391,6 +436,18 @@ function parseMarkdown($text) {
         }
 
         /* Markdown styling within descriptions */
+        .bookmark .description p {
+            margin: 0.75em 0;
+        }
+
+        .bookmark .description p:first-child {
+            margin-top: 0;
+        }
+
+        .bookmark .description p:last-child {
+            margin-bottom: 0;
+        }
+
         .bookmark .description h1,
         .bookmark .description h2,
         .bookmark .description h3,
