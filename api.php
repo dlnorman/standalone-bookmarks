@@ -356,9 +356,8 @@ switch ($action) {
             return $b['count'] - $a['count'];
         });
 
-        $topTags = array_slice($tagFrequency, 0, 30);
         $tagStats = [];
-        foreach ($topTags as $normalizedTag => $data) {
+        foreach ($tagFrequency as $normalizedTag => $data) {
             $tagStats[] = [
                 'tag' => $data['display'],
                 'count' => $data['count'],

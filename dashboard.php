@@ -101,7 +101,7 @@ $isLoggedIn = is_logged_in();
         /* Main content grid */
         .content-grid {
             display: grid;
-            grid-template-columns: 1fr 1fr;
+            grid-template-columns: 60% 1fr;
             grid-template-rows: 1fr 1fr;
             gap: 20px;
             height: calc(1080px - 200px);
@@ -124,6 +124,40 @@ $isLoggedIn = is_logged_in();
             margin-bottom: 15px;
             padding-bottom: 10px;
             border-bottom: 2px solid #ecf0f1;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .fullscreen-btn {
+            background: none;
+            border: none;
+            cursor: pointer;
+            font-size: 16px;
+            padding: 5px 10px;
+            color: #7f8c8d;
+            transition: all 0.2s;
+            border-radius: 4px;
+        }
+
+        .fullscreen-btn:hover {
+            background: #ecf0f1;
+            color: #2c3e50;
+        }
+
+        .panel.fullscreen {
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            z-index: 9999;
+            border-radius: 0;
+            margin: 0;
+        }
+
+        .panel.fullscreen .panel-content {
+            height: calc(100vh - 80px);
         }
 
         .panel-content {
@@ -134,16 +168,19 @@ $isLoggedIn = is_logged_in();
 
         /* Tag co-occurrence network - takes up full left side */
         #tagNetworkPanel {
-            grid-row: span 2;
+            grid-column: 1;
+            grid-row: 1 / span 2;
         }
 
         /* Velocity chart - top right */
         #velocityPanel {
+            grid-column: 2;
             grid-row: 1;
         }
 
         /* Tag evolution - bottom right */
         #tagEvolutionPanel {
+            grid-column: 2;
             grid-row: 2;
         }
 
@@ -155,12 +192,17 @@ $isLoggedIn = is_logged_in();
 
         .network-node {
             cursor: pointer;
-            transition: all 0.3s;
         }
 
-        .network-node:hover {
+        .network-node:hover circle {
             stroke: #3498db;
-            stroke-width: 3px;
+            stroke-width: 4px;
+            filter: brightness(1.1);
+        }
+
+        .network-node:hover text {
+            font-weight: 700;
+            fill: #1a1a1a;
         }
 
         .network-node text {
@@ -378,7 +420,10 @@ $isLoggedIn = is_logged_in();
 
         <div class="content-grid">
             <div class="panel" id="tagNetworkPanel">
-                <div class="panel-title">Tag Co-occurrence Network</div>
+                <div class="panel-title">
+                    <span>Tag Co-occurrence Network</span>
+                    <button class="fullscreen-btn" onclick="toggleFullscreen('tagNetworkPanel')" title="Toggle fullscreen">⛶</button>
+                </div>
                 <div class="panel-content">
                     <div class="loading">Loading tag network</div>
                     <svg class="network-container" id="tagNetwork"></svg>
@@ -386,7 +431,10 @@ $isLoggedIn = is_logged_in();
             </div>
 
             <div class="panel" id="velocityPanel">
-                <div class="panel-title">Bookmarking Velocity (90 Days)</div>
+                <div class="panel-title">
+                    <span>Bookmarking Velocity (90 Days)</span>
+                    <button class="fullscreen-btn" onclick="toggleFullscreen('velocityPanel')" title="Toggle fullscreen">⛶</button>
+                </div>
                 <div class="panel-content">
                     <div class="loading">Loading velocity data</div>
                     <svg class="chart-container" id="velocityChart"></svg>
@@ -394,7 +442,10 @@ $isLoggedIn = is_logged_in();
             </div>
 
             <div class="panel" id="tagEvolutionPanel">
-                <div class="panel-title">Tag Activity Trends (Daily)</div>
+                <div class="panel-title">
+                    <span>Tag Activity Trends (Daily)</span>
+                    <button class="fullscreen-btn" onclick="toggleFullscreen('tagEvolutionPanel')" title="Toggle fullscreen">⛶</button>
+                </div>
                 <div class="panel-content">
                     <div class="loading">Loading tag activity</div>
                     <svg class="chart-container" id="tagEvolutionChart"></svg>
@@ -495,8 +546,12 @@ $isLoggedIn = is_logged_in();
                 .attr('width', width)
                 .attr('height', height);
 
+            // Detect if we're in fullscreen mode
+            const isFullscreen = parent.closest('.panel').classList.contains('fullscreen');
+            const area = width * height;
+
             // Prepare nodes and links
-            const tagStats = data.tag_stats.slice(0, 20); // Top 20 tags
+            const tagStats = data.tag_stats; // Use all tags from API
             const nodes = tagStats.map(t => ({
                 id: t.tag.toLowerCase(),
                 label: t.tag,
@@ -505,7 +560,6 @@ $isLoggedIn = is_logged_in();
             }));
 
             const links = data.tag_cooccurrence
-                .filter(c => c.count > 1) // Only show significant connections
                 .map(c => ({
                     source: c.source,
                     target: c.target,
@@ -517,23 +571,16 @@ $isLoggedIn = is_logged_in();
             const colorScale = d3.scaleSequential(d3.interpolateBlues)
                 .domain(countExtent);
 
-            // Size scale
+            // Adaptive size scale based on space available
+            const nodeSizeRange = isFullscreen ? [8, 30] : [6, 20];
             const sizeScale = d3.scaleSqrt()
                 .domain(countExtent)
-                .range([8, 30]);
+                .range(nodeSizeRange);
 
-            // Add margins to keep nodes within bounds
-            const margin = 40; // Margin from edges
-            const nodeRadius = 30; // Max node size
-
-            // Create force simulation with boundary constraints
-            const simulation = d3.forceSimulation(nodes)
-                .force('link', d3.forceLink(links).id(d => d.id).distance(80))
-                .force('charge', d3.forceManyBody().strength(-200))
-                .force('center', d3.forceCenter(width / 2, height / 2))
-                .force('collision', d3.forceCollide().radius(d => sizeScale(d.count) + 10))
-                .force('x', d3.forceX(width / 2).strength(0.05))
-                .force('y', d3.forceY(height / 2).strength(0.05));
+            // Adaptive margins and sizing based on mode
+            const margin = isFullscreen ? 60 : 30;
+            const textPadding = isFullscreen ? 15 : 10;
+            const fontSize = isFullscreen ? '11px' : '9px';
 
             // Draw links
             const link = svg.append('g')
@@ -563,17 +610,19 @@ $isLoggedIn = is_logged_in();
             node.append('text')
                 .text(d => d.label)
                 .attr('x', 0)
-                .attr('y', d => sizeScale(d.count) + 15)
+                .attr('y', d => sizeScale(d.count) + (isFullscreen ? 15 : 12))
                 .attr('text-anchor', 'middle')
-                .attr('fill', '#2c3e50');
+                .attr('fill', '#2c3e50')
+                .attr('font-size', fontSize);
 
-            // Tooltip
+            // Tooltip and click handling
             const tooltip = document.getElementById('tooltip');
             node.on('mouseenter', function(event, d) {
                 tooltip.innerHTML = `
                     <strong>${d.label}</strong><br>
                     Count: ${d.count} bookmarks<br>
-                    First used: ${new Date(d.first_seen).toLocaleDateString()}
+                    First used: ${new Date(d.first_seen).toLocaleDateString()}<br>
+                    <em style="font-size: 10px; color: #95a5a6;">Click to view bookmarks</em>
                 `;
                 tooltip.classList.add('visible');
 
@@ -589,15 +638,99 @@ $isLoggedIn = is_logged_in();
             .on('mouseleave', function() {
                 tooltip.classList.remove('visible');
                 link.classed('highlighted', false);
+            })
+            .on('click', function(event, d) {
+                // Navigate to tag page
+                window.location.href = `${BASE_PATH}/?tag=${encodeURIComponent(d.label)}`;
             });
 
-            // Update positions with boundary constraints
-            simulation.on('tick', () => {
-                // Constrain node positions to boundaries
+            // Measure actual text widths for collision detection
+            const tempSvg = svg.append('g').attr('class', 'temp-measure');
+            nodes.forEach(d => {
+                const text = tempSvg.append('text')
+                    .text(d.label)
+                    .attr('font-size', fontSize)
+                    .attr('font-weight', '600');
+                d.textWidth = text.node().getComputedTextLength();
+                text.remove();
+            });
+            tempSvg.remove();
+
+            // Calculate collision radius for each node (node radius + text space)
+            nodes.forEach(d => {
+                d.collisionRadius = Math.max(
+                    sizeScale(d.count) + textPadding,
+                    (d.textWidth / 2) + textPadding
+                );
+            });
+
+            // Adaptive force parameters based on mode
+            const linkDistance = isFullscreen ? 40 : 25;
+            const chargeStrength = isFullscreen ? 0.8 : 0.5;
+            const centerStrength = isFullscreen ? 0.05 : 0.15;
+            const collisionStrength = isFullscreen ? 1 : 0.9;
+
+            // Create force simulation with very strong collision prevention
+            const simulation = d3.forceSimulation(nodes)
+                .force('link', d3.forceLink(links)
+                    .id(d => d.id)
+                    .distance(d => {
+                        // Adaptive distance based on node sizes and mode
+                        const source = nodes.find(n => n.id === d.source.id || n.id === d.source);
+                        const target = nodes.find(n => n.id === d.target.id || n.id === d.target);
+                        const baseDistance = (source?.collisionRadius || 30) + (target?.collisionRadius || 30);
+                        return baseDistance + linkDistance;
+                    })
+                    .strength(isFullscreen ? 0.5 : 0.4))
+                .force('charge', d3.forceManyBody()
+                    .strength(d => -Math.pow(d.collisionRadius, 2) * chargeStrength)
+                    .distanceMax(isFullscreen ? 400 : 250))
+                .force('collision', d3.forceCollide()
+                    .radius(d => d.collisionRadius)
+                    .strength(collisionStrength)
+                    .iterations(5))
+                .force('center', d3.forceCenter(width / 2, height / 2).strength(centerStrength))
+                .force('boundary', () => {
+                    // Soft boundary force to prevent edge-hugging in widget mode
+                    if (!isFullscreen) {
+                        nodes.forEach(d => {
+                            const edgeBuffer = 40;
+                            const xPush = 0.5; // Strength of push
+                            const yPush = 0.5;
+
+                            // Push away from left edge
+                            if (d.x < edgeBuffer) d.vx += xPush;
+                            // Push away from right edge
+                            if (d.x > width - edgeBuffer) d.vx -= xPush;
+                            // Push away from top edge
+                            if (d.y < edgeBuffer) d.vy += yPush;
+                            // Push away from bottom edge
+                            if (d.y > height - edgeBuffer) d.vy -= yPush;
+                        });
+                    }
+                })
+                .velocityDecay(0.6)
+                .alphaDecay(0.015)
+                .on('tick', ticked)
+                .on('end', () => {
+                    console.log('Simulation complete');
+                });
+
+            // Track last update time to prevent constant re-rendering
+            let lastUpdate = Date.now();
+            let tickCount = 0;
+
+            function ticked() {
+                tickCount++;
+
+                // Only update DOM every 2 ticks for performance
+                if (tickCount % 2 !== 0 && simulation.alpha() > 0.1) return;
+
+                // Gentle boundary constraints - keep nodes mostly in view
                 nodes.forEach(d => {
-                    const radius = sizeScale(d.count) + 20; // Node radius + text space
-                    d.x = Math.max(margin + radius, Math.min(width - margin - radius, d.x));
-                    d.y = Math.max(margin + radius, Math.min(height - margin - radius, d.y));
+                    const buffer = 20; // Small buffer to keep nodes visible
+                    d.x = Math.max(buffer, Math.min(width - buffer, d.x));
+                    d.y = Math.max(buffer, Math.min(height - buffer, d.y));
                 });
 
                 link
@@ -607,7 +740,13 @@ $isLoggedIn = is_logged_in();
                     .attr('y2', d => d.target.y);
 
                 node.attr('transform', d => `translate(${d.x},${d.y})`);
-            });
+
+                // Force stop after settling completely
+                if (simulation.alpha() < 0.005) {
+                    simulation.stop();
+                    console.log('Force stopped at alpha:', simulation.alpha());
+                }
+            }
 
             // Drag functions
             function dragstarted(event, d) {
@@ -899,11 +1038,52 @@ $isLoggedIn = is_logged_in();
                 `Last updated: ${now.toLocaleTimeString()}`;
         }
 
-        // Auto-refresh every 60 seconds
-        setInterval(fetchDashboardData, 60000);
+        // Auto-refresh disabled - uncomment if you want automatic updates
+        // setInterval(fetchDashboardData, 60000);
 
         // Initial load
         fetchDashboardData();
+
+        // Fullscreen toggle functionality
+        function toggleFullscreen(panelId) {
+            const panel = document.getElementById(panelId);
+            panel.classList.toggle('fullscreen');
+
+            // Re-render the visualization after fullscreen toggle
+            setTimeout(() => {
+                if (dashboardData) {
+                    if (panelId === 'tagNetworkPanel') {
+                        renderTagNetwork(dashboardData);
+                    } else if (panelId === 'velocityPanel') {
+                        renderVelocityChart(dashboardData);
+                    } else if (panelId === 'tagEvolutionPanel') {
+                        renderTagEvolution(dashboardData);
+                    }
+                }
+            }, 100);
+        }
+
+        // Allow ESC key to exit fullscreen
+        document.addEventListener('keydown', function(event) {
+            if (event.key === 'Escape') {
+                const fullscreenPanel = document.querySelector('.panel.fullscreen');
+                if (fullscreenPanel) {
+                    fullscreenPanel.classList.remove('fullscreen');
+                    // Re-render after exiting fullscreen
+                    setTimeout(() => {
+                        if (dashboardData) {
+                            if (fullscreenPanel.id === 'tagNetworkPanel') {
+                                renderTagNetwork(dashboardData);
+                            } else if (fullscreenPanel.id === 'velocityPanel') {
+                                renderVelocityChart(dashboardData);
+                            } else if (fullscreenPanel.id === 'tagEvolutionPanel') {
+                                renderTagEvolution(dashboardData);
+                            }
+                        }
+                    }, 100);
+                }
+            }
+        });
     </script>
 </body>
 </html>
