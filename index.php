@@ -685,6 +685,7 @@ $totalPages = ceil($total / $limit);
             <?php if ($isLoggedIn): ?>
                 <a href="#" onclick="showAddBookmark(); return false;" class="btn btn-primary">Add Bookmark</a>
                 <a href="<?= $config['base_path'] ?>/dashboard.php" class="btn">Dashboard</a>
+                <a href="<?= $config['base_path'] ?>/gallery.php" class="btn">Gallery</a>
                 <a href="<?= $config['base_path'] ?>/archive.php" class="btn">Archive</a>
                 <a href="<?= $config['base_path'] ?>/tags.php" class="btn">Tags</a>
                 <div class="menu-dropdown">
@@ -703,6 +704,7 @@ $totalPages = ceil($total / $limit);
                 </div>
             <?php else: ?>
                 <a href="<?= $config['base_path'] ?>/login.php" class="btn btn-primary">Login</a>
+                <a href="<?= $config['base_path'] ?>/gallery.php" class="btn">Gallery</a>
                 <a href="<?= $config['base_path'] ?>/archive.php" class="btn">Archive</a>
                 <a href="<?= $config['base_path'] ?>/rss.php" class="btn">RSS Feed</a>
             <?php endif; ?>
