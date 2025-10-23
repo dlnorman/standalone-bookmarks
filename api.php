@@ -399,13 +399,84 @@ switch ($action) {
         arsort($domainStats);
         $topDomains = array_slice($domainStats, 0, 10);
 
+        // Tag activity over time - use DAILY granularity for better resolution
+        $dailyTagData = $db->query("
+            SELECT
+                DATE(created_at) as date,
+                tags
+            FROM bookmarks
+            WHERE tags IS NOT NULL
+                AND tags != ''
+            ORDER BY created_at ASC
+        ")->fetchAll(PDO::FETCH_ASSOC);
+
+        // Process into daily tag counts
+        $dailyTagCounts = [];
+        $allTagsSet = new stdClass(); // Use object as set
+
+        foreach ($dailyTagData as $row) {
+            $date = $row['date'];
+            $tags = array_map('trim', explode(',', $row['tags']));
+
+            if (!isset($dailyTagCounts[$date])) {
+                $dailyTagCounts[$date] = [];
+            }
+
+            foreach ($tags as $tag) {
+                $normalizedTag = strtolower($tag);
+                if (!isset($dailyTagCounts[$date][$normalizedTag])) {
+                    $dailyTagCounts[$date][$normalizedTag] = ['count' => 0, 'display' => $tag];
+                }
+                $dailyTagCounts[$date][$normalizedTag]['count']++;
+                $allTagsSet->$normalizedTag = true;
+            }
+        }
+
+        // Get top tags for the period
+        $tagTotals = [];
+        foreach ($dailyTagCounts as $date => $tags) {
+            foreach ($tags as $normalizedTag => $data) {
+                if (!isset($tagTotals[$normalizedTag])) {
+                    $tagTotals[$normalizedTag] = ['count' => 0, 'display' => $data['display']];
+                }
+                $tagTotals[$normalizedTag]['count'] += $data['count'];
+            }
+        }
+
+        // Sort by count (descending)
+        uasort($tagTotals, function($a, $b) {
+            return $b['count'] - $a['count'];
+        });
+
+        $topTagsForChart = array_slice($tagTotals, 0, 10, true);
+
+        // Build the final data structure with daily data
+        $tagActivity = [];
+        foreach ($topTagsForChart as $normalizedTag => $data) {
+            $days = [];
+            foreach ($dailyTagCounts as $date => $tagData) {
+                if (isset($tagData[$normalizedTag])) {
+                    $days[] = [
+                        'date' => $date,
+                        'count' => $tagData[$normalizedTag]['count']
+                    ];
+                }
+            }
+            $tagActivity[] = [
+                'tag' => $data['display'],
+                'days' => $days,
+                'total' => $data['count']
+            ];
+        }
+
         // Prepare final output
         echo json_encode([
             'basic_stats' => $basicStats,
             'timeline' => $timeline,
             'tag_stats' => $tagStats,
             'tag_cooccurrence' => $cooccurrenceData,
-            'top_domains' => $topDomains
+            'top_domains' => $topDomains,
+            'tag_activity_heatmap' => $tagActivity
         ]);
         break;
 

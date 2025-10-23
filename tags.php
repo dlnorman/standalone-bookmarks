@@ -145,12 +145,12 @@ ksort($allTags);
             border-radius: 10px;
         }
 
-        /* Size tags based on frequency */
-        .tag-size-1 { font-size: 0.9em; }
-        .tag-size-2 { font-size: 1em; }
-        .tag-size-3 { font-size: 1.1em; }
-        .tag-size-4 { font-size: 1.3em; }
-        .tag-size-5 { font-size: 1.5em; }
+        /* Size tags based on frequency - wider spread for more visual impact */
+        .tag-size-1 { font-size: 0.75em; }
+        .tag-size-2 { font-size: 0.95em; }
+        .tag-size-3 { font-size: 1.2em; }
+        .tag-size-4 { font-size: 1.6em; font-weight: 600; }
+        .tag-size-5 { font-size: 2.2em; font-weight: 700; }
 
         .no-tags {
             text-align: center;
@@ -267,15 +267,24 @@ ksort($allTags);
         <?php else: ?>
             <div class="tag-cloud">
                 <?php
-                // Calculate size classes based on frequency
+                // Calculate size classes based on frequency using logarithmic scale
                 $maxCount = max($allTags);
                 $minCount = min($allTags);
-                $range = max($maxCount - $minCount, 1);
 
                 foreach ($allTags as $tag => $count):
-                    // Calculate size (1-5)
-                    $normalized = ($count - $minCount) / $range;
-                    $size = max(1, min(5, ceil($normalized * 5)));
+                    // Use logarithmic scale for better distribution
+                    // This gives more differentiation at lower counts
+                    if ($count == 1) {
+                        $size = 1;
+                    } elseif ($count <= 2) {
+                        $size = 2;
+                    } elseif ($count <= 4) {
+                        $size = 3;
+                    } elseif ($count <= 8) {
+                        $size = 4;
+                    } else {
+                        $size = 5;
+                    }
                 ?>
                     <div class="tag-item">
                         <a href="<?= $config['base_path'] ?>/?tag=<?= urlencode($tag) ?>"

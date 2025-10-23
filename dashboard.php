@@ -212,13 +212,37 @@ $isLoggedIn = is_logged_in();
             stroke-width: 2;
         }
 
-        .tag-timeline-item {
-            cursor: pointer;
-            transition: all 0.2s;
+        .tag-area {
+            transition: opacity 0.3s;
         }
 
-        .tag-timeline-item:hover {
-            stroke-width: 3px;
+        .tag-area:hover {
+            opacity: 0.8;
+            stroke: #2c3e50;
+            stroke-width: 2px;
+        }
+
+        .tag-legend-item {
+            cursor: pointer;
+            transition: opacity 0.2s;
+        }
+
+        .tag-legend-item:hover {
+            opacity: 0.7;
+        }
+
+        .tag-legend-item.inactive {
+            opacity: 0.3;
+        }
+
+        .tag-line {
+            fill: none;
+            stroke-width: 2;
+            transition: all 0.3s;
+        }
+
+        .tag-line:hover {
+            stroke-width: 3;
         }
 
         /* Loading state */
@@ -370,9 +394,9 @@ $isLoggedIn = is_logged_in();
             </div>
 
             <div class="panel" id="tagEvolutionPanel">
-                <div class="panel-title">Tag Evolution Timeline</div>
+                <div class="panel-title">Tag Activity Trends (Daily)</div>
                 <div class="panel-content">
-                    <div class="loading">Loading tag evolution</div>
+                    <div class="loading">Loading tag activity</div>
                     <svg class="chart-container" id="tagEvolutionChart"></svg>
                 </div>
             </div>
@@ -645,7 +669,7 @@ $isLoggedIn = is_logged_in();
             svg.append('g')
                 .attr('class', 'axis')
                 .attr('transform', `translate(0,${height})`)
-                .call(d3.axisBottom(x).ticks(8));
+                .call(d3.axisBottom(x).ticks(6).tickFormat(d3.timeFormat('%b %d')));
 
             svg.append('g')
                 .attr('class', 'axis')
@@ -701,14 +725,14 @@ $isLoggedIn = is_logged_in();
                 .attr('d', line);
         }
 
-        // Render tag evolution timeline
+        // Render tag activity as stacked area chart
         function renderTagEvolution(data) {
             const container = document.getElementById('tagEvolutionChart');
             const parent = container.parentElement;
             parent.querySelector('.loading').style.display = 'none';
             container.style.display = 'block';
 
-            const margin = {top: 20, right: 100, bottom: 30, left: 40};
+            const margin = {top: 30, right: 120, bottom: 40, left: 50};
             const width = parent.clientWidth - margin.left - margin.right;
             const height = parent.clientHeight - margin.top - margin.bottom;
 
@@ -721,87 +745,151 @@ $isLoggedIn = is_logged_in();
                 .append('g')
                 .attr('transform', `translate(${margin.left},${margin.top})`);
 
-            const tagStats = data.tag_stats.slice(0, 15); // Top 15 tags
+            const tagData = data.tag_activity_heatmap || [];
 
-            // Parse dates
-            tagStats.forEach(d => {
-                d.first_seen = new Date(d.first_seen);
+            if (tagData.length === 0) {
+                svg.append('text')
+                    .attr('x', width / 2)
+                    .attr('y', height / 2)
+                    .attr('text-anchor', 'middle')
+                    .attr('fill', '#95a5a6')
+                    .text('Not enough data to display chart');
+                return;
+            }
+
+            // Get all unique dates and sort them
+            const allDates = new Set();
+            tagData.forEach(tag => {
+                tag.days.forEach(d => allDates.add(d.date));
+            });
+            const dates = Array.from(allDates).sort();
+
+            if (dates.length === 0) {
+                svg.append('text')
+                    .attr('x', width / 2)
+                    .attr('y', height / 2)
+                    .attr('text-anchor', 'middle')
+                    .attr('fill', '#95a5a6')
+                    .text('No recent activity data');
+                return;
+            }
+
+            // Create complete data series for each tag (fill in missing dates with 0)
+            const series = tagData.map(tag => {
+                const dateMap = new Map(tag.days.map(d => [d.date, d.count]));
+                return {
+                    tag: tag.tag,
+                    values: dates.map(date => ({
+                        date: date,
+                        count: dateMap.get(date) || 0
+                    }))
+                };
             });
 
-            // Sort by first seen
-            tagStats.sort((a, b) => a.first_seen - b.first_seen);
+            // Parse date strings
+            const parseDate = d3.timeParse('%Y-%m-%d');
 
             // Scales
             const x = d3.scaleTime()
-                .domain(d3.extent(tagStats, d => d.first_seen))
+                .domain([parseDate(dates[0]), parseDate(dates[dates.length - 1])])
                 .range([0, width]);
 
-            const y = d3.scalePoint()
-                .domain(tagStats.map(d => d.tag))
-                .range([0, height])
-                .padding(0.5);
+            // Find max value for y scale
+            const maxValue = d3.max(dates, date => {
+                return d3.sum(series, s => {
+                    const dataPoint = s.values.find(v => v.date === date);
+                    return dataPoint ? dataPoint.count : 0;
+                });
+            });
 
-            const sizeScale = d3.scaleSqrt()
-                .domain(d3.extent(tagStats, d => d.count))
-                .range([4, 15]);
+            const y = d3.scaleLinear()
+                .domain([0, maxValue])
+                .nice()
+                .range([height, 0]);
 
-            const colorScale = d3.scaleSequential(d3.interpolateTurbo)
-                .domain([0, tagStats.length - 1]);
+            // Color scale
+            const colorScale = d3.scaleOrdinal()
+                .domain(tagData.map(d => d.tag))
+                .range(d3.schemeCategory10);
 
-            // Axes
-            svg.append('g')
-                .attr('class', 'axis')
-                .attr('transform', `translate(0,${height})`)
-                .call(d3.axisBottom(x).ticks(8));
+            // Stack the data
+            const stack = d3.stack()
+                .keys(series.map(s => s.tag))
+                .value((d, key) => {
+                    const tagSeries = series.find(s => s.tag === key);
+                    const dataPoint = tagSeries.values.find(v => v.date === d);
+                    return dataPoint ? dataPoint.count : 0;
+                });
 
-            svg.append('g')
-                .attr('class', 'axis')
-                .call(d3.axisLeft(y));
+            const stackedData = stack(dates);
 
-            // Timeline items
+            // Area generator
+            const area = d3.area()
+                .x(d => x(parseDate(d.data)))
+                .y0(d => y(d[0]))
+                .y1(d => y(d[1]))
+                .curve(d3.curveMonotoneX);
+
+            // Draw areas
             const tooltip = document.getElementById('tooltip');
 
-            svg.selectAll('.tag-timeline-item')
-                .data(tagStats)
-                .join('circle')
-                .attr('class', 'tag-timeline-item')
-                .attr('cx', d => x(d.first_seen))
-                .attr('cy', d => y(d.tag))
-                .attr('r', d => sizeScale(d.count))
-                .attr('fill', (d, i) => colorScale(i))
-                .attr('stroke', '#fff')
-                .attr('stroke-width', 2)
+            svg.selectAll('.tag-area')
+                .data(stackedData)
+                .join('path')
+                .attr('class', 'tag-area')
+                .attr('fill', d => colorScale(d.key))
+                .attr('d', area)
+                .attr('opacity', 0.7)
                 .on('mouseenter', function(event, d) {
+                    d3.select(this).attr('opacity', 0.9);
+                    const tagInfo = tagData.find(t => t.tag === d.key);
                     tooltip.innerHTML = `
-                        <strong>${d.tag}</strong><br>
-                        First used: ${d.first_seen.toLocaleDateString()}<br>
-                        Total uses: ${d.count} bookmarks
+                        <strong>${d.key}</strong><br>
+                        Total: ${tagInfo.total} bookmarks
                     `;
                     tooltip.classList.add('visible');
-                    d3.select(this).attr('stroke', '#2c3e50');
                 })
                 .on('mousemove', function(event) {
                     tooltip.style.left = (event.pageX + 10) + 'px';
                     tooltip.style.top = (event.pageY + 10) + 'px';
                 })
                 .on('mouseleave', function() {
+                    d3.select(this).attr('opacity', 0.7);
                     tooltip.classList.remove('visible');
-                    d3.select(this).attr('stroke', '#fff');
                 });
 
-            // Connect to present
-            svg.selectAll('.tag-timeline-line')
-                .data(tagStats)
-                .join('line')
-                .attr('class', 'tag-timeline-line')
-                .attr('x1', d => x(d.first_seen))
-                .attr('y1', d => y(d.tag))
-                .attr('x2', width)
-                .attr('y2', d => y(d.tag))
-                .attr('stroke', (d, i) => colorScale(i))
-                .attr('stroke-width', 1)
-                .attr('stroke-opacity', 0.2)
-                .attr('stroke-dasharray', '4,4');
+            // Axes
+            svg.append('g')
+                .attr('class', 'axis')
+                .attr('transform', `translate(0,${height})`)
+                .call(d3.axisBottom(x).ticks(6).tickFormat(d3.timeFormat('%b %d')));
+
+            svg.append('g')
+                .attr('class', 'axis')
+                .call(d3.axisLeft(y).ticks(5));
+
+            // Legend
+            const legend = svg.append('g')
+                .attr('transform', `translate(${width + 15}, 0)`);
+
+            const legendItems = legend.selectAll('.tag-legend-item')
+                .data(series)
+                .join('g')
+                .attr('class', 'tag-legend-item')
+                .attr('transform', (d, i) => `translate(0, ${i * 20})`);
+
+            legendItems.append('rect')
+                .attr('width', 12)
+                .attr('height', 12)
+                .attr('fill', d => colorScale(d.tag))
+                .attr('opacity', 0.7);
+
+            legendItems.append('text')
+                .attr('x', 18)
+                .attr('y', 10)
+                .attr('font-size', '11px')
+                .attr('fill', '#2c3e50')
+                .text(d => d.tag);
         }
 
         // Update last updated timestamp

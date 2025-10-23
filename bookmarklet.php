@@ -102,12 +102,20 @@ if (!empty($url) && empty($_POST['submit']) && !$isEdit) {
         }
     }
 
+    // Wrap description in blockquote format
+    if (!empty($description)) {
+        $description = '> ' . str_replace("\n", "\n> ", $description);
+    }
+
     // Append selected text to description if provided
     if (!empty($selectedText)) {
+        // Wrap selected text in blockquote format
+        $wrappedSelectedText = '> ' . str_replace("\n", "\n> ", $selectedText);
+
         if (!empty($description)) {
-            $description .= "\n\n---\nSelected text:\n" . $selectedText;
+            $description .= "\n\n---\n### Selected text\n\n" . $wrappedSelectedText;
         } else {
-            $description = $selectedText;
+            $description = $wrappedSelectedText;
         }
     }
 }
