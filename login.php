@@ -10,6 +10,8 @@ if (!file_exists(__DIR__ . '/config.php')) {
 
 $config = require __DIR__ . '/config.php';
 require_once __DIR__ . '/auth.php';
+require_once __DIR__ . '/includes/csrf.php';
+require_once __DIR__ . '/includes/security.php';
 
 // Set timezone
 if (isset($config['timezone'])) {
@@ -23,18 +25,36 @@ if (is_logged_in()) {
 }
 
 $error = '';
-$redirect = $_GET['redirect'] ?? $config['base_path'] . '/';
+$redirectParam = $_GET['redirect'] ?? $config['base_path'] . '/';
+$redirect = validate_redirect_url($redirectParam, $config['base_path'], $config['base_path'] . '/');
 
 // Handle login form submission
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
-    $username = $_POST['username'] ?? '';
-    $password = $_POST['password'] ?? '';
+    // Validate CSRF token
+    csrf_require_valid_token();
 
-    if (login($username, $password, $config)) {
-        header('Location: ' . $redirect);
-        exit;
+    // Get client IP for rate limiting
+    $clientIp = $_SERVER['REMOTE_ADDR'] ?? 'unknown';
+
+    // Check rate limiting
+    if (is_rate_limited($clientIp, 5, 300)) {
+        $lockoutTime = get_lockout_time($clientIp);
+        $minutes = ceil($lockoutTime / 60);
+        $error = "Too many failed login attempts. Please try again in {$minutes} minute(s).";
     } else {
-        $error = 'Invalid username or password';
+        $username = $_POST['username'] ?? '';
+        $password = $_POST['password'] ?? '';
+
+        if (login($username, $password, $config)) {
+            // Successful login - reset rate limit
+            reset_rate_limit($clientIp);
+            header('Location: ' . $redirect);
+            exit;
+        } else {
+            // Failed login - record attempt
+            record_failed_login($clientIp);
+            $error = 'Invalid username or password';
+        }
     }
 }
 
@@ -143,6 +163,7 @@ $timeout_msg = isset($_GET['timeout']) ? 'Your session has expired. Please login
         <?php endif; ?>
 
         <form method="post" action="">
+            <?php csrf_field(); ?>
             <div class="form-group">
                 <label for="username">Username</label>
                 <input type="text" id="username" name="username" required autofocus>

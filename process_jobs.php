@@ -11,6 +11,7 @@ if (!file_exists(__DIR__ . '/config.php')) {
 }
 
 $config = require __DIR__ . '/config.php';
+require_once __DIR__ . '/includes/security.php';
 
 // Set timezone
 if (isset($config['timezone'])) {
@@ -48,18 +49,24 @@ try {
             if ($job['job_type'] === 'archive') {
                 // Archive with Wayback Machine
                 $url = $job['payload'];
-                $archiveApiUrl = 'https://web.archive.org/save/' . $url;
 
-                $context = stream_context_create([
-                    'http' => [
-                        'method' => 'GET',
-                        'timeout' => 30,
-                        'user_agent' => 'Mozilla/5.0 (compatible; BookmarksApp/1.0)',
-                        'follow_location' => false,
-                    ]
-                ]);
+                // Validate URL for SSRF protection
+                if (!is_safe_url($url)) {
+                    $result = 'URL not allowed: Private/internal addresses are blocked';
+                    $success = false;
+                } else {
+                    $archiveApiUrl = 'https://web.archive.org/save/' . $url;
 
-                $response = @file_get_contents($archiveApiUrl, false, $context);
+                    $context = stream_context_create([
+                        'http' => [
+                            'method' => 'GET',
+                            'timeout' => 30,
+                            'user_agent' => 'Mozilla/5.0 (compatible; BookmarksApp/1.0)',
+                            'follow_location' => false,
+                        ]
+                    ]);
+
+                    $response = @file_get_contents($archiveApiUrl, false, $context);
                 $archiveUrl = '';
 
                 if (isset($http_response_header)) {
@@ -83,25 +90,32 @@ try {
                 $db->prepare("UPDATE bookmarks SET archive_url = ?, updated_at = ? WHERE id = ?")
                    ->execute([$archiveUrl, $now, $job['bookmark_id']]);
 
-                $result = $archiveUrl;
-                $success = true;
+                    $result = $archiveUrl;
+                    $success = true;
+                }
 
             } elseif ($job['job_type'] === 'thumbnail') {
                 // Fetch thumbnail from OG image or favicon
                 $url = $job['payload'];
 
-                // First, fetch the page to extract thumbnail URL
-                $context = stream_context_create([
-                    'http' => [
-                        'timeout' => 10,
-                        'user_agent' => 'Mozilla/5.0 (compatible; BookmarksApp/1.0)',
-                    ]
-                ]);
+                // Validate URL for SSRF protection
+                if (!is_safe_url($url)) {
+                    $result = 'URL not allowed: Private/internal addresses are blocked';
+                    $success = false;
+                } else {
+                    // First, fetch the page to extract thumbnail URL
+                    $fetchResult = safe_fetch_url($url, 10);
 
-                $html = @file_get_contents($url, false, $context);
+                    if (!$fetchResult['success']) {
+                        $result = 'Failed to fetch page: ' . $fetchResult['error'];
+                        $html = false;
+                    } else {
+                        $html = $fetchResult['content'];
+                    }
+                }
                 $thumbnailUrl = '';
 
-                if ($html) {
+                if (isset($html) && $html) {
                     // Try OG image (multiple patterns)
                     if (preg_match('/<meta\s+[^>]*property\s*=\s*["\']og:image["\']\s+[^>]*content\s*=\s*["\']([^"\']+)["\'][^>]*>/is', $html, $matches)) {
                         $thumbnailUrl = $matches[1];

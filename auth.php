@@ -62,15 +62,24 @@ function is_logged_in() {
  * Require authentication - redirect to login if not logged in
  */
 function require_auth($config) {
+    // Load security functions if not already loaded
+    if (!function_exists('validate_redirect_url')) {
+        require_once __DIR__ . '/includes/security.php';
+    }
+
+    // Get current URI and validate it's safe for redirect
+    $currentUri = $_SERVER['REQUEST_URI'] ?? $config['base_path'] . '/';
+    $safeRedirect = validate_redirect_url($currentUri, $config['base_path'], $config['base_path'] . '/');
+
     // Check if session was expired
     if (isset($_SESSION['session_expired']) && $_SESSION['session_expired'] === true) {
         session_destroy();
-        header('Location: ' . $config['base_path'] . '/login.php?timeout=1&redirect=' . urlencode($_SERVER['REQUEST_URI']));
+        header('Location: ' . $config['base_path'] . '/login.php?timeout=1&redirect=' . urlencode($safeRedirect));
         exit;
     }
 
     if (!is_logged_in()) {
-        header('Location: ' . $config['base_path'] . '/login.php?redirect=' . urlencode($_SERVER['REQUEST_URI']));
+        header('Location: ' . $config['base_path'] . '/login.php?redirect=' . urlencode($safeRedirect));
         exit;
     }
 }

@@ -15,6 +15,8 @@ if (!file_exists(__DIR__ . '/config.php')) {
 
 $config = require __DIR__ . '/config.php';
 require_once __DIR__ . '/auth.php';
+require_once __DIR__ . '/includes/csrf.php';
+require_once __DIR__ . '/includes/security.php';
 
 // Set timezone
 if (isset($config['timezone'])) {
@@ -37,11 +39,24 @@ $action = $_GET['action'] ?? $_POST['action'] ?? '';
 // Public endpoints that don't require authentication
 $publicEndpoints = ['dashboard_stats'];
 
+// Read-only endpoints that don't require CSRF tokens
+$readOnlyEndpoints = ['get', 'list', 'fetch_meta', 'get_tags', 'dashboard_stats'];
+
 // Require authentication for all operations except public endpoints
 if (!in_array($action, $publicEndpoints) && !is_logged_in()) {
     http_response_code(401);
     echo json_encode(['error' => 'Authentication required']);
     exit;
+}
+
+// Require CSRF token for state-changing operations
+if ($_SERVER['REQUEST_METHOD'] === 'POST' && !in_array($action, $readOnlyEndpoints)) {
+    $token = $_POST['csrf_token'] ?? '';
+    if (!csrf_validate_token($token)) {
+        http_response_code(403);
+        echo json_encode(['error' => 'Invalid CSRF token. Please refresh the page and try again.']);
+        exit;
+    }
 }
 
 switch ($action) {
@@ -199,6 +214,13 @@ switch ($action) {
             exit;
         }
 
+        // Validate URL for SSRF protection
+        if (!is_safe_url($url)) {
+            http_response_code(400);
+            echo json_encode(['error' => 'URL not allowed: Private/internal addresses are blocked for security']);
+            exit;
+        }
+
         $meta = [
             'url' => $url,
             'title' => '',
@@ -206,15 +228,16 @@ switch ($action) {
             'tags' => ''
         ];
 
-        // Fetch the page content
-        $context = stream_context_create([
-            'http' => [
-                'timeout' => 10,
-                'user_agent' => 'Mozilla/5.0 (compatible; BookmarksApp/1.0)',
-            ]
-        ]);
+        // Fetch the page content safely
+        $result = safe_fetch_url($url, 10);
 
-        $html = @file_get_contents($url, false, $context);
+        if (!$result['success']) {
+            http_response_code(400);
+            echo json_encode(['error' => $result['error']]);
+            exit;
+        }
+
+        $html = $result['content'];
 
         if ($html) {
             // Extract title

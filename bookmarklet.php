@@ -10,6 +10,8 @@ if (!file_exists(__DIR__ . '/config.php')) {
 
 $config = require __DIR__ . '/config.php';
 require_once __DIR__ . '/auth.php';
+require_once __DIR__ . '/includes/csrf.php';
+require_once __DIR__ . '/includes/security.php';
 
 // Set timezone
 if (isset($config['timezone'])) {
@@ -56,17 +58,23 @@ if (empty($existingBookmark)) {
 }
 
 if (!empty($url) && empty($_POST['submit']) && !$isEdit) {
-    // Fetch metadata directly from the URL
-    $context = stream_context_create([
-        'http' => [
-            'timeout' => 10,
-            'user_agent' => 'Mozilla/5.0 (compatible; BookmarksApp/1.0)',
-        ]
-    ]);
+    // Validate URL for SSRF protection
+    if (!is_safe_url($url)) {
+        $error = 'URL not allowed: Private/internal addresses are blocked for security';
+        $url = '';
+    } else {
+        // Fetch metadata directly from the URL
+        $result = safe_fetch_url($url, 10);
 
-    $html = @file_get_contents($url, false, $context);
+        if (!$result['success']) {
+            // Failed to fetch - that's okay, user can still manually enter data
+            $html = false;
+        } else {
+            $html = $result['content'];
+        }
+    }
 
-    if ($html) {
+    if (isset($html) && $html) {
         // Extract title
         if (preg_match('/<title[^>]*>(.*?)<\/title>/is', $html, $matches)) {
             $extractedTitle = html_entity_decode(trim($matches[1]), ENT_QUOTES, 'UTF-8');
@@ -122,6 +130,9 @@ if (!empty($url) && empty($_POST['submit']) && !$isEdit) {
 
 // Handle form submission
 if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['submit'])) {
+    // Validate CSRF token
+    csrf_require_valid_token();
+
     $submitUrl = $_POST['url'] ?? '';
     $submitTitle = $_POST['title'] ?? '';
     $submitDescription = $_POST['description'] ?? '';
@@ -368,6 +379,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['submit'])) {
         <?php endif; ?>
 
         <form method="post" action="">
+            <?php csrf_field(); ?>
             <?php if ($isEdit): ?>
             <input type="hidden" name="bookmark_id" value="<?= $existingBookmark['id'] ?>">
             <?php endif; ?>

@@ -11,6 +11,7 @@ if (!file_exists(__DIR__ . '/config.php')) {
 $config = require __DIR__ . '/config.php';
 require_once __DIR__ . '/auth.php';
 require_once __DIR__ . '/includes/markdown.php';
+require_once __DIR__ . '/includes/csrf.php';
 
 // Set timezone
 if (isset($config['timezone'])) {
@@ -797,6 +798,7 @@ $totalPages = ceil($total / $limit);
     <script>
         const BASE_PATH = <?= json_encode($config['base_path']) ?>;
         const IS_LOGGED_IN = <?= json_encode($isLoggedIn) ?>;
+        const CSRF_TOKEN = <?= json_encode(csrf_get_token()) ?>;
 
         function showAddBookmark() {
             if (!IS_LOGGED_IN) return;
@@ -812,6 +814,7 @@ $totalPages = ceil($total / $limit);
 
             const formData = new FormData();
             formData.append('action', 'add');
+            formData.append('csrf_token', CSRF_TOKEN);
             formData.append('url', url);
             formData.append('title', title);
             formData.append('description', description);
@@ -914,6 +917,7 @@ $totalPages = ceil($total / $limit);
 
             const formData = new FormData();
             formData.append('action', 'edit');
+            formData.append('csrf_token', CSRF_TOKEN);
             formData.append('id', id);
             formData.append('url', url);
             formData.append('title', title);
@@ -942,6 +946,7 @@ $totalPages = ceil($total / $limit);
 
             const formData = new FormData();
             formData.append('action', 'delete');
+            formData.append('csrf_token', CSRF_TOKEN);
             formData.append('id', id);
 
             fetch(BASE_PATH + '/api.php', {

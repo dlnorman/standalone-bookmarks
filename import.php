@@ -10,6 +10,7 @@ if (!file_exists(__DIR__ . '/config.php')) {
 
 $config = require __DIR__ . '/config.php';
 require_once __DIR__ . '/auth.php';
+require_once __DIR__ . '/includes/csrf.php';
 
 // Set timezone
 if (isset($config['timezone'])) {
@@ -37,6 +38,9 @@ $stats = null;
 
 // Handle file upload
 if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_FILES['import_file'])) {
+    // Validate CSRF token
+    csrf_require_valid_token();
+
     if ($_FILES['import_file']['error'] === UPLOAD_ERR_OK) {
         $tmpFile = $_FILES['import_file']['tmp_name'];
         $content = file_get_contents($tmpFile);
@@ -396,6 +400,7 @@ function importBookmarks($db, $content) {
         </div>
 
         <form method="post" enctype="multipart/form-data">
+            <?php csrf_field(); ?>
             <div class="form-group">
                 <label for="import_file">Select Bookmark File:</label>
                 <input type="file" id="import_file" name="import_file" accept=".html,.htm" required>
