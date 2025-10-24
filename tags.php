@@ -10,6 +10,7 @@ if (!file_exists(__DIR__ . '/config.php')) {
 
 $config = require __DIR__ . '/config.php';
 require_once __DIR__ . '/auth.php';
+require_once __DIR__ . '/includes/nav.php';
 
 // Set timezone
 if (isset($config['timezone'])) {
@@ -53,6 +54,7 @@ ksort($allTags);
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Tags - <?= htmlspecialchars($config['site_title']) ?></title>
+    <?php render_nav_styles(); ?>
     <style>
         * {
             box-sizing: border-box;
@@ -60,46 +62,17 @@ ksort($allTags);
 
         body {
             font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
-            max-width: 900px;
-            margin: 0 auto;
-            padding: 20px;
+            margin: 0;
+            padding: 0;
             line-height: 1.6;
             background: #f5f5f5;
             color: #333;
         }
 
-        header {
-            background: white;
+        .page-container {
+            max-width: 900px;
+            margin: 0 auto;
             padding: 20px;
-            border-radius: 8px;
-            margin-bottom: 20px;
-            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
-        }
-
-        h1 {
-            margin: 0 0 15px 0;
-            font-size: 24px;
-            color: #2c3e50;
-        }
-
-        .actions {
-            display: flex;
-            gap: 10px;
-            flex-wrap: wrap;
-        }
-
-        .btn {
-            padding: 8px 15px;
-            background: #95a5a6;
-            color: white;
-            text-decoration: none;
-            border-radius: 4px;
-            font-size: 13px;
-            display: inline-block;
-        }
-
-        .btn:hover {
-            background: #7f8c8d;
         }
 
         .tags-container {
@@ -158,72 +131,9 @@ ksort($allTags);
             padding: 40px;
         }
 
-        .menu-dropdown {
-            position: relative;
-            display: inline-block;
-        }
-
-        .menu-trigger {
-            background: #95a5a6;
-            color: white;
-            border: none;
-            padding: 8px 15px;
-            border-radius: 4px;
-            font-size: 13px;
-            cursor: pointer;
-            display: inline-flex;
-            align-items: center;
-            gap: 5px;
-        }
-
-        .menu-trigger:hover {
-            background: #7f8c8d;
-        }
-
-        .menu-content {
-            display: none;
-            position: absolute;
-            right: 0;
-            top: 100%;
-            margin-top: 5px;
-            background: white;
-            min-width: 160px;
-            box-shadow: 0 4px 12px rgba(0,0,0,0.15);
-            border-radius: 4px;
-            z-index: 1000;
-            overflow: hidden;
-        }
-
-        .menu-content.active {
-            display: block;
-        }
-
-        .menu-content a {
-            display: block;
-            padding: 10px 15px;
-            color: #2c3e50;
-            text-decoration: none;
-            font-size: 13px;
-            transition: background 0.15s;
-        }
-
-        .menu-content a:hover {
-            background: #f8f9fa;
-        }
-
-        .menu-divider {
-            height: 1px;
-            background: #ecf0f1;
-            margin: 5px 0;
-        }
-
         @media (max-width: 600px) {
-            body {
+            .page-container {
                 padding: 10px;
-            }
-
-            header {
-                padding: 15px;
             }
 
             .tags-container {
@@ -237,27 +147,9 @@ ksort($allTags);
     </style>
 </head>
 <body>
-    <header>
-        <h1>Tags</h1>
-        <div class="actions">
-            <a href="<?= $config['base_path'] ?>/" class="btn">← Back to Bookmarks</a>
-            <a href="<?= $config['base_path'] ?>/archive.php" class="btn">Archive</a>
-            <div class="menu-dropdown">
-                <button class="menu-trigger" onclick="toggleMenu(event)">
-                    <span>⚙</span> Menu
-                </button>
-                <div class="menu-content" id="mainMenu">
-                    <a href="<?= $config['base_path'] ?>/bookmarklet-setup.php">Bookmarklet</a>
-                    <a href="<?= $config['base_path'] ?>/rss.php">RSS Feed</a>
-                    <div class="menu-divider"></div>
-                    <a href="<?= $config['base_path'] ?>/import.php">Import</a>
-                    <a href="<?= $config['base_path'] ?>/export.php">Export</a>
-                    <div class="menu-divider"></div>
-                    <a href="<?= $config['base_path'] ?>/logout.php">Logout</a>
-                </div>
-            </div>
-        </div>
-    </header>
+    <?php render_nav($config, true, 'tags', 'Tags'); ?>
+
+    <div class="page-container">
 
     <div class="tags-container">
         <?php if (empty($allTags)): ?>
@@ -297,22 +189,8 @@ ksort($allTags);
             </div>
         <?php endif; ?>
     </div>
+    </div>
 
-    <script>
-        // Menu dropdown functionality
-        function toggleMenu(event) {
-            event.stopPropagation();
-            const menu = document.getElementById('mainMenu');
-            menu.classList.toggle('active');
-        }
-
-        // Close menu when clicking outside
-        document.addEventListener('click', function(event) {
-            const menu = document.getElementById('mainMenu');
-            if (menu && !event.target.closest('.menu-dropdown')) {
-                menu.classList.remove('active');
-            }
-        });
-    </script>
+    <?php render_nav_scripts(); ?>
 </body>
 </html>

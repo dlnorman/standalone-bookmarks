@@ -12,6 +12,7 @@ $config = require __DIR__ . '/config.php';
 require_once __DIR__ . '/auth.php';
 require_once __DIR__ . '/includes/markdown.php';
 require_once __DIR__ . '/includes/csrf.php';
+require_once __DIR__ . '/includes/nav.php';
 
 // Set timezone
 if (isset($config['timezone'])) {
@@ -137,6 +138,7 @@ $totalPages = ceil($total / $limit);
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title><?= htmlspecialchars($config['site_title']) ?></title>
+    <?php render_nav_styles(); ?>
     <style>
         * {
             box-sizing: border-box;
@@ -144,26 +146,25 @@ $totalPages = ceil($total / $limit);
 
         body {
             font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
-            max-width: 900px;
-            margin: 0 auto;
-            padding: 20px;
+            margin: 0;
+            padding: 0;
             line-height: 1.6;
             background: #f5f5f5;
             color: #333;
         }
 
-        header {
+        .page-container {
+            max-width: 900px;
+            margin: 0 auto;
+            padding: 20px;
+        }
+
+        .search-header {
             background: white;
             padding: 20px;
             border-radius: 8px;
             margin-bottom: 20px;
             box-shadow: 0 2px 4px rgba(0,0,0,0.1);
-        }
-
-        h1 {
-            margin: 0 0 15px 0;
-            font-size: 24px;
-            color: #2c3e50;
         }
 
         .search-form {
@@ -194,15 +195,23 @@ $totalPages = ceil($total / $limit);
             background: #2980b9;
         }
 
-        .actions {
-            display: flex;
-            gap: 10px;
-            flex-wrap: wrap;
+        .filter-notice {
+            margin: 15px 0;
+            padding: 10px 15px;
+            background: #e8f4f8;
+            border-radius: 4px;
+            color: #2c3e50;
+            font-size: 14px;
         }
 
-        .btn {
-            padding: 8px 15px;
-            background: #95a5a6;
+        .filter-notice strong {
+            color: #3498db;
+        }
+
+        .filter-notice .btn {
+            margin-left: 10px;
+            padding: 4px 12px;
+            background: #3498db;
             color: white;
             text-decoration: none;
             border-radius: 4px;
@@ -210,16 +219,8 @@ $totalPages = ceil($total / $limit);
             display: inline-block;
         }
 
-        .btn:hover {
-            background: #7f8c8d;
-        }
-
-        .btn-primary {
-            background: #27ae60;
-        }
-
-        .btn-primary:hover {
-            background: #229954;
+        .filter-notice .btn:hover {
+            background: #2980b9;
         }
 
         .bookmark {
@@ -578,71 +579,12 @@ $totalPages = ceil($total / $limit);
             color: #3498db;
         }
 
-        .menu-dropdown {
-            position: relative;
-            display: inline-block;
-        }
-
-        .menu-trigger {
-            background: #95a5a6;
-            color: white;
-            border: none;
-            padding: 8px 15px;
-            border-radius: 4px;
-            font-size: 13px;
-            cursor: pointer;
-            display: inline-flex;
-            align-items: center;
-            gap: 5px;
-        }
-
-        .menu-trigger:hover {
-            background: #7f8c8d;
-        }
-
-        .menu-content {
-            display: none;
-            position: absolute;
-            right: 0;
-            top: 100%;
-            margin-top: 5px;
-            background: white;
-            min-width: 160px;
-            box-shadow: 0 4px 12px rgba(0,0,0,0.15);
-            border-radius: 4px;
-            z-index: 1000;
-            overflow: hidden;
-        }
-
-        .menu-content.active {
-            display: block;
-        }
-
-        .menu-content a {
-            display: block;
-            padding: 10px 15px;
-            color: #2c3e50;
-            text-decoration: none;
-            font-size: 13px;
-            transition: background 0.15s;
-        }
-
-        .menu-content a:hover {
-            background: #f8f9fa;
-        }
-
-        .menu-divider {
-            height: 1px;
-            background: #ecf0f1;
-            margin: 5px 0;
-        }
-
         @media (max-width: 600px) {
-            body {
+            .page-container {
                 padding: 10px;
             }
 
-            header {
+            .search-header {
                 padding: 15px;
             }
 
@@ -662,55 +604,29 @@ $totalPages = ceil($total / $limit);
     </style>
 </head>
 <body>
-    <header>
-        <h1><?= htmlspecialchars($config['site_title']) ?></h1>
+    <?php render_nav($config, $isLoggedIn, 'index'); ?>
 
-        <form method="get" action="" class="search-form">
-            <input type="text" name="q" placeholder="Search bookmarks..." value="<?= htmlspecialchars($search) ?>">
-            <button type="submit">Search</button>
-        </form>
+    <div class="page-container">
+        <div class="search-header">
+            <form method="get" action="" class="search-form">
+                <input type="text" name="q" placeholder="Search bookmarks..." value="<?= htmlspecialchars($search) ?>">
+                <button type="submit">Search</button>
+            </form>
 
-        <?php if (!empty($tag)): ?>
-            <div style="margin-bottom: 15px; padding: 10px; background: #e8f4f8; border-radius: 4px; color: #2c3e50;">
-                Showing bookmarks tagged with: <strong><?= htmlspecialchars($tag) ?></strong>
-            </div>
-        <?php endif; ?>
-
-        <div class="actions">
             <?php if (!empty($search)): ?>
-                <a href="<?= $config['base_path'] ?>" class="btn">Clear Search</a>
-            <?php endif; ?>
-            <?php if (!empty($tag)): ?>
-                <a href="<?= $config['base_path'] ?>" class="btn">Clear Filter</a>
-            <?php endif; ?>
-            <?php if ($isLoggedIn): ?>
-                <a href="#" onclick="showAddBookmark(); return false;" class="btn btn-primary">Add Bookmark</a>
-                <a href="<?= $config['base_path'] ?>/dashboard.php" class="btn">Dashboard</a>
-                <a href="<?= $config['base_path'] ?>/gallery.php" class="btn">Gallery</a>
-                <a href="<?= $config['base_path'] ?>/archive.php" class="btn">Archive</a>
-                <a href="<?= $config['base_path'] ?>/tags.php" class="btn">Tags</a>
-                <div class="menu-dropdown">
-                    <button class="menu-trigger" onclick="toggleMenu(event)">
-                        <span>⚙</span> Menu
-                    </button>
-                    <div class="menu-content" id="mainMenu">
-                        <a href="<?= $config['base_path'] ?>/bookmarklet-setup.php">Bookmarklet</a>
-                        <a href="<?= $config['base_path'] ?>/rss.php">RSS Feed</a>
-                        <div class="menu-divider"></div>
-                        <a href="<?= $config['base_path'] ?>/import.php">Import</a>
-                        <a href="<?= $config['base_path'] ?>/export.php">Export</a>
-                        <div class="menu-divider"></div>
-                        <a href="<?= $config['base_path'] ?>/logout.php">Logout</a>
-                    </div>
+                <div class="filter-notice">
+                    Searching for: <strong><?= htmlspecialchars($search) ?></strong>
+                    <a href="<?= $config['base_path'] ?>" class="btn">Clear</a>
                 </div>
-            <?php else: ?>
-                <a href="<?= $config['base_path'] ?>/login.php" class="btn btn-primary">Login</a>
-                <a href="<?= $config['base_path'] ?>/gallery.php" class="btn">Gallery</a>
-                <a href="<?= $config['base_path'] ?>/archive.php" class="btn">Archive</a>
-                <a href="<?= $config['base_path'] ?>/rss.php" class="btn">RSS Feed</a>
+            <?php endif; ?>
+
+            <?php if (!empty($tag)): ?>
+                <div class="filter-notice">
+                    Showing bookmarks tagged with: <strong><?= htmlspecialchars($tag) ?></strong>
+                    <a href="<?= $config['base_path'] ?>" class="btn">Clear</a>
+                </div>
             <?php endif; ?>
         </div>
-    </header>
 
     <?php if (empty($bookmarks)): ?>
         <div class="no-results">
@@ -794,7 +710,9 @@ $totalPages = ceil($total / $limit);
             </div>
         <?php endif; ?>
     <?php endif; ?>
+    </div>
 
+    <?php render_nav_scripts(); ?>
     <script>
         const BASE_PATH = <?= json_encode($config['base_path']) ?>;
         const IS_LOGGED_IN = <?= json_encode($isLoggedIn) ?>;
@@ -1096,21 +1014,6 @@ $totalPages = ceil($total / $limit);
                 input.focus();
             }
         }
-
-        // Menu dropdown functionality
-        function toggleMenu(event) {
-            event.stopPropagation();
-            const menu = document.getElementById('mainMenu');
-            menu.classList.toggle('active');
-        }
-
-        // Close menu when clicking outside
-        document.addEventListener('click', function(event) {
-            const menu = document.getElementById('mainMenu');
-            if (menu && !event.target.closest('.menu-dropdown')) {
-                menu.classList.remove('active');
-            }
-        });
     </script>
 </body>
 </html>

@@ -10,6 +10,7 @@ if (!file_exists(__DIR__ . '/config.php')) {
 
 $config = require __DIR__ . '/config.php';
 require_once __DIR__ . '/auth.php';
+require_once __DIR__ . '/includes/nav.php';
 
 // Set timezone
 if (isset($config['timezone'])) {
@@ -60,6 +61,7 @@ $bookmarks = $stmt->fetchAll(PDO::FETCH_ASSOC);
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Screenshot Gallery - <?= htmlspecialchars($config['site_title']) ?></title>
+    <?php render_nav_styles(); ?>
     <style>
         * {
             box-sizing: border-box;
@@ -71,58 +73,58 @@ $bookmarks = $stmt->fetchAll(PDO::FETCH_ASSOC);
             font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
             background: #1a1a1a;
             color: #fff;
-            overflow-x: hidden;
+            margin: 0;
+            padding: 0;
         }
 
-        header {
-            background: rgba(0, 0, 0, 0.9);
-            padding: 20px;
-            position: sticky;
-            top: 0;
-            z-index: 1000;
-            backdrop-filter: blur(10px);
-            border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+        .app-nav {
+            background: rgba(0, 0, 0, 0.95);
         }
 
-        .header-content {
-            max-width: 1400px;
-            margin: 0 auto;
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-            flex-wrap: wrap;
-            gap: 15px;
+        .app-nav .brand-link,
+        .app-nav .nav-link {
+            color: rgba(255, 255, 255, 0.9);
         }
 
-        h1 {
-            font-size: 24px;
-            font-weight: 600;
-            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-            -webkit-background-clip: text;
-            -webkit-text-fill-color: transparent;
-            background-clip: text;
-        }
-
-        .actions {
-            display: flex;
-            gap: 10px;
-            flex-wrap: wrap;
-        }
-
-        .btn {
-            padding: 8px 16px;
+        .app-nav .nav-link:hover {
             background: rgba(255, 255, 255, 0.1);
             color: white;
-            text-decoration: none;
-            border-radius: 6px;
-            font-size: 13px;
-            border: 1px solid rgba(255, 255, 255, 0.2);
-            transition: all 0.2s;
         }
 
-        .btn:hover {
-            background: rgba(255, 255, 255, 0.2);
-            transform: translateY(-1px);
+        .app-nav .nav-link.active {
+            background: #667eea;
+            color: white;
+        }
+
+        .app-nav .nav-btn,
+        .app-nav .nav-dropdown-trigger {
+            color: rgba(255, 255, 255, 0.9);
+            border-color: rgba(255, 255, 255, 0.2);
+        }
+
+        .app-nav .nav-btn:hover,
+        .app-nav .nav-dropdown-trigger:hover {
+            background: rgba(255, 255, 255, 0.1);
+        }
+
+        .app-nav .nav-dropdown-content {
+            background: rgba(0, 0, 0, 0.95);
+            border-color: rgba(255, 255, 255, 0.2);
+        }
+
+        .app-nav .dropdown-item {
+            color: rgba(255, 255, 255, 0.9);
+        }
+
+        .app-nav .dropdown-item:hover {
+            background: rgba(255, 255, 255, 0.1);
+            color: white;
+        }
+
+        .app-nav .hamburger-icon,
+        .app-nav .hamburger-icon::before,
+        .app-nav .hamburger-icon::after {
+            background: rgba(255, 255, 255, 0.9);
         }
 
         .filter-bar {
@@ -407,18 +409,7 @@ $bookmarks = $stmt->fetchAll(PDO::FETCH_ASSOC);
     </style>
 </head>
 <body>
-    <header>
-        <div class="header-content">
-            <h1>📸 Screenshot Gallery</h1>
-            <div class="actions">
-                <a href="<?= $config['base_path'] ?>/" class="btn">← Bookmarks</a>
-                <a href="<?= $config['base_path'] ?>/dashboard.php" class="btn">Dashboard</a>
-                <?php if ($isLoggedIn): ?>
-                    <a href="<?= $config['base_path'] ?>/tags.php" class="btn">Tags</a>
-                <?php endif; ?>
-            </div>
-        </div>
-    </header>
+    <?php render_nav($config, $isLoggedIn, 'gallery', 'Screenshot Gallery'); ?>
 
     <div class="gallery-container">
         <div class="filter-bar">
@@ -607,5 +598,6 @@ $bookmarks = $stmt->fetchAll(PDO::FETCH_ASSOC);
             }
         });
     </script>
+    <?php render_nav_scripts(); ?>
 </body>
 </html>

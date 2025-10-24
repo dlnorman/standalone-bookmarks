@@ -10,6 +10,7 @@ if (!file_exists(__DIR__ . '/config.php')) {
 
 $config = require __DIR__ . '/config.php';
 require_once __DIR__ . '/auth.php';
+require_once __DIR__ . '/includes/nav.php';
 
 // Set timezone
 if (isset($config['timezone'])) {
@@ -26,6 +27,7 @@ $isLoggedIn = is_logged_in();
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Dashboard - <?= htmlspecialchars($config['site_title']) ?></title>
     <script src="https://d3js.org/d3.v7.min.js"></script>
+    <?php render_nav_styles(); ?>
     <style>
         * {
             box-sizing: border-box;
@@ -37,14 +39,13 @@ $isLoggedIn = is_logged_in();
             font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
             background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
             color: #333;
-            overflow: hidden;
-            height: 100vh;
-            width: 100vw;
+            margin: 0;
+            padding: 0;
+            min-height: 100vh;
         }
 
         .dashboard-container {
-            width: 1920px;
-            height: 1080px;
+            max-width: 1920px;
             margin: 0 auto;
             padding: 20px;
             display: grid;
@@ -328,29 +329,6 @@ $isLoggedIn = is_logged_in();
             opacity: 1;
         }
 
-        /* Nav link */
-        .nav-link {
-            position: fixed;
-            top: 20px;
-            right: 20px;
-            background: rgba(255, 255, 255, 0.95);
-            padding: 10px 20px;
-            border-radius: 8px;
-            text-decoration: none;
-            color: #2c3e50;
-            font-size: 14px;
-            font-weight: 600;
-            box-shadow: 0 4px 12px rgba(0,0,0,0.1);
-            transition: all 0.2s;
-            z-index: 1000;
-        }
-
-        .nav-link:hover {
-            background: white;
-            transform: translateY(-2px);
-            box-shadow: 0 6px 20px rgba(0,0,0,0.15);
-        }
-
         /* Last updated indicator */
         .last-updated {
             position: fixed;
@@ -382,7 +360,7 @@ $isLoggedIn = is_logged_in();
     </style>
 </head>
 <body>
-    <a href="<?= $config['base_path'] ?>/" class="nav-link">← Back to Bookmarks</a>
+    <?php render_nav($config, $isLoggedIn, 'dashboard', 'Dashboard'); ?>
 
     <div class="dashboard-container">
         <div class="header">
@@ -1085,5 +1063,6 @@ $isLoggedIn = is_logged_in();
             }
         });
     </script>
+    <?php render_nav_scripts(); ?>
 </body>
 </html>
