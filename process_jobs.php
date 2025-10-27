@@ -18,6 +18,101 @@ if (isset($config['timezone'])) {
     date_default_timezone_set($config['timezone']);
 }
 
+/**
+ * Resize image if wider than max width, maintaining aspect ratio
+ * @param string $imageData Binary image data
+ * @param string $mimeType MIME type of the image
+ * @param int $maxWidth Maximum width (default 1200px)
+ * @return string|false Resized image data or original if resize not needed/possible
+ */
+function resize_image($imageData, $mimeType, $maxWidth = 1200) {
+    // Check if GD is available
+    if (!extension_loaded('gd')) {
+        return $imageData; // Return original if GD not available
+    }
+
+    // Create image resource from data based on type
+    $image = false;
+    switch ($mimeType) {
+        case 'image/jpeg':
+            $image = @imagecreatefromstring($imageData);
+            break;
+        case 'image/png':
+            $image = @imagecreatefromstring($imageData);
+            break;
+        case 'image/gif':
+            $image = @imagecreatefromstring($imageData);
+            break;
+        case 'image/webp':
+            if (function_exists('imagecreatefromwebp')) {
+                $image = @imagecreatefromstring($imageData);
+            }
+            break;
+        default:
+            return $imageData; // Unsupported format, return original
+    }
+
+    if (!$image) {
+        return $imageData; // Failed to create image, return original
+    }
+
+    // Get dimensions
+    $width = imagesx($image);
+    $height = imagesy($image);
+
+    // Check if resize is needed
+    if ($width <= $maxWidth) {
+        imagedestroy($image);
+        return $imageData; // No resize needed
+    }
+
+    // Calculate new dimensions maintaining aspect ratio
+    $newWidth = $maxWidth;
+    $newHeight = (int)($height * ($maxWidth / $width));
+
+    // Create new image
+    $newImage = imagecreatetruecolor($newWidth, $newHeight);
+
+    // Preserve transparency for PNG and GIF
+    if ($mimeType === 'image/png' || $mimeType === 'image/gif') {
+        imagealphablending($newImage, false);
+        imagesavealpha($newImage, true);
+        $transparent = imagecolorallocatealpha($newImage, 0, 0, 0, 127);
+        imagefilledrectangle($newImage, 0, 0, $newWidth, $newHeight, $transparent);
+    }
+
+    // Resize
+    imagecopyresampled($newImage, $image, 0, 0, 0, 0, $newWidth, $newHeight, $width, $height);
+
+    // Output to buffer
+    ob_start();
+    $success = false;
+    switch ($mimeType) {
+        case 'image/jpeg':
+            $success = imagejpeg($newImage, null, 85); // 85% quality for compression
+            break;
+        case 'image/png':
+            $success = imagepng($newImage, null, 8); // Compression level 8
+            break;
+        case 'image/gif':
+            $success = imagegif($newImage);
+            break;
+        case 'image/webp':
+            if (function_exists('imagewebp')) {
+                $success = imagewebp($newImage, null, 85);
+            }
+            break;
+    }
+
+    $resizedData = $success ? ob_get_clean() : false;
+
+    // Clean up
+    imagedestroy($image);
+    imagedestroy($newImage);
+
+    return $resizedData ?: $imageData; // Return resized or original if failed
+}
+
 try {
     $db = new PDO('sqlite:' . $config['db_path']);
     $db->setAttribute(PDO::ATTR_ERRMODE, PDO::ERRMODE_EXCEPTION);
@@ -183,6 +278,9 @@ try {
                             'image/x-icon' => 'ico',
                         ];
                         $extension = $mimeToExt[$mimeType] ?? 'png';
+
+                        // Resize image if it's wider than 1200px
+                        $imageData = resize_image($imageData, $mimeType, 1200);
 
                         // Save file
                         $timestamp = time();

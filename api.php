@@ -82,9 +82,29 @@ switch ($action) {
         ");
         $stmt->execute([$url, $title, $description, $tags, $private, $now, $now]);
 
+        $bookmarkId = $db->lastInsertId();
+
+        // Queue background jobs for archiving and screenshot capture
+        $tables = $db->query("SELECT name FROM sqlite_master WHERE type='table' AND name='jobs'")->fetchAll();
+        if (!empty($tables)) {
+            // Queue archive job
+            $stmt = $db->prepare("
+                INSERT INTO jobs (bookmark_id, job_type, payload, created_at, updated_at)
+                VALUES (?, 'archive', ?, ?, ?)
+            ");
+            $stmt->execute([$bookmarkId, $url, $now, $now]);
+
+            // Queue thumbnail job
+            $stmt = $db->prepare("
+                INSERT INTO jobs (bookmark_id, job_type, payload, created_at, updated_at)
+                VALUES (?, 'thumbnail', ?, ?, ?)
+            ");
+            $stmt->execute([$bookmarkId, $url, $now, $now]);
+        }
+
         echo json_encode([
             'success' => true,
-            'id' => $db->lastInsertId(),
+            'id' => $bookmarkId,
             'message' => 'Bookmark added successfully'
         ]);
         break;
