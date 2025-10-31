@@ -494,13 +494,13 @@ $isLoggedIn = is_logged_in();
 
             // 30-day velocity
             const last30Days = timeline.slice(-30);
-            const velocity30 = last30Days.reduce((sum, d) => sum + d.count, 0);
+            const velocity30 = last30Days.reduce((sum, d) => sum + parseInt(d.count, 10), 0);
             const avgPerDay = last30Days.length > 0 ? (velocity30 / last30Days.length).toFixed(1) : 0;
             document.getElementById('stat-velocity').textContent = velocity30;
             document.getElementById('stat-velocity-sub').textContent = `${avgPerDay} per day avg`;
 
             // Active days
-            const activeDays = timeline.filter(d => d.count > 0).length;
+            const activeDays = timeline.filter(d => parseInt(d.count, 10) > 0).length;
             const totalDays = timeline.length;
             const activePercent = totalDays > 0 ? Math.round((activeDays / totalDays) * 100) : 0;
             document.getElementById('stat-active').textContent = activeDays;
@@ -778,7 +778,7 @@ $isLoggedIn = is_logged_in();
                 .range([0, width]);
 
             const y = d3.scaleLinear()
-                .domain([0, d3.max(timeline, d => d.count)])
+                .domain([0, d3.max(timeline, d => parseInt(d.count, 10))])
                 .nice()
                 .range([height, 0]);
 
@@ -801,13 +801,14 @@ $isLoggedIn = is_logged_in();
                 .join('rect')
                 .attr('class', 'velocity-bar')
                 .attr('x', d => x(d.date) - barWidth / 2)
-                .attr('y', d => y(d.count))
+                .attr('y', d => y(parseInt(d.count, 10)))
                 .attr('width', barWidth)
-                .attr('height', d => height - y(d.count))
+                .attr('height', d => height - y(parseInt(d.count, 10)))
                 .on('mouseenter', function(event, d) {
+                    const count = parseInt(d.count, 10);
                     tooltip.innerHTML = `
                         <strong>${d.date.toLocaleDateString()}</strong><br>
-                        ${d.count} bookmark${d.count !== 1 ? 's' : ''} added
+                        ${count} bookmark${count !== 1 ? 's' : ''} added
                     `;
                     tooltip.classList.add('visible');
                 })
@@ -824,7 +825,7 @@ $isLoggedIn = is_logged_in();
             for (let i = 0; i < timeline.length; i++) {
                 const start = Math.max(0, i - 6);
                 const slice = timeline.slice(start, i + 1);
-                const avg = slice.reduce((sum, d) => sum + d.count, 0) / slice.length;
+                const avg = slice.reduce((sum, d) => sum + parseInt(d.count, 10), 0) / slice.length;
                 movingAverage.push({
                     date: timeline[i].date,
                     avg: avg
