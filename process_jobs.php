@@ -191,7 +191,10 @@ try {
                 }
 
             } elseif ($job['job_type'] === 'thumbnail') {
-                // Generate screenshot using PageSpeed Insights API
+                // Generate screenshot using fallback chain:
+                // 1. PageSpeed API screenshot
+                // 2. og:image from HTML
+                // 3. First content image
                 $url = $job['payload'];
 
                 // Validate URL for SSRF protection
@@ -202,24 +205,20 @@ try {
                     // Initialize screenshot generator
                     $generator = new ScreenshotGenerator($config);
 
-                    if (!$generator->isConfigured()) {
-                        $result = 'PageSpeed API key not configured in config.php';
-                        $success = false;
+                    // Use fallback chain for robust screenshot generation
+                    $screenshotResult = $generator->generateWithFallback($url, 'desktop', __DIR__ . '/screenshots');
+
+                    if ($screenshotResult['success']) {
+                        // Update bookmark with screenshot path
+                        $db->prepare("UPDATE bookmarks SET screenshot = ?, updated_at = ? WHERE id = ?")
+                           ->execute([$screenshotResult['path'], $now, $job['bookmark_id']]);
+
+                        $method = $screenshotResult['method'] ?? 'unknown';
+                        $result = $screenshotResult['path'] . " (via {$method})";
+                        $success = true;
                     } else {
-                        // Generate screenshot using PageSpeed API (desktop view, 300px width)
-                        $screenshotResult = $generator->generateAndSave($url, 'desktop', __DIR__ . '/screenshots');
-
-                        if ($screenshotResult['success']) {
-                            // Update bookmark with screenshot path
-                            $db->prepare("UPDATE bookmarks SET screenshot = ?, updated_at = ? WHERE id = ?")
-                               ->execute([$screenshotResult['path'], $now, $job['bookmark_id']]);
-
-                            $result = $screenshotResult['path'];
-                            $success = true;
-                        } else {
-                            $result = 'PageSpeed API error: ' . $screenshotResult['error'];
-                            $success = false;
-                        }
+                        $result = 'All screenshot methods failed: ' . $screenshotResult['error'];
+                        $success = false;
                     }
                 }
             }

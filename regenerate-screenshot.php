@@ -76,21 +76,17 @@ try {
     // Initialize screenshot generator
     $generator = new ScreenshotGenerator($config);
 
-    if (!$generator->isConfigured()) {
-        die(json_encode([
-            'success' => false,
-            'error' => 'PageSpeed API key not configured. Add "pagespeed_api_key" to config.php'
-        ]));
-    }
-
     // Delete old screenshot if it exists
     $oldScreenshot = $bookmark['screenshot'];
     if ($oldScreenshot && file_exists(__DIR__ . '/' . $oldScreenshot)) {
         @unlink(__DIR__ . '/' . $oldScreenshot);
     }
 
-    // Generate new screenshot (desktop view, resized to 300px)
-    $result = $generator->generateAndSave($bookmark['url'], 'desktop', __DIR__ . '/screenshots');
+    // Generate new screenshot using fallback chain:
+    // 1. PageSpeed API screenshot
+    // 2. og:image from HTML
+    // 3. First content image
+    $result = $generator->generateWithFallback($bookmark['url'], 'desktop', __DIR__ . '/screenshots');
 
     if (!$result['success']) {
         die(json_encode([
@@ -104,11 +100,20 @@ try {
     $stmt = $db->prepare("UPDATE bookmarks SET screenshot = ?, updated_at = ? WHERE id = ?");
     $stmt->execute([$result['path'], $now, $bookmarkId]);
 
+    // Get method used for informative message
+    $method = $result['method'] ?? 'unknown';
+    $methodNames = [
+        'pagespeed' => 'PageSpeed API screenshot',
+        'og:image' => 'Open Graph image',
+        'content-image' => 'content image'
+    ];
+    $methodName = $methodNames[$method] ?? $method;
+
     // Return success with new screenshot path
     echo json_encode([
         'success' => true,
         'screenshot' => $result['path'],
-        'message' => 'Screenshot regenerated successfully'
+        'message' => "Screenshot regenerated successfully using {$methodName}"
     ]);
 
 } catch (PDOException $e) {
