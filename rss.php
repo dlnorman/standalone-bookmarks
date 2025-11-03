@@ -55,9 +55,14 @@ echo '<?xml version="1.0" encoding="UTF-8"?>' . "\n";
             <link><?= htmlspecialchars($bookmark['url']) ?></link>
             <guid isPermaLink="false">bookmark-<?= $bookmark['id'] ?></guid>
             <pubDate><?= date(DATE_RSS, strtotime($bookmark['created_at'])) ?></pubDate>
-            <?php if (!empty($bookmark['description'])): ?>
-            <description><![CDATA[<?= parseMarkdown($bookmark['description']) ?>]]></description>
-            <?php endif; ?>
+            <description><![CDATA[
+                <?php if (!empty($bookmark['screenshot'])): ?>
+                <p><img src="<?= htmlspecialchars($config['site_url']) ?>/<?= htmlspecialchars($bookmark['screenshot']) ?>" alt="<?= htmlspecialchars($bookmark['title']) ?>" style="max-width: 100%; height: auto;" /></p>
+                <?php endif; ?>
+                <?php if (!empty($bookmark['description'])): ?>
+                <?= parseMarkdown($bookmark['description']) ?>
+                <?php endif; ?>
+            ]]></description>
             <?php if (!empty($bookmark['screenshot'])): ?>
             <media:thumbnail url="<?= htmlspecialchars($config['site_url']) ?>/<?= htmlspecialchars($bookmark['screenshot']) ?>" />
             <enclosure url="<?= htmlspecialchars($config['site_url']) ?>/<?= htmlspecialchars($bookmark['screenshot']) ?>" type="image/jpeg" />
