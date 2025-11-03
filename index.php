@@ -681,6 +681,7 @@ $totalPages = ceil($total / $limit);
                     <div class="actions">
                         <a href="#" onclick="editBookmark(<?= $bookmark['id'] ?>); return false;">Edit</a>
                         <a href="#" onclick="deleteBookmark(<?= $bookmark['id'] ?>); return false;">Delete</a>
+                        <a href="#" onclick="regenerateScreenshot(<?= $bookmark['id'] ?>); return false;">Regenerate Screenshot</a>
                     </div>
                     <?php endif; ?>
                 </div>
@@ -880,6 +881,64 @@ $totalPages = ceil($total / $limit);
                 }
             })
             .catch(err => alert('Error: ' + err));
+        }
+
+        function regenerateScreenshot(id) {
+            if (!IS_LOGGED_IN) return;
+            if (!confirm('Regenerate screenshot using PageSpeed API? This may take 10-30 seconds.')) return;
+
+            const bookmarkEl = document.getElementById('bookmark-' + id);
+            const screenshotDiv = bookmarkEl.querySelector('.screenshot');
+
+            // Show loading indicator
+            const originalContent = screenshotDiv ? screenshotDiv.innerHTML : null;
+            if (screenshotDiv) {
+                screenshotDiv.innerHTML = '<div style="padding: 20px; text-align: center; color: #666;">Generating screenshot...</div>';
+            }
+
+            const formData = new FormData();
+            formData.append('bookmark_id', id);
+
+            fetch(BASE_PATH + '/regenerate-screenshot.php', {
+                method: 'POST',
+                body: formData
+            })
+            .then(r => {
+                // Log response for debugging
+                console.log('Response status:', r.status);
+                console.log('Response headers:', r.headers.get('content-type'));
+
+                // Get text first to see what we're actually receiving
+                return r.text().then(text => {
+                    console.log('Response text:', text);
+
+                    // Try to parse as JSON
+                    try {
+                        return JSON.parse(text);
+                    } catch (e) {
+                        console.error('JSON parse error:', e);
+                        console.error('First 200 chars:', text.substring(0, 200));
+                        throw new Error('Invalid JSON response: ' + text.substring(0, 100));
+                    }
+                });
+            })
+            .then(data => {
+                if (data.success) {
+                    // Reload the page to show the new screenshot
+                    location.reload();
+                } else {
+                    alert('Error: ' + data.error);
+                    if (screenshotDiv && originalContent) {
+                        screenshotDiv.innerHTML = originalContent;
+                    }
+                }
+            })
+            .catch(err => {
+                alert('Error: ' + err);
+                if (screenshotDiv && originalContent) {
+                    screenshotDiv.innerHTML = originalContent;
+                }
+            });
         }
 
         // Tag autocomplete functionality

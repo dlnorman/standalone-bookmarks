@@ -43,10 +43,12 @@ For production deployment, see [Installation](#installation) below.
   - Tag activity trends with stacked area charts
   - Real-time statistics and insights
 - **Screenshot Gallery** - Automatic screenshot capture with:
-  - Masonry grid layout
-  - Full-screen modal view
-  - Client-side filtering
-  - Pagination support
+  - Real webpage screenshots using Google PageSpeed Insights API
+  - Desktop view screenshots (300px width)
+  - Automatic generation for all new bookmarks
+  - One-click manual regeneration
+  - Masonry grid layout with full-screen modal view
+  - Client-side filtering and pagination
 - **Archive View** - Time-based bookmark browsing:
   - Day/week/month/custom date range views
   - Grouping by day/week/month
@@ -72,8 +74,9 @@ For production deployment, see [Installation](#installation) below.
 - PHP 7.4 or higher
 - SQLite3 support (usually enabled by default)
 - Web server (Apache, Nginx, or PHP built-in server for development)
-- Optional: GD extension for screenshot resizing
-- Optional: cron or similar for background job processing
+- GD extension for screenshot resizing (usually enabled by default)
+- Cron or similar for background job processing (required for screenshots)
+- Google PageSpeed Insights API key (free - see [Screenshot Generation](#screenshot-generation))
 
 ## Installation
 
@@ -99,6 +102,8 @@ Important settings to configure:
 - `password`: **IMPORTANT** - Change this to a strong password
 - `session_timeout`: How long to stay logged in (default: 30 days)
 - `timezone`: Your timezone (e.g., `America/Edmonton`)
+- `pagespeed_api_key`: Google PageSpeed API key for screenshots (see [Screenshot Generation](#screenshot-generation))
+- `screenshot_max_width`: Maximum screenshot width in pixels (default: 300)
 
 ### 3. Initialize the database
 
@@ -427,15 +432,181 @@ Returns list of all tags with usage counts.
 
 **Note:** All POST endpoints require a valid CSRF token. Get the token from the `csrf_field()` function in forms or the `CSRF_TOKEN` JavaScript constant.
 
+## Screenshot Generation
+
+The application includes automatic real webpage screenshot generation using Google's PageSpeed Insights API.
+
+### Features
+
+- ✅ **Automatic screenshots** - All new bookmarks get real webpage screenshots automatically
+- ✅ **Desktop view** - Captures desktop screenshots (not mobile) at 300px width
+- ✅ **One-click regeneration** - Click "Regenerate Screenshot" to refresh any existing screenshot
+- ✅ **Free tier** - Google provides 25,000 API calls/day (more than enough for personal use)
+- ✅ **No dependencies** - No Chrome binary or Node.js required on your server
+
+### Setup
+
+#### 1. Get a Google API Key (Free)
+
+1. Go to [Google Cloud Console](https://console.cloud.google.com/)
+2. Create a new project or select an existing one
+3. Enable the PageSpeed Insights API:
+   - Visit: https://console.cloud.google.com/apis/library/pagespeedonline.googleapis.com
+   - Click "Enable"
+4. Create an API key:
+   - Go to: https://console.cloud.google.com/apis/credentials
+   - Click "Create Credentials" → "API Key"
+   - Copy your new API key
+   - (Optional) Click "Restrict Key" to limit it to PageSpeed Insights API only
+
+#### 2. Add API Key to Config
+
+Edit your `config.php` file:
+
+```php
+'pagespeed_api_key' => 'YOUR_API_KEY_HERE',
+'screenshot_max_width' => 300,  // Maximum width in pixels (default: 300)
+```
+
+#### 3. Verify Cron Job
+
+Ensure your cron job is running (see [Background Jobs](#background-jobs) section below).
+
+### How It Works
+
+#### Automatic Screenshot Generation
+
+When you add a new bookmark:
+1. A background job is queued for screenshot generation
+2. Your cron job runs `process_jobs.php` every 5 minutes
+3. PageSpeed API captures a desktop screenshot (takes 10-30 seconds)
+4. Screenshot is resized to 300px width
+5. Stored in `screenshots/` directory
+6. Bookmark automatically updated with screenshot path
+
+**Processing speed:**
+- 3 bookmarks processed per cron run (every 5 minutes)
+- Each screenshot takes 10-30 seconds to generate
+- Total: ~1-2 minutes per cron run for 3 screenshots
+
+#### Manual Regeneration
+
+Click "Regenerate Screenshot" on any bookmark to:
+1. Delete the old screenshot
+2. Generate a fresh one via PageSpeed API
+3. Update the bookmark immediately
+4. Page reloads to show new screenshot
+
+### API Quota & Limits
+
+**Free Tier:**
+- 25,000 requests per day
+- 1 request per second
+
+**Usage Estimate:**
+- With automatic screenshots: ~3 screenshots every 5 minutes = ~864 per day (max)
+- Plus manual regenerations
+- **Well within the free tier!**
+
+**Monitoring Usage:**
+1. Go to [Google Cloud Console](https://console.cloud.google.com/)
+2. Select your project
+3. Go to "APIs & Services" → "Dashboard"
+4. Click on "PageSpeed Insights API"
+5. View quota usage and requests per day
+
+### Testing
+
+**Test the background job processor:**
+
+```bash
+# SSH into your server
+ssh user@server
+
+# Run the job processor manually
+cd /path/to/bookmarks
+php process_jobs.php
+```
+
+You should see output like:
+```
+Processing 3 jobs...
+Job #123: thumbnail for bookmark #45... ✓ Success: screenshots/example.com/1234567890_abc123.png
+Done!
+```
+
+**Test by adding a new bookmark:**
+
+1. Log in to your bookmarks app
+2. Add a new bookmark (any URL)
+3. It will appear without a screenshot initially
+4. Wait 5 minutes (for cron to run), or manually run: `php process_jobs.php`
+5. Refresh the page - screenshot should appear!
+
+### Troubleshooting
+
+**"PageSpeed API key not configured"**
+
+Add your API key to `config.php`:
+```php
+'pagespeed_api_key' => 'YOUR_API_KEY_HERE',
+```
+
+**"API error: 403"**
+
+Your API key is invalid or the PageSpeed Insights API is not enabled:
+1. Check your API key is correct in config.php
+2. Enable the API: https://console.cloud.google.com/apis/library/pagespeedonline.googleapis.com
+
+**"API error: 429"**
+
+Rate limit exceeded. Options:
+1. Wait a few seconds and try again
+2. Check your API quota in Google Cloud Console
+
+**Screenshots not generating automatically**
+
+1. Check cron is running: `crontab -l | grep process_jobs`
+2. Manually run job processor: `php process_jobs.php`
+3. Check for errors in output
+
+**Jobs stuck in "pending" status**
+
+Check the `jobs` table:
+```bash
+sqlite3 bookmarks.db "SELECT * FROM jobs WHERE status='pending' LIMIT 5;"
+```
+
+If attempts = 3, job has failed. Check the `result` column for error message.
+
+### Configuration Options
+
+**Change Screenshot Width**
+
+Edit `config.php`:
+```php
+'screenshot_max_width' => 400,  // Make screenshots 400px wide
+```
+
+**Change Processing Rate**
+
+Edit `process_jobs.php` line ~126:
+```php
+LIMIT 5  // Process 5 screenshots per run instead of 3
+```
+
+**Warning:** More screenshots per run = longer cron execution time!
+- 3 screenshots = ~30-90 seconds
+- 5 screenshots = ~50-150 seconds
+
 ## Background Jobs
 
 The `process_jobs.php` script handles asynchronous tasks:
 
 ### Features
-- **Archive Capture**: Creates archival snapshots of bookmarked pages
-- **Screenshot Generation**: Captures page screenshots using headless browser APIs
-- **Thumbnail Creation**: Generates optimized thumbnails from screenshots
-- **Image Optimization**: Resizes images to save storage space
+- **Screenshot Generation**: Captures real webpage screenshots using Google PageSpeed Insights API
+- **Archive Capture**: Creates archival snapshots of bookmarked pages via Wayback Machine
+- **Image Optimization**: Automatically resizes screenshots to save storage space
 
 ### Setup
 
@@ -540,6 +711,7 @@ Additional fields on bookmarks table:
 │   ├── csrf.php            # CSRF token generation and validation
 │   ├── security.php        # Security helpers (SSRF, rate limiting, redirect validation)
 │   ├── markdown.php        # Markdown parser for descriptions
+│   ├── screenshot-generator.php  # PageSpeed API screenshot generator
 │   └── nav.php             # Navigation component
 ├── auth.php                # Authentication helper functions
 ├── login.php               # Login page
@@ -556,6 +728,7 @@ Additional fields on bookmarks table:
 ├── export.php              # Export bookmarks to Pinboard/Delicious format
 ├── rss.php                 # RSS feed generator
 ├── recent.php              # JSON API for recent bookmarks
+├── regenerate-screenshot.php  # AJAX endpoint for manual screenshot regeneration
 ├── process_jobs.php        # Background job processor (run via cron)
 ├── screenshots/            # Screenshot storage directory
 ├── archives/               # Archive storage directory

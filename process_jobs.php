@@ -12,6 +12,7 @@ if (!file_exists(__DIR__ . '/config.php')) {
 
 $config = require __DIR__ . '/config.php';
 require_once __DIR__ . '/includes/security.php';
+require_once __DIR__ . '/includes/screenshot-generator.php';
 
 // Set timezone
 if (isset($config['timezone'])) {
@@ -117,12 +118,12 @@ try {
     $db = new PDO('sqlite:' . $config['db_path']);
     $db->setAttribute(PDO::ATTR_ERRMODE, PDO::ERRMODE_EXCEPTION);
 
-    // Get pending jobs (limit to 10 per run to avoid timeout)
+    // Get pending jobs (limit to 3 per run since PageSpeed screenshots take 10-30s each)
     $stmt = $db->prepare("
         SELECT * FROM jobs
         WHERE status = 'pending' AND attempts < 3
         ORDER BY created_at ASC
-        LIMIT 10
+        LIMIT 3
     ");
     $stmt->execute();
     $jobs = $stmt->fetchAll(PDO::FETCH_ASSOC);
@@ -190,7 +191,7 @@ try {
                 }
 
             } elseif ($job['job_type'] === 'thumbnail') {
-                // Fetch thumbnail from OG image or favicon
+                // Generate screenshot using PageSpeed Insights API
                 $url = $job['payload'];
 
                 // Validate URL for SSRF protection
@@ -198,104 +199,26 @@ try {
                     $result = 'URL not allowed: Private/internal addresses are blocked';
                     $success = false;
                 } else {
-                    // First, fetch the page to extract thumbnail URL
-                    $fetchResult = safe_fetch_url($url, 10);
+                    // Initialize screenshot generator
+                    $generator = new ScreenshotGenerator($config);
 
-                    if (!$fetchResult['success']) {
-                        $result = 'Failed to fetch page: ' . $fetchResult['error'];
-                        $html = false;
+                    if (!$generator->isConfigured()) {
+                        $result = 'PageSpeed API key not configured in config.php';
+                        $success = false;
                     } else {
-                        $html = $fetchResult['content'];
-                    }
-                }
-                $thumbnailUrl = '';
+                        // Generate screenshot using PageSpeed API (desktop view, 300px width)
+                        $screenshotResult = $generator->generateAndSave($url, 'desktop', __DIR__ . '/screenshots');
 
-                if (isset($html) && $html) {
-                    // Try OG image (multiple patterns)
-                    if (preg_match('/<meta\s+[^>]*property\s*=\s*["\']og:image["\']\s+[^>]*content\s*=\s*["\']([^"\']+)["\'][^>]*>/is', $html, $matches)) {
-                        $thumbnailUrl = $matches[1];
-                    } elseif (preg_match('/<meta\s+[^>]*content\s*=\s*["\']([^"\']+)["\'][^>]*property\s*=\s*["\']og:image["\']/is', $html, $matches)) {
-                        $thumbnailUrl = $matches[1];
-                    }
-                    // Try Twitter image
-                    elseif (preg_match('/<meta\s+[^>]*name\s*=\s*["\']twitter:image["\']\s+[^>]*content\s*=\s*["\']([^"\']+)["\'][^>]*>/is', $html, $matches)) {
-                        $thumbnailUrl = $matches[1];
-                    } elseif (preg_match('/<meta\s+[^>]*content\s*=\s*["\']([^"\']+)["\'][^>]*name\s*=\s*["\']twitter:image["\']/is', $html, $matches)) {
-                        $thumbnailUrl = $matches[1];
-                    }
-                    // Try favicon (multiple patterns)
-                    elseif (preg_match('/<link\s+[^>]*rel\s*=\s*["\'](?:icon|shortcut icon|apple-touch-icon)["\']\s+[^>]*href\s*=\s*["\']([^"\']+)["\'][^>]*>/is', $html, $matches)) {
-                        $thumbnailUrl = $matches[1];
-                    } elseif (preg_match('/<link\s+[^>]*href\s*=\s*["\']([^"\']+)["\'][^>]*rel\s*=\s*["\'](?:icon|shortcut icon|apple-touch-icon)["\']/is', $html, $matches)) {
-                        $thumbnailUrl = $matches[1];
-                    }
-
-                    if (empty($thumbnailUrl)) {
-                        $result = 'No thumbnail found (no OG image, Twitter image, or favicon)';
-                    }
-                } else {
-                    $result = 'Failed to fetch page HTML';
-                }
-
-                if (!empty($thumbnailUrl)) {
-                    // Make absolute URL
-                    if (!preg_match('~^https?://~', $thumbnailUrl)) {
-                        $urlParts = parse_url($url);
-                        $base = $urlParts['scheme'] . '://' . $urlParts['host'];
-                        if (substr($thumbnailUrl, 0, 2) === '//') {
-                            $thumbnailUrl = $urlParts['scheme'] . ':' . $thumbnailUrl;
-                        } elseif (strpos($thumbnailUrl, '/') === 0) {
-                            $thumbnailUrl = $base . $thumbnailUrl;
-                        } else {
-                            $thumbnailUrl = $base . '/' . $thumbnailUrl;
-                        }
-                    }
-
-                    // Download thumbnail
-                    $imageData = @file_get_contents($thumbnailUrl, false, $context);
-
-                    if ($imageData && strlen($imageData) > 0) {
-                        // Parse domain for directory
-                        $urlParts = parse_url($url);
-                        $domain = $urlParts['host'] ?? 'unknown';
-                        $domain = preg_replace('/[^a-z0-9\-\.]/', '_', strtolower($domain));
-
-                        // Create directory
-                        $domainDir = __DIR__ . '/screenshots/' . $domain;
-                        if (!is_dir($domainDir)) {
-                            mkdir($domainDir, 0755, true);
-                        }
-
-                        // Detect image type
-                        $finfo = new finfo(FILEINFO_MIME_TYPE);
-                        $mimeType = $finfo->buffer($imageData);
-                        $mimeToExt = [
-                            'image/jpeg' => 'jpg',
-                            'image/png' => 'png',
-                            'image/gif' => 'gif',
-                            'image/webp' => 'webp',
-                            'image/svg+xml' => 'svg',
-                            'image/x-icon' => 'ico',
-                        ];
-                        $extension = $mimeToExt[$mimeType] ?? 'png';
-
-                        // Resize image if it's wider than 1200px
-                        $imageData = resize_image($imageData, $mimeType, 1200);
-
-                        // Save file
-                        $timestamp = time();
-                        $filename = $timestamp . '_' . substr(md5($url . $now), 0, 8) . '.' . $extension;
-                        $filePath = $domainDir . '/' . $filename;
-
-                        if (file_put_contents($filePath, $imageData)) {
-                            $screenshotPath = 'screenshots/' . $domain . '/' . $filename;
-
-                            // Update bookmark
+                        if ($screenshotResult['success']) {
+                            // Update bookmark with screenshot path
                             $db->prepare("UPDATE bookmarks SET screenshot = ?, updated_at = ? WHERE id = ?")
-                               ->execute([$screenshotPath, $now, $job['bookmark_id']]);
+                               ->execute([$screenshotResult['path'], $now, $job['bookmark_id']]);
 
-                            $result = $screenshotPath;
+                            $result = $screenshotResult['path'];
                             $success = true;
+                        } else {
+                            $result = 'PageSpeed API error: ' . $screenshotResult['error'];
+                            $success = false;
                         }
                     }
                 }
