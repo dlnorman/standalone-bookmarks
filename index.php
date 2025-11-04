@@ -34,12 +34,46 @@ try {
 // Get parameters
 $search = $_GET['q'] ?? '';
 $tag = $_GET['tag'] ?? '';
+$showBroken = isset($_GET['broken']) && $_GET['broken'] === '1';
 $page = max(1, intval($_GET['page'] ?? 1));
 $limit = $config['items_per_page'];
 $offset = ($page - 1) * $limit;
 
+// Check if broken_url column exists
+$columns = $db->query("PRAGMA table_info(bookmarks)")->fetchAll(PDO::FETCH_ASSOC);
+$hasBrokenUrl = false;
+foreach ($columns as $column) {
+    if ($column['name'] === 'broken_url') {
+        $hasBrokenUrl = true;
+        break;
+    }
+}
+
 // Fetch bookmarks
-if (!empty($tag)) {
+if ($showBroken && $hasBrokenUrl) {
+    // Filter by broken URLs
+    if ($isLoggedIn) {
+        $stmt = $db->prepare("
+            SELECT * FROM bookmarks
+            WHERE broken_url = 1
+            ORDER BY last_checked DESC, created_at DESC
+            LIMIT ? OFFSET ?
+        ");
+        $stmt->execute([$limit, $offset]);
+
+        $countStmt = $db->query("SELECT COUNT(*) as total FROM bookmarks WHERE broken_url = 1");
+    } else {
+        $stmt = $db->prepare("
+            SELECT * FROM bookmarks
+            WHERE broken_url = 1 AND private = 0
+            ORDER BY last_checked DESC, created_at DESC
+            LIMIT ? OFFSET ?
+        ");
+        $stmt->execute([$limit, $offset]);
+
+        $countStmt = $db->query("SELECT COUNT(*) as total FROM bookmarks WHERE broken_url = 1 AND private = 0");
+    }
+} elseif (!empty($tag)) {
     // Filter by tag (case-insensitive)
     $tagPattern = '%' . strtolower($tag) . '%';
 
@@ -386,10 +420,25 @@ $totalPages = ceil($total / $limit);
             border-left: 4px solid #e67e22;
         }
 
+        .bookmark.broken {
+            border-left: 4px solid #e74c3c;
+        }
+
         .bookmark .private-badge {
             display: inline-block;
             padding: 2px 8px;
             background: #e67e22;
+            color: white;
+            border-radius: 3px;
+            font-size: 11px;
+            font-weight: bold;
+            margin-left: 10px;
+        }
+
+        .bookmark .broken-badge {
+            display: inline-block;
+            padding: 2px 8px;
+            background: #e74c3c;
             color: white;
             border-radius: 3px;
             font-size: 11px;
@@ -626,23 +675,37 @@ $totalPages = ceil($total / $limit);
                     <a href="<?= $config['base_path'] ?>" class="btn">Clear</a>
                 </div>
             <?php endif; ?>
+
+            <?php if ($showBroken): ?>
+                <div class="filter-notice" style="background: #fee; border-left: 3px solid #e74c3c;">
+                    Showing <strong style="color: #e74c3c;">broken links only</strong>
+                    <a href="<?= $config['base_path'] ?>" class="btn">Show All</a>
+                </div>
+            <?php endif; ?>
         </div>
 
     <?php if (empty($bookmarks)): ?>
         <div class="no-results">
             <?php if (!empty($search)): ?>
                 <p>No bookmarks found for "<?= htmlspecialchars($search) ?>"</p>
+            <?php elseif ($showBroken): ?>
+                <p>🎉 No broken links found! All your bookmarks are working.</p>
+            <?php elseif (!empty($tag)): ?>
+                <p>No bookmarks found with tag "<?= htmlspecialchars($tag) ?>"</p>
             <?php else: ?>
                 <p>No bookmarks yet. Add your first bookmark!</p>
             <?php endif; ?>
         </div>
     <?php else: ?>
         <?php foreach ($bookmarks as $bookmark): ?>
-            <div class="bookmark<?= !empty($bookmark['private']) ? ' private' : '' ?>" id="bookmark-<?= $bookmark['id'] ?>">
+            <div class="bookmark<?= !empty($bookmark['private']) ? ' private' : '' ?><?= isset($bookmark['broken_url']) && !empty($bookmark['broken_url']) ? ' broken' : '' ?>" id="bookmark-<?= $bookmark['id'] ?>">
                 <h2>
                     <a href="<?= htmlspecialchars($bookmark['url']) ?>" target="_blank" rel="noopener noreferrer"><?= htmlspecialchars($bookmark['title']) ?></a>
                     <?php if (!empty($bookmark['private'])): ?>
                         <span class="private-badge">PRIVATE</span>
+                    <?php endif; ?>
+                    <?php if (isset($bookmark['broken_url']) && !empty($bookmark['broken_url'])): ?>
+                        <span class="broken-badge" title="This URL appears to be broken. Last checked: <?= !empty($bookmark['last_checked']) ? date($config['date_format'], strtotime($bookmark['last_checked'])) : 'N/A' ?>">BROKEN LINK</span>
                     <?php endif; ?>
                 </h2>
                 <div class="url"><?= htmlspecialchars($bookmark['url']) ?></div>
@@ -692,6 +755,9 @@ $totalPages = ceil($total / $limit);
             <div class="pagination">
                 <?php
                 $paginationParams = ['q' => $search, 'tag' => $tag];
+                if ($showBroken) {
+                    $paginationParams['broken'] = '1';
+                }
                 ?>
                 <?php if ($page > 1): ?>
                     <a href="?<?= http_build_query(array_merge($paginationParams, ['page' => $page - 1])) ?>">Previous</a>

@@ -221,6 +221,89 @@ try {
                         $success = false;
                     }
                 }
+
+            } elseif ($job['job_type'] === 'check_url') {
+                // Check if URL is accessible (not broken)
+                $url = $job['payload'];
+
+                // Validate URL for SSRF protection
+                if (!is_safe_url($url)) {
+                    $result = 'URL not allowed: Private/internal addresses are blocked';
+                    $success = false;
+                } else {
+                    // Check URL accessibility with HEAD request first (faster)
+                    $ch = curl_init($url);
+                    curl_setopt_array($ch, [
+                        CURLOPT_RETURNTRANSFER => true,
+                        CURLOPT_NOBODY => true, // HEAD request
+                        CURLOPT_FOLLOWLOCATION => true,
+                        CURLOPT_MAXREDIRS => 5,
+                        CURLOPT_TIMEOUT => 15,
+                        CURLOPT_CONNECTTIMEOUT => 10,
+                        CURLOPT_SSL_VERIFYPEER => true,
+                        CURLOPT_SSL_VERIFYHOST => 2,
+                        CURLOPT_USERAGENT => 'Mozilla/5.0 (compatible; BookmarksApp/1.0; +URL-Checker)',
+                        CURLOPT_HTTPHEADER => [
+                            'Accept: text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8'
+                        ]
+                    ]);
+
+                    curl_exec($ch);
+                    $httpCode = curl_getinfo($ch, CURLINFO_HTTP_CODE);
+                    $curlError = curl_error($ch);
+                    $effectiveUrl = curl_getinfo($ch, CURLINFO_EFFECTIVE_URL);
+                    curl_close($ch);
+
+                    // Consider 2xx and 3xx codes as success, also some 4xx that might be false positives
+                    // 200-299: Success
+                    // 300-399: Redirects (should be followed, but some might return these codes)
+                    // 401, 403: Unauthorized/Forbidden (site exists but requires auth - not broken)
+                    // 405: Method Not Allowed (might not support HEAD, but site exists)
+                    // 429: Rate limited (site exists)
+                    $isBroken = false;
+                    $statusMessage = "HTTP $httpCode";
+
+                    if (!empty($curlError)) {
+                        $isBroken = true;
+                        $statusMessage = "Connection error: $curlError";
+                    } elseif ($httpCode >= 200 && $httpCode < 400) {
+                        $isBroken = false;
+                        $statusMessage = "OK (HTTP $httpCode)";
+                    } elseif (in_array($httpCode, [401, 403, 405, 429])) {
+                        // These codes mean the server responded, so URL is not broken
+                        $isBroken = false;
+                        $statusMessage = "Accessible but restricted (HTTP $httpCode)";
+                    } elseif ($httpCode >= 400) {
+                        $isBroken = true;
+                        $statusMessage = "Broken (HTTP $httpCode)";
+                    } elseif ($httpCode === 0) {
+                        $isBroken = true;
+                        $statusMessage = "No response";
+                    }
+
+                    // Update bookmark with broken status and last checked time
+                    // First, check if broken_url column exists, if not add it
+                    $columns = $db->query("PRAGMA table_info(bookmarks)")->fetchAll(PDO::FETCH_ASSOC);
+                    $hasBrokenUrl = false;
+                    $hasLastChecked = false;
+                    foreach ($columns as $column) {
+                        if ($column['name'] === 'broken_url') $hasBrokenUrl = true;
+                        if ($column['name'] === 'last_checked') $hasLastChecked = true;
+                    }
+
+                    if (!$hasBrokenUrl) {
+                        $db->exec("ALTER TABLE bookmarks ADD COLUMN broken_url INTEGER DEFAULT 0");
+                    }
+                    if (!$hasLastChecked) {
+                        $db->exec("ALTER TABLE bookmarks ADD COLUMN last_checked DATETIME");
+                    }
+
+                    $db->prepare("UPDATE bookmarks SET broken_url = ?, last_checked = ?, updated_at = ? WHERE id = ?")
+                       ->execute([$isBroken ? 1 : 0, $now, $now, $job['bookmark_id']]);
+
+                    $result = $statusMessage;
+                    $success = true;
+                }
             }
 
         } catch (Exception $e) {

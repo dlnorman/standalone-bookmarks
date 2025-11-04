@@ -40,7 +40,7 @@ $action = $_GET['action'] ?? $_POST['action'] ?? '';
 $publicEndpoints = ['dashboard_stats'];
 
 // Read-only endpoints that don't require CSRF tokens
-$readOnlyEndpoints = ['get', 'list', 'fetch_meta', 'get_tags', 'dashboard_stats'];
+$readOnlyEndpoints = ['get', 'list', 'fetch_meta', 'get_tags', 'dashboard_stats', 'check_status'];
 
 // Require authentication for all operations except public endpoints
 if (!in_array($action, $publicEndpoints) && !is_logged_in()) {
@@ -316,6 +316,133 @@ switch ($action) {
         });
 
         echo json_encode(['tags' => $allTags]);
+        break;
+
+    case 'queue_url_checks':
+        // Queue URL checks for all bookmarks
+        $now = date('Y-m-d H:i:s');
+
+        // Get all bookmarks
+        $stmt = $db->query("SELECT id, url FROM bookmarks ORDER BY id");
+        $bookmarks = $stmt->fetchAll(PDO::FETCH_ASSOC);
+
+        $queued = 0;
+        $skipped = 0;
+        foreach ($bookmarks as $bookmark) {
+            // Check if there's already a pending or processing check_url job for this bookmark
+            $existingJob = $db->prepare("
+                SELECT id FROM jobs
+                WHERE bookmark_id = ?
+                AND job_type = 'check_url'
+                AND status IN ('pending', 'processing')
+            ");
+            $existingJob->execute([$bookmark['id']]);
+
+            if (!$existingJob->fetch()) {
+                // Queue new check_url job
+                $stmt = $db->prepare("
+                    INSERT INTO jobs (bookmark_id, job_type, payload, created_at, updated_at)
+                    VALUES (?, 'check_url', ?, ?, ?)
+                ");
+                $stmt->execute([$bookmark['id'], $bookmark['url'], $now, $now]);
+                $queued++;
+            } else {
+                $skipped++;
+            }
+        }
+
+        $message = "Queued $queued bookmark(s) for URL checking.";
+        if ($skipped > 0) {
+            $message .= " Skipped $skipped bookmark(s) that already have pending checks.";
+        }
+        if ($queued === 0 && $skipped === 0 && count($bookmarks) === 0) {
+            $message = "No bookmarks found to check.";
+        }
+
+        echo json_encode([
+            'success' => true,
+            'queued' => $queued,
+            'skipped' => $skipped,
+            'total' => count($bookmarks),
+            'message' => $message
+        ]);
+        break;
+
+    case 'check_status':
+        // Get status of URL check jobs
+        $stats = $db->query("
+            SELECT
+                COUNT(*) as total,
+                COUNT(CASE WHEN status = 'pending' THEN 1 END) as pending,
+                COUNT(CASE WHEN status = 'processing' THEN 1 END) as processing,
+                COUNT(CASE WHEN status = 'completed' THEN 1 END) as completed,
+                COUNT(CASE WHEN status = 'failed' THEN 1 END) as failed
+            FROM jobs
+            WHERE job_type = 'check_url'
+        ")->fetch(PDO::FETCH_ASSOC);
+
+        // Check if broken_url column exists
+        $columns = $db->query("PRAGMA table_info(bookmarks)")->fetchAll(PDO::FETCH_ASSOC);
+        $hasBrokenUrl = false;
+        foreach ($columns as $column) {
+            if ($column['name'] === 'broken_url') {
+                $hasBrokenUrl = true;
+                break;
+            }
+        }
+
+        // Get broken bookmarks count (if column exists)
+        $brokenCount = 0;
+        if ($hasBrokenUrl) {
+            $brokenCount = $db->query("
+                SELECT COUNT(*) as count FROM bookmarks WHERE broken_url = 1
+            ")->fetch(PDO::FETCH_ASSOC)['count'];
+        }
+
+        // Get recent check results
+        $recentChecks = [];
+        if ($hasBrokenUrl) {
+            $recentChecks = $db->query("
+                SELECT
+                    j.id,
+                    j.bookmark_id,
+                    j.status,
+                    j.result,
+                    j.updated_at,
+                    b.url,
+                    b.title,
+                    b.broken_url
+                FROM jobs j
+                JOIN bookmarks b ON j.bookmark_id = b.id
+                WHERE j.job_type = 'check_url'
+                ORDER BY j.updated_at DESC
+                LIMIT 50
+            ")->fetchAll(PDO::FETCH_ASSOC);
+        } else {
+            // If column doesn't exist yet, just show job status
+            $recentChecks = $db->query("
+                SELECT
+                    j.id,
+                    j.bookmark_id,
+                    j.status,
+                    j.result,
+                    j.updated_at,
+                    b.url,
+                    b.title,
+                    0 as broken_url
+                FROM jobs j
+                JOIN bookmarks b ON j.bookmark_id = b.id
+                WHERE j.job_type = 'check_url'
+                ORDER BY j.updated_at DESC
+                LIMIT 50
+            ")->fetchAll(PDO::FETCH_ASSOC);
+        }
+
+        echo json_encode([
+            'stats' => $stats,
+            'broken_count' => $brokenCount,
+            'recent_checks' => $recentChecks
+        ]);
         break;
 
     case 'dashboard_stats':

@@ -55,6 +55,14 @@ $nav_items = [
             'type' => 'divider'
         ],
         [
+            'label' => 'Check Bookmarks',
+            'url' => $config['base_path'] . '/check-bookmarks.php',
+            'auth_required' => true
+        ],
+        [
+            'type' => 'divider'
+        ],
+        [
             'label' => 'Import',
             'url' => $config['base_path'] . '/import.php',
             'auth_required' => true
