@@ -17,8 +17,8 @@ if (isset($config['timezone'])) {
     date_default_timezone_set($config['timezone']);
 }
 
-// Require authentication
-require_auth($config);
+// Check if logged in (but don't require it)
+$isLoggedIn = is_logged_in();
 
 // Connect to database
 try {
@@ -28,8 +28,40 @@ try {
     die('Database connection failed. Run init_db.php first.');
 }
 
-// Fetch all bookmarks to extract tags
-$stmt = $db->query("SELECT tags FROM bookmarks WHERE tags IS NOT NULL AND tags != ''");
+// HTTP Caching: Get last modification time from most recent bookmark
+if ($isLoggedIn) {
+    $lastModStmt = $db->query("SELECT MAX(updated_at) as last_mod FROM bookmarks");
+} else {
+    $lastModStmt = $db->query("SELECT MAX(updated_at) as last_mod FROM bookmarks WHERE private = 0");
+}
+$lastMod = $lastModStmt->fetch(PDO::FETCH_ASSOC)['last_mod'];
+
+if ($lastMod) {
+    $lastModTime = strtotime($lastMod);
+    $etag = md5($lastMod . ($isLoggedIn ? 'auth' : 'public'));
+
+    // Set caching headers (cache for 5 minutes)
+    header('Cache-Control: public, max-age=300');
+    header('Last-Modified: ' . gmdate('D, d M Y H:i:s', $lastModTime) . ' GMT');
+    header('ETag: "' . $etag . '"');
+
+    // Check if client has cached version
+    $ifModifiedSince = isset($_SERVER['HTTP_IF_MODIFIED_SINCE']) ? strtotime($_SERVER['HTTP_IF_MODIFIED_SINCE']) : 0;
+    $ifNoneMatch = isset($_SERVER['HTTP_IF_NONE_MATCH']) ? trim($_SERVER['HTTP_IF_NONE_MATCH'], '"') : '';
+
+    // Return 304 Not Modified if content hasn't changed
+    if ($ifModifiedSince >= $lastModTime || $ifNoneMatch === $etag) {
+        header('HTTP/1.1 304 Not Modified');
+        exit;
+    }
+}
+
+// Fetch bookmarks to extract tags (exclude private if not logged in)
+if ($isLoggedIn) {
+    $stmt = $db->query("SELECT tags FROM bookmarks WHERE tags IS NOT NULL AND tags != ''");
+} else {
+    $stmt = $db->query("SELECT tags FROM bookmarks WHERE tags IS NOT NULL AND tags != '' AND private = 0");
+}
 $allTags = [];
 
 while ($row = $stmt->fetch(PDO::FETCH_ASSOC)) {
@@ -147,7 +179,7 @@ ksort($allTags);
     </style>
 </head>
 <body>
-    <?php render_nav($config, true, 'tags', 'Tags'); ?>
+    <?php render_nav($config, $isLoggedIn, 'tags', 'Tags'); ?>
 
     <div class="page-container">
 

@@ -37,7 +37,7 @@ try {
 $action = $_GET['action'] ?? $_POST['action'] ?? '';
 
 // Public endpoints that don't require authentication
-$publicEndpoints = ['dashboard_stats'];
+$publicEndpoints = ['dashboard_stats', 'get_tags'];
 
 // Read-only endpoints that don't require CSRF tokens
 $readOnlyEndpoints = ['get', 'list', 'fetch_meta', 'get_tags', 'dashboard_stats', 'check_status'];
@@ -296,7 +296,41 @@ switch ($action) {
 
     case 'get_tags':
         // Get all unique tags for autocomplete
-        $stmt = $db->query("SELECT DISTINCT tags FROM bookmarks WHERE tags IS NOT NULL AND tags != ''");
+
+        // HTTP Caching: Get last modification time
+        $isLoggedIn = is_logged_in();
+        if ($isLoggedIn) {
+            $lastModStmt = $db->query("SELECT MAX(updated_at) as last_mod FROM bookmarks WHERE tags IS NOT NULL AND tags != ''");
+        } else {
+            $lastModStmt = $db->query("SELECT MAX(updated_at) as last_mod FROM bookmarks WHERE tags IS NOT NULL AND tags != '' AND private = 0");
+        }
+        $lastMod = $lastModStmt->fetch(PDO::FETCH_ASSOC)['last_mod'];
+
+        if ($lastMod) {
+            $lastModTime = strtotime($lastMod);
+            $etag = md5($lastMod . 'get_tags' . ($isLoggedIn ? 'auth' : 'public'));
+
+            // Set caching headers (cache for 5 minutes)
+            header('Cache-Control: public, max-age=300');
+            header('Last-Modified: ' . gmdate('D, d M Y H:i:s', $lastModTime) . ' GMT');
+            header('ETag: "' . $etag . '"');
+
+            // Check if client has cached version
+            $ifModifiedSince = isset($_SERVER['HTTP_IF_MODIFIED_SINCE']) ? strtotime($_SERVER['HTTP_IF_MODIFIED_SINCE']) : 0;
+            $ifNoneMatch = isset($_SERVER['HTTP_IF_NONE_MATCH']) ? trim($_SERVER['HTTP_IF_NONE_MATCH'], '"') : '';
+
+            // Return 304 Not Modified if content hasn't changed
+            if ($ifModifiedSince >= $lastModTime || $ifNoneMatch === $etag) {
+                header('HTTP/1.1 304 Not Modified');
+                exit;
+            }
+        }
+
+        if ($isLoggedIn) {
+            $stmt = $db->query("SELECT DISTINCT tags FROM bookmarks WHERE tags IS NOT NULL AND tags != ''");
+        } else {
+            $stmt = $db->query("SELECT DISTINCT tags FROM bookmarks WHERE tags IS NOT NULL AND tags != '' AND private = 0");
+        }
         $rows = $stmt->fetchAll(PDO::FETCH_ASSOC);
 
         // Parse comma-separated tags and create unique list
@@ -447,6 +481,30 @@ switch ($action) {
 
     case 'dashboard_stats':
         // Get comprehensive dashboard statistics
+
+        // HTTP Caching: Get last modification time
+        $lastModStmt = $db->query("SELECT MAX(updated_at) as last_mod FROM bookmarks WHERE private = 0");
+        $lastMod = $lastModStmt->fetch(PDO::FETCH_ASSOC)['last_mod'];
+
+        if ($lastMod) {
+            $lastModTime = strtotime($lastMod);
+            $etag = md5($lastMod . 'dashboard_stats');
+
+            // Set caching headers (cache for 5 minutes)
+            header('Cache-Control: public, max-age=300');
+            header('Last-Modified: ' . gmdate('D, d M Y H:i:s', $lastModTime) . ' GMT');
+            header('ETag: "' . $etag . '"');
+
+            // Check if client has cached version
+            $ifModifiedSince = isset($_SERVER['HTTP_IF_MODIFIED_SINCE']) ? strtotime($_SERVER['HTTP_IF_MODIFIED_SINCE']) : 0;
+            $ifNoneMatch = isset($_SERVER['HTTP_IF_NONE_MATCH']) ? trim($_SERVER['HTTP_IF_NONE_MATCH'], '"') : '';
+
+            // Return 304 Not Modified if content hasn't changed
+            if ($ifModifiedSince >= $lastModTime || $ifNoneMatch === $etag) {
+                header('HTTP/1.1 304 Not Modified');
+                exit;
+            }
+        }
 
         // Basic stats
         $basicStats = $db->query("

@@ -24,6 +24,30 @@ try {
     die('Database connection failed.');
 }
 
+// HTTP Caching: Get last modification time from most recent bookmark
+$lastModStmt = $db->query("SELECT MAX(created_at) as last_mod FROM bookmarks WHERE private = 0");
+$lastMod = $lastModStmt->fetch(PDO::FETCH_ASSOC)['last_mod'];
+
+if ($lastMod) {
+    $lastModTime = strtotime($lastMod);
+    $etag = md5($lastMod . $config['rss_limit']);
+
+    // Set caching headers (cache for 5 minutes)
+    header('Cache-Control: public, max-age=300');
+    header('Last-Modified: ' . gmdate('D, d M Y H:i:s', $lastModTime) . ' GMT');
+    header('ETag: "' . $etag . '"');
+
+    // Check if client has cached version
+    $ifModifiedSince = isset($_SERVER['HTTP_IF_MODIFIED_SINCE']) ? strtotime($_SERVER['HTTP_IF_MODIFIED_SINCE']) : 0;
+    $ifNoneMatch = isset($_SERVER['HTTP_IF_NONE_MATCH']) ? trim($_SERVER['HTTP_IF_NONE_MATCH'], '"') : '';
+
+    // Return 304 Not Modified if content hasn't changed
+    if ($ifModifiedSince >= $lastModTime || $ifNoneMatch === $etag) {
+        header('HTTP/1.1 304 Not Modified');
+        exit;
+    }
+}
+
 // Fetch recent bookmarks (exclude private)
 $stmt = $db->prepare("
     SELECT * FROM bookmarks
