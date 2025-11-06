@@ -165,6 +165,12 @@ if (!empty($export) && !empty($bookmarks)) {
                     echo $bookmark['description'] . "\n\n";
                 }
 
+                if (!empty($bookmark['screenshot'])) {
+                    $screenshotPath = ltrim($bookmark['screenshot'], '/');
+                    $screenshotUrl = rtrim($config['site_url'], '/') . '/' . $screenshotPath;
+                    echo "![Screenshot](" . $screenshotUrl . ")\n\n";
+                }
+
                 if (!empty($bookmark['tags'])) {
                     echo "**Tags:** " . $bookmark['tags'] . "\n\n";
                 }
@@ -193,6 +199,8 @@ if (!empty($export) && !empty($bookmarks)) {
         echo "h3 a:hover { text-decoration: underline; }\n";
         echo ".url { color: #7f8c8d; font-size: 14px; word-break: break-all; }\n";
         echo ".description { margin: 10px 0; color: #555; }\n";
+        echo ".screenshot { margin: 15px 0; }\n";
+        echo ".screenshot img { max-width: 100%; height: auto; border: 1px solid #ddd; border-radius: 4px; }\n";
         echo ".meta { font-size: 13px; color: #95a5a6; margin-top: 10px; }\n";
         echo ".tags { color: #27ae60; font-weight: 500; }\n";
         echo "hr { border: none; border-top: 1px solid #ecf0f1; margin: 30px 0; }\n";
@@ -211,6 +219,12 @@ if (!empty($export) && !empty($bookmarks)) {
 
                 if (!empty($bookmark['description'])) {
                     echo "<div class=\"description\">" . nl2br(htmlspecialchars($bookmark['description'])) . "</div>\n";
+                }
+
+                if (!empty($bookmark['screenshot'])) {
+                    $screenshotPath = ltrim($bookmark['screenshot'], '/');
+                    $screenshotUrl = rtrim($config['site_url'], '/') . '/' . $screenshotPath;
+                    echo "<div class=\"screenshot\"><img src=\"" . htmlspecialchars($screenshotUrl) . "\" alt=\"Screenshot\"></div>\n";
                 }
 
                 echo "<div class=\"meta\">\n";
