@@ -2,18 +2,98 @@
 /**
  * Recent bookmarks widget - embeddable in Hugo site
  *
- * Usage in Hugo (modern syntax):
+ * Usage in Hugo (modern syntax with markdown support and styling):
  * {{ $url := "https://yourdomain.com/bookmarks/recent.php?limit=5" }}
  * {{ $data := (resources.GetRemote $url).Content | transform.Unmarshal }}
+ * <div class="recent-bookmarks">
  * {{ range $data }}
- *   <div>
- *     {{ if .screenshot }}<img src="{{ .screenshot }}" alt="{{ .title }}">{{ end }}
- *     <a href="{{ .url }}">{{ .title }}</a>
- *     {{ if .description }}<p>{{ .description }}</p>{{ end }}
- *     <small>{{ .created_at }}</small>
- *     {{ if .archive_url }} | <a href="{{ .archive_url }}">Archive</a>{{ end }}
- *   </div>
+ *   <article class="bookmark-item">
+ *     <h3 class="bookmark-title">
+ *       <a href="{{ .url }}" target="_blank" rel="noopener">{{ .title }}</a>
+ *     </h3>
+ *     <div class="bookmark-content">
+ *       {{ if .screenshot }}
+ *       <div class="bookmark-screenshot">
+ *         <img src="{{ .screenshot }}" alt="{{ .title }}">
+ *       </div>
+ *       {{ end }}
+ *       {{ if .description }}
+ *       <div class="bookmark-description">
+ *         {{ .description | markdownify }}
+ *       </div>
+ *       {{ end }}
+ *       <div class="bookmark-meta">
+ *         <time datetime="{{ .created_at }}">{{ .created_at }}</time>
+ *         {{ if .tags }} • {{ .tags }}{{ end }}
+ *         {{ if .archive_url }} • <a href="{{ .archive_url }}" target="_blank">Archive</a>{{ end }}
+ *       </div>
+ *     </div>
+ *   </article>
  * {{ end }}
+ * </div>
+ *
+ * Add this CSS to your Hugo theme:
+ * <style>
+ * .recent-bookmarks {
+ *   display: flex;
+ *   flex-direction: column;
+ *   gap: 2rem;
+ * }
+ * .bookmark-item {
+ *   border: 1px solid #e5e7eb;
+ *   border-radius: 8px;
+ *   padding: 1.5rem;
+ *   background: #fff;
+ *   box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+ * }
+ * .bookmark-item:hover {
+ *   box-shadow: 0 4px 6px rgba(0,0,0,0.1);
+ * }
+ * .bookmark-title {
+ *   margin: 0 0 1rem 0;
+ *   font-size: 1.25rem;
+ * }
+ * .bookmark-content {
+ *   overflow: auto;
+ * }
+ * .bookmark-screenshot {
+ *   float: right;
+ *   margin: 0 0 1rem 1.5rem;
+ *   max-width: 300px;
+ * }
+ * .bookmark-screenshot img {
+ *   width: 100%;
+ *   height: auto;
+ *   border-radius: 4px;
+ *   box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+ * }
+ * @media (max-width: 640px) {
+ *   .bookmark-screenshot {
+ *     float: none;
+ *     max-width: 100%;
+ *     margin: 0 0 1rem 0;
+ *   }
+ * }
+ * .bookmark-title a {
+ *   color: #1d4ed8;
+ *   text-decoration: none;
+ * }
+ * .bookmark-title a:hover {
+ *   text-decoration: underline;
+ * }
+ * .bookmark-description {
+ *   margin-bottom: 1rem;
+ *   line-height: 1.6;
+ *   color: #374151;
+ * }
+ * .bookmark-meta {
+ *   font-size: 0.875rem;
+ *   color: #6b7280;
+ * }
+ * .bookmark-meta a {
+ *   color: #6b7280;
+ * }
+ * </style>
  */
 
 // Load configuration
