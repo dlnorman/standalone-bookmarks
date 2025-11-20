@@ -10,6 +10,7 @@ if (!file_exists(__DIR__ . '/config.php')) {
 
 $config = require __DIR__ . '/config.php';
 require_once __DIR__ . '/auth.php';
+require_once __DIR__ . '/includes/markdown.php';
 require_once __DIR__ . '/includes/nav.php';
 
 // Set timezone
@@ -42,7 +43,7 @@ $totalBookmarks = $db->query($countQuery)->fetch(PDO::FETCH_ASSOC)['total'];
 $totalPages = ceil($totalBookmarks / $itemsPerPage);
 
 // Fetch bookmarks with screenshots for current page
-$query = "SELECT id, url, title, screenshot, created_at, tags FROM bookmarks WHERE screenshot IS NOT NULL AND screenshot != ''";
+$query = "SELECT id, url, title, description, screenshot, created_at, tags FROM bookmarks WHERE screenshot IS NOT NULL AND screenshot != ''";
 
 // If not logged in, only show public bookmarks
 if (!$isLoggedIn) {
@@ -54,6 +55,12 @@ $query .= " ORDER BY created_at DESC LIMIT ? OFFSET ?";
 $stmt = $db->prepare($query);
 $stmt->execute([$itemsPerPage, $offset]);
 $bookmarks = $stmt->fetchAll(PDO::FETCH_ASSOC);
+
+// Pre-render markdown descriptions
+foreach ($bookmarks as &$bookmark) {
+    $bookmark['description_html'] = parseMarkdown($bookmark['description'] ?? '');
+}
+unset($bookmark); // Break reference
 ?>
 <!DOCTYPE html>
 <html lang="en">
@@ -371,6 +378,33 @@ $bookmarks = $stmt->fetchAll(PDO::FETCH_ASSOC);
             text-decoration: underline;
         }
 
+        .modal-description {
+            color: rgba(255, 255, 255, 0.8);
+            margin: 15px 0;
+            line-height: 1.6;
+            font-size: 15px;
+            max-height: 200px;
+            overflow-y: auto;
+        }
+
+        .modal-tags {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 8px;
+            margin-top: 15px;
+            padding-top: 15px;
+            border-top: 1px solid rgba(255, 255, 255, 0.1);
+        }
+
+        .modal-tag {
+            font-size: 12px;
+            padding: 4px 10px;
+            background: rgba(102, 126, 234, 0.2);
+            color: #a0b0ff;
+            border-radius: 4px;
+            border: 1px solid rgba(102, 126, 234, 0.3);
+        }
+
         /* Pagination */
         .pagination {
             display: flex;
@@ -569,6 +603,8 @@ $bookmarks = $stmt->fetchAll(PDO::FETCH_ASSOC);
             <div class="modal-info">
                 <div class="modal-title" id="modalTitle"></div>
                 <a id="modalUrl" class="modal-url" href="" target="_blank" rel="noopener noreferrer"></a>
+                <div id="modalDescription" class="modal-description"></div>
+                <div id="modalTags" class="modal-tags"></div>
             </div>
         </div>
     </div>
@@ -614,11 +650,44 @@ $bookmarks = $stmt->fetchAll(PDO::FETCH_ASSOC);
             const modalImage = document.getElementById('modalImage');
             const modalTitle = document.getElementById('modalTitle');
             const modalUrl = document.getElementById('modalUrl');
+            const modalDescription = document.getElementById('modalDescription');
+            const modalTags = document.getElementById('modalTags');
 
             modalImage.src = basePath + '/' + bookmark.screenshot;
             modalTitle.textContent = bookmark.title;
             modalUrl.href = bookmark.url;
             modalUrl.textContent = bookmark.url;
+
+            // Handle description
+            if (bookmark.description_html) {
+                modalDescription.innerHTML = bookmark.description_html;
+                modalDescription.style.display = 'block';
+            } else if (bookmark.description) {
+                // Fallback for raw description if html not present
+                modalDescription.textContent = bookmark.description;
+                modalDescription.style.display = 'block';
+            } else {
+                modalDescription.style.display = 'none';
+            }
+
+            // Handle tags
+            modalTags.innerHTML = '';
+            if (bookmark.tags) {
+                const tags = bookmark.tags.split(',').map(t => t.trim()).filter(t => t);
+                if (tags.length > 0) {
+                    tags.forEach(tag => {
+                        const span = document.createElement('span');
+                        span.className = 'modal-tag';
+                        span.textContent = tag;
+                        modalTags.appendChild(span);
+                    });
+                    modalTags.style.display = 'flex';
+                } else {
+                    modalTags.style.display = 'none';
+                }
+            } else {
+                modalTags.style.display = 'none';
+            }
 
             modal.classList.add('active');
             document.body.style.overflow = 'hidden';
