@@ -714,11 +714,12 @@ $totalPages = ceil($total / $limit);
                 <?php endif; ?>
                 <?php if (!empty($bookmark['screenshot'])): ?>
                     <div class="screenshot">
-                        <img src="<?= $config['base_path'] . '/' . htmlspecialchars($bookmark['screenshot']) ?>"
-                             class="thumbnail"
-                             alt="Screenshot"
-                             onclick="this.classList.toggle('thumbnail')"
-                             title="Click to toggle size">
+                        <a href="<?= htmlspecialchars($bookmark['url']) ?>" target="_blank" rel="noopener noreferrer">
+                            <img src="<?= $config['base_path'] . '/' . htmlspecialchars($bookmark['screenshot']) ?>"
+                                 class="thumbnail"
+                                 alt="Screenshot"
+                                 title="Click to open bookmark">
+                        </a>
                     </div>
                 <?php endif; ?>
                 <div class="meta">

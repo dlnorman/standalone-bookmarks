@@ -57,6 +57,7 @@ $bookmarks = $stmt->fetchAll(PDO::FETCH_ASSOC);
 ?>
 <!DOCTYPE html>
 <html lang="en">
+
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
@@ -199,16 +200,45 @@ $bookmarks = $stmt->fetchAll(PDO::FETCH_ASSOC);
             padding: 15px;
         }
 
+        .gallery-item-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: flex-start;
+            gap: 10px;
+            margin-bottom: 8px;
+        }
+
         .gallery-item-title {
             font-size: 15px;
             font-weight: 600;
-            margin-bottom: 8px;
             color: #fff;
             display: -webkit-box;
             -webkit-line-clamp: 2;
             -webkit-box-orient: vertical;
             overflow: hidden;
             line-height: 1.4;
+            margin-bottom: 0;
+            flex: 1;
+        }
+
+        .btn-details {
+            background: rgba(255, 255, 255, 0.1);
+            border: none;
+            color: rgba(255, 255, 255, 0.7);
+            cursor: pointer;
+            padding: 4px;
+            border-radius: 4px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            transition: all 0.2s;
+            flex-shrink: 0;
+        }
+
+        .btn-details:hover {
+            background: rgba(255, 255, 255, 0.2);
+            color: white;
+            transform: scale(1.1);
         }
 
         .gallery-item-url {
@@ -408,15 +438,13 @@ $bookmarks = $stmt->fetchAll(PDO::FETCH_ASSOC);
         }
     </style>
 </head>
+
 <body>
     <?php render_nav($config, $isLoggedIn, 'gallery', 'Screenshot Gallery'); ?>
 
     <div class="gallery-container">
         <div class="filter-bar">
-            <input type="text"
-                   id="filterInput"
-                   class="filter-input"
-                   placeholder="🔍 Filter by title, URL, or tags...">
+            <input type="text" id="filterInput" class="filter-input" placeholder="🔍 Filter by title, URL, or tags...">
         </div>
 
         <div class="stats">
@@ -432,30 +460,41 @@ $bookmarks = $stmt->fetchAll(PDO::FETCH_ASSOC);
             <div class="no-results">
                 <div class="no-results-icon">📷</div>
                 <p>No screenshots available yet.</p>
-                <p style="margin-top: 10px; font-size: 13px;">Screenshots are automatically captured when you bookmark pages.</p>
+                <p style="margin-top: 10px; font-size: 13px;">Screenshots are automatically captured when you bookmark
+                    pages.</p>
             </div>
         <?php else: ?>
             <div class="gallery-grid" id="galleryGrid">
                 <?php foreach ($bookmarks as $bookmark): ?>
-                    <div class="gallery-item"
-                         data-id="<?= $bookmark['id'] ?>"
-                         data-title="<?= htmlspecialchars($bookmark['title']) ?>"
-                         data-url="<?= htmlspecialchars($bookmark['url']) ?>"
-                         data-tags="<?= htmlspecialchars(strtolower($bookmark['tags'] ?? '')) ?>"
-                         onclick="openModal(<?= $bookmark['id'] ?>)">
+                    <div class="gallery-item" data-id="<?= $bookmark['id'] ?>"
+                        data-title="<?= htmlspecialchars($bookmark['title']) ?>"
+                        data-url="<?= htmlspecialchars($bookmark['url']) ?>"
+                        data-tags="<?= htmlspecialchars(strtolower($bookmark['tags'] ?? '')) ?>"
+                        onclick="window.open('<?= htmlspecialchars($bookmark['url']) ?>', '_blank')">
                         <img src="<?= $config['base_path'] ?>/<?= htmlspecialchars($bookmark['screenshot']) ?>"
-                             alt="<?= htmlspecialchars($bookmark['title']) ?>"
-                             class="gallery-item-image"
-                             loading="lazy">
+                            alt="<?= htmlspecialchars($bookmark['title']) ?>" class="gallery-item-image" loading="lazy">
                         <div class="gallery-item-info">
-                            <div class="gallery-item-title"><?= htmlspecialchars($bookmark['title']) ?></div>
-                            <div class="gallery-item-url"><?= htmlspecialchars(parse_url($bookmark['url'], PHP_URL_HOST)) ?></div>
+                            <div class="gallery-item-header">
+                                <div class="gallery-item-title"><?= htmlspecialchars($bookmark['title']) ?></div>
+                                <button class="btn-details" onclick="event.stopPropagation(); openModal(<?= $bookmark['id'] ?>)"
+                                    title="View Details">
+                                    <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24"
+                                        fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"
+                                        stroke-linejoin="round">
+                                        <circle cx="12" cy="12" r="10"></circle>
+                                        <line x1="12" y1="16" x2="12" y2="12"></line>
+                                        <line x1="12" y1="8" x2="12.01" y2="8"></line>
+                                    </svg>
+                                </button>
+                            </div>
+                            <div class="gallery-item-url"><?= htmlspecialchars(parse_url($bookmark['url'], PHP_URL_HOST)) ?>
+                            </div>
                             <?php if (!empty($bookmark['tags'])): ?>
                                 <div class="gallery-item-tags">
                                     <?php
                                     $tags = array_map('trim', explode(',', $bookmark['tags']));
                                     foreach (array_slice($tags, 0, 3) as $tag):
-                                    ?>
+                                        ?>
                                         <span class="gallery-tag"><?= htmlspecialchars($tag) ?></span>
                                     <?php endforeach; ?>
                                     <?php if (count($tags) > 3): ?>
@@ -543,7 +582,7 @@ $bookmarks = $stmt->fetchAll(PDO::FETCH_ASSOC);
         const galleryGrid = document.getElementById('galleryGrid');
         const visibleCount = document.getElementById('visibleCount');
 
-        filterInput.addEventListener('input', function() {
+        filterInput.addEventListener('input', function () {
             const query = this.value.toLowerCase().trim();
             const items = galleryGrid.querySelectorAll('.gallery-item');
             let visible = 0;
@@ -592,7 +631,7 @@ $bookmarks = $stmt->fetchAll(PDO::FETCH_ASSOC);
         }
 
         // Close modal on escape key
-        document.addEventListener('keydown', function(e) {
+        document.addEventListener('keydown', function (e) {
             if (e.key === 'Escape') {
                 closeModal();
             }
@@ -600,4 +639,5 @@ $bookmarks = $stmt->fetchAll(PDO::FETCH_ASSOC);
     </script>
     <?php render_nav_scripts(); ?>
 </body>
+
 </html>
