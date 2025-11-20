@@ -168,6 +168,7 @@ $totalPages = ceil($total / $limit);
 ?>
 <!DOCTYPE html>
 <html lang="en">
+
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
@@ -198,7 +199,7 @@ $totalPages = ceil($total / $limit);
             padding: 20px;
             border-radius: 8px;
             margin-bottom: 20px;
-            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+            box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
         }
 
         .search-form {
@@ -262,7 +263,7 @@ $totalPages = ceil($total / $limit);
             padding: 20px;
             margin-bottom: 15px;
             border-radius: 8px;
-            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+            box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
         }
 
         .bookmark h2 {
@@ -316,12 +317,29 @@ $totalPages = ceil($total / $limit);
             font-weight: 600;
         }
 
-        .bookmark .description h1 { font-size: 1.5em; }
-        .bookmark .description h2 { font-size: 1.3em; }
-        .bookmark .description h3 { font-size: 1.1em; }
-        .bookmark .description h4 { font-size: 1em; }
-        .bookmark .description h5 { font-size: 0.9em; }
-        .bookmark .description h6 { font-size: 0.85em; }
+        .bookmark .description h1 {
+            font-size: 1.5em;
+        }
+
+        .bookmark .description h2 {
+            font-size: 1.3em;
+        }
+
+        .bookmark .description h3 {
+            font-size: 1.1em;
+        }
+
+        .bookmark .description h4 {
+            font-size: 1em;
+        }
+
+        .bookmark .description h5 {
+            font-size: 0.9em;
+        }
+
+        .bookmark .description h6 {
+            font-size: 0.85em;
+        }
 
         .bookmark .description strong {
             font-weight: 600;
@@ -480,7 +498,7 @@ $totalPages = ceil($total / $limit);
             color: #3498db;
             text-decoration: none;
             border-radius: 4px;
-            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+            box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
         }
 
         .pagination span {
@@ -601,7 +619,7 @@ $totalPages = ceil($total / $limit);
             overflow-y: auto;
             z-index: 1000;
             display: none;
-            box-shadow: 0 4px 6px rgba(0,0,0,0.1);
+            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
         }
 
         .tag-suggestions.active {
@@ -652,6 +670,7 @@ $totalPages = ceil($total / $limit);
         }
     </style>
 </head>
+
 <body>
     <?php render_nav($config, $isLoggedIn, 'index'); ?>
 
@@ -684,100 +703,104 @@ $totalPages = ceil($total / $limit);
             <?php endif; ?>
         </div>
 
-    <?php if (empty($bookmarks)): ?>
-        <div class="no-results">
-            <?php if (!empty($search)): ?>
-                <p>No bookmarks found for "<?= htmlspecialchars($search) ?>"</p>
-            <?php elseif ($showBroken): ?>
-                <p>🎉 No broken links found! All your bookmarks are working.</p>
-            <?php elseif (!empty($tag)): ?>
-                <p>No bookmarks found with tag "<?= htmlspecialchars($tag) ?>"</p>
-            <?php else: ?>
-                <p>No bookmarks yet. Add your first bookmark!</p>
-            <?php endif; ?>
-        </div>
-    <?php else: ?>
-        <?php foreach ($bookmarks as $bookmark): ?>
-            <div class="bookmark<?= !empty($bookmark['private']) ? ' private' : '' ?><?= isset($bookmark['broken_url']) && !empty($bookmark['broken_url']) ? ' broken' : '' ?>" id="bookmark-<?= $bookmark['id'] ?>">
-                <h2>
-                    <a href="<?= htmlspecialchars($bookmark['url']) ?>" target="_blank" rel="noopener noreferrer"><?= htmlspecialchars($bookmark['title']) ?></a>
-                    <?php if (!empty($bookmark['private'])): ?>
-                        <span class="private-badge">PRIVATE</span>
-                    <?php endif; ?>
-                    <?php if (isset($bookmark['broken_url']) && !empty($bookmark['broken_url'])): ?>
-                        <span class="broken-badge" title="This URL appears to be broken. Last checked: <?= !empty($bookmark['last_checked']) ? date($config['date_format'], strtotime($bookmark['last_checked'])) : 'N/A' ?>">BROKEN LINK</span>
-                    <?php endif; ?>
-                </h2>
-                <div class="url"><?= htmlspecialchars($bookmark['url']) ?></div>
-                <?php if (!empty($bookmark['description'])): ?>
-                    <div class="description"><?= parseMarkdown($bookmark['description']) ?></div>
+        <?php if (empty($bookmarks)): ?>
+            <div class="no-results">
+                <?php if (!empty($search)): ?>
+                    <p>No bookmarks found for "<?= htmlspecialchars($search) ?>"</p>
+                <?php elseif ($showBroken): ?>
+                    <p>🎉 No broken links found! All your bookmarks are working.</p>
+                <?php elseif (!empty($tag)): ?>
+                    <p>No bookmarks found with tag "<?= htmlspecialchars($tag) ?>"</p>
+                <?php else: ?>
+                    <p>No bookmarks yet. Add your first bookmark!</p>
                 <?php endif; ?>
-                <?php if (!empty($bookmark['screenshot'])): ?>
-                    <div class="screenshot">
-                        <a href="<?= htmlspecialchars($bookmark['url']) ?>" target="_blank" rel="noopener noreferrer">
-                            <img src="<?= $config['base_path'] . '/' . htmlspecialchars($bookmark['screenshot']) ?>"
-                                 class="thumbnail"
-                                 alt="Screenshot"
-                                 title="Click to open bookmark">
-                        </a>
-                    </div>
-                <?php endif; ?>
-                <div class="meta">
-                    <div>
-                        <?php if (!empty($bookmark['tags'])): ?>
-                            <span class="tags">Tags:
-                            <?php
-                                $tagList = array_map('trim', explode(',', $bookmark['tags']));
-                                $tagLinks = [];
-                                foreach ($tagList as $tagItem) {
-                                    $tagLinks[] = '<a href="?tag=' . urlencode($tagItem) . '" style="color: #3498db; text-decoration: none;">' . htmlspecialchars($tagItem) . '</a>';
-                                }
-                                echo implode(', ', $tagLinks);
-                            ?>
-                            </span>
+            </div>
+        <?php else: ?>
+            <?php foreach ($bookmarks as $bookmark): ?>
+                <div class="bookmark<?= !empty($bookmark['private']) ? ' private' : '' ?><?= isset($bookmark['broken_url']) && !empty($bookmark['broken_url']) ? ' broken' : '' ?>"
+                    id="bookmark-<?= $bookmark['id'] ?>">
+                    <h2>
+                        <a href="<?= htmlspecialchars($bookmark['url']) ?>" target="_blank"
+                            rel="noopener noreferrer"><?= htmlspecialchars($bookmark['title']) ?></a>
+                        <?php if (!empty($bookmark['private'])): ?>
+                            <span class="private-badge">PRIVATE</span>
                         <?php endif; ?>
-                        <span> &middot; <?= date($config['date_format'], strtotime($bookmark['created_at'])) ?></span>
-                        <?php if (!empty($bookmark['archive_url'])): ?>
-                            <span> &middot; <a href="<?= htmlspecialchars($bookmark['archive_url']) ?>" target="_blank" rel="noopener noreferrer" style="color: #27ae60;">Archive</a></span>
+                        <?php if (isset($bookmark['broken_url']) && !empty($bookmark['broken_url'])): ?>
+                            <span class="broken-badge"
+                                title="This URL appears to be broken. Last checked: <?= !empty($bookmark['last_checked']) ? date($config['date_format'], strtotime($bookmark['last_checked'])) : 'N/A' ?>">BROKEN
+                                LINK</span>
+                        <?php endif; ?>
+                    </h2>
+                    <div class="url"><?= htmlspecialchars($bookmark['url']) ?></div>
+                    <?php if (!empty($bookmark['description'])): ?>
+                        <div class="description"><?= parseMarkdown($bookmark['description']) ?></div>
+                    <?php endif; ?>
+                    <?php if (!empty($bookmark['screenshot'])): ?>
+                        <div class="screenshot">
+                            <a href="<?= htmlspecialchars($bookmark['url']) ?>" target="_blank" rel="noopener noreferrer">
+                                <img src="<?= $config['base_path'] . '/' . htmlspecialchars($bookmark['screenshot']) ?>"
+                                    class="thumbnail" alt="Screenshot" title="Click to open bookmark">
+                            </a>
+                        </div>
+                    <?php endif; ?>
+                    <div class="meta">
+                        <div>
+                            <?php if (!empty($bookmark['tags'])): ?>
+                                <span class="tags">Tags:
+                                    <?php
+                                    $tagList = array_map('trim', explode(',', $bookmark['tags']));
+                                    $tagLinks = [];
+                                    foreach ($tagList as $tagItem) {
+                                        $tagLinks[] = '<a href="?tag=' . urlencode($tagItem) . '" style="color: #3498db; text-decoration: none;">' . htmlspecialchars($tagItem) . '</a>';
+                                    }
+                                    echo implode(', ', $tagLinks);
+                                    ?>
+                                </span>
+                            <?php endif; ?>
+                            <span> &middot; <?= date($config['date_format'], strtotime($bookmark['created_at'])) ?></span>
+                            <?php if (!empty($bookmark['archive_url'])): ?>
+                                <span> &middot; <a href="<?= htmlspecialchars($bookmark['archive_url']) ?>" target="_blank"
+                                        rel="noopener noreferrer" style="color: #27ae60;">Archive</a></span>
+                            <?php endif; ?>
+                        </div>
+                        <?php if ($isLoggedIn): ?>
+                            <div class="actions">
+                                <a href="#" onclick="editBookmark(<?= $bookmark['id'] ?>); return false;">Edit</a>
+                                <a href="#" onclick="deleteBookmark(<?= $bookmark['id'] ?>); return false;">Delete</a>
+                                <a href="#" onclick="regenerateScreenshot(<?= $bookmark['id'] ?>); return false;">Regenerate
+                                    Screenshot</a>
+                            </div>
                         <?php endif; ?>
                     </div>
-                    <?php if ($isLoggedIn): ?>
-                    <div class="actions">
-                        <a href="#" onclick="editBookmark(<?= $bookmark['id'] ?>); return false;">Edit</a>
-                        <a href="#" onclick="deleteBookmark(<?= $bookmark['id'] ?>); return false;">Delete</a>
-                        <a href="#" onclick="regenerateScreenshot(<?= $bookmark['id'] ?>); return false;">Regenerate Screenshot</a>
-                    </div>
+                </div>
+            <?php endforeach; ?>
+
+            <?php if ($totalPages > 1): ?>
+                <div class="pagination">
+                    <?php
+                    $paginationParams = ['q' => $search, 'tag' => $tag];
+                    if ($showBroken) {
+                        $paginationParams['broken'] = '1';
+                    }
+                    ?>
+                    <?php if ($page > 1): ?>
+                        <a href="?<?= http_build_query(array_merge($paginationParams, ['page' => $page - 1])) ?>">Previous</a>
+                    <?php endif; ?>
+
+                    <?php for ($i = max(1, $page - 2); $i <= min($totalPages, $page + 2); $i++): ?>
+                        <?php if ($i == $page): ?>
+                            <span><?= $i ?></span>
+                        <?php else: ?>
+                            <a href="?<?= http_build_query(array_merge($paginationParams, ['page' => $i])) ?>"><?= $i ?></a>
+                        <?php endif; ?>
+                    <?php endfor; ?>
+
+                    <?php if ($page < $totalPages): ?>
+                        <a href="?<?= http_build_query(array_merge($paginationParams, ['page' => $page + 1])) ?>">Next</a>
                     <?php endif; ?>
                 </div>
-            </div>
-        <?php endforeach; ?>
-
-        <?php if ($totalPages > 1): ?>
-            <div class="pagination">
-                <?php
-                $paginationParams = ['q' => $search, 'tag' => $tag];
-                if ($showBroken) {
-                    $paginationParams['broken'] = '1';
-                }
-                ?>
-                <?php if ($page > 1): ?>
-                    <a href="?<?= http_build_query(array_merge($paginationParams, ['page' => $page - 1])) ?>">Previous</a>
-                <?php endif; ?>
-
-                <?php for ($i = max(1, $page - 2); $i <= min($totalPages, $page + 2); $i++): ?>
-                    <?php if ($i == $page): ?>
-                        <span><?= $i ?></span>
-                    <?php else: ?>
-                        <a href="?<?= http_build_query(array_merge($paginationParams, ['page' => $i])) ?>"><?= $i ?></a>
-                    <?php endif; ?>
-                <?php endfor; ?>
-
-                <?php if ($page < $totalPages): ?>
-                    <a href="?<?= http_build_query(array_merge($paginationParams, ['page' => $page + 1])) ?>">Next</a>
-                <?php endif; ?>
-            </div>
+            <?php endif; ?>
         <?php endif; ?>
-    <?php endif; ?>
     </div>
 
     <?php render_nav_scripts(); ?>
@@ -813,16 +836,16 @@ $totalPages = ceil($total / $limit);
                 method: 'POST',
                 body: formData
             })
-            .then(r => r.json())
-            .then(data => {
-                if (data.success) {
-                    alert('Bookmark added successfully!');
-                    location.reload();
-                } else {
-                    alert('Error: ' + data.error);
-                }
-            })
-            .catch(err => alert('Error: ' + err));
+                .then(r => r.json())
+                .then(data => {
+                    if (data.success) {
+                        alert('Bookmark added successfully!');
+                        location.reload();
+                    } else {
+                        alert('Error: ' + data.error);
+                    }
+                })
+                .catch(err => alert('Error: ' + err));
         }
 
         function editBookmark(id) {
@@ -834,9 +857,9 @@ $totalPages = ceil($total / $limit);
             const bookmarkElement = document.getElementById('bookmark-' + id);
 
             fetch(BASE_PATH + '/api.php?action=get&id=' + id)
-            .then(r => r.json())
-            .then(bookmark => {
-                const formHtml = `
+                .then(r => r.json())
+                .then(bookmark => {
+                    const formHtml = `
                     <div class="edit-form">
                         <div class="form-group">
                             <label for="edit-url-${id}">URL</label>
@@ -868,12 +891,12 @@ $totalPages = ceil($total / $limit);
                     </div>
                 `;
 
-                bookmarkElement.insertAdjacentHTML('beforeend', formHtml);
+                    bookmarkElement.insertAdjacentHTML('beforeend', formHtml);
 
-                // Initialize tag autocomplete after the form is inserted
-                initTagAutocomplete(`edit-tags-${id}`, `edit-tags-suggestions-${id}`);
-            })
-            .catch(err => alert('Error loading bookmark: ' + err));
+                    // Initialize tag autocomplete after the form is inserted
+                    initTagAutocomplete(`edit-tags-${id}`, `edit-tags-suggestions-${id}`);
+                })
+                .catch(err => alert('Error loading bookmark: ' + err));
         }
 
         function escapeHtml(text) {
@@ -915,15 +938,15 @@ $totalPages = ceil($total / $limit);
                 method: 'POST',
                 body: formData
             })
-            .then(r => r.json())
-            .then(data => {
-                if (data.success) {
-                    location.reload();
-                } else {
-                    alert('Error: ' + data.error);
-                }
-            })
-            .catch(err => alert('Error: ' + err));
+                .then(r => r.json())
+                .then(data => {
+                    if (data.success) {
+                        location.reload();
+                    } else {
+                        alert('Error: ' + data.error);
+                    }
+                })
+                .catch(err => alert('Error: ' + err));
         }
 
         function deleteBookmark(id) {
@@ -939,15 +962,15 @@ $totalPages = ceil($total / $limit);
                 method: 'POST',
                 body: formData
             })
-            .then(r => r.json())
-            .then(data => {
-                if (data.success) {
-                    document.getElementById('bookmark-' + id).remove();
-                } else {
-                    alert('Error: ' + data.error);
-                }
-            })
-            .catch(err => alert('Error: ' + err));
+                .then(r => r.json())
+                .then(data => {
+                    if (data.success) {
+                        document.getElementById('bookmark-' + id).remove();
+                    } else {
+                        alert('Error: ' + data.error);
+                    }
+                })
+                .catch(err => alert('Error: ' + err));
         }
 
         function regenerateScreenshot(id) {
@@ -970,42 +993,42 @@ $totalPages = ceil($total / $limit);
                 method: 'POST',
                 body: formData
             })
-            .then(r => {
-                // Log response for debugging
-                console.log('Response status:', r.status);
-                console.log('Response headers:', r.headers.get('content-type'));
+                .then(r => {
+                    // Log response for debugging
+                    console.log('Response status:', r.status);
+                    console.log('Response headers:', r.headers.get('content-type'));
 
-                // Get text first to see what we're actually receiving
-                return r.text().then(text => {
-                    console.log('Response text:', text);
+                    // Get text first to see what we're actually receiving
+                    return r.text().then(text => {
+                        console.log('Response text:', text);
 
-                    // Try to parse as JSON
-                    try {
-                        return JSON.parse(text);
-                    } catch (e) {
-                        console.error('JSON parse error:', e);
-                        console.error('First 200 chars:', text.substring(0, 200));
-                        throw new Error('Invalid JSON response: ' + text.substring(0, 100));
+                        // Try to parse as JSON
+                        try {
+                            return JSON.parse(text);
+                        } catch (e) {
+                            console.error('JSON parse error:', e);
+                            console.error('First 200 chars:', text.substring(0, 200));
+                            throw new Error('Invalid JSON response: ' + text.substring(0, 100));
+                        }
+                    });
+                })
+                .then(data => {
+                    if (data.success) {
+                        // Reload the page to show the new screenshot
+                        location.reload();
+                    } else {
+                        alert('Error: ' + data.error);
+                        if (screenshotDiv && originalContent) {
+                            screenshotDiv.innerHTML = originalContent;
+                        }
                     }
-                });
-            })
-            .then(data => {
-                if (data.success) {
-                    // Reload the page to show the new screenshot
-                    location.reload();
-                } else {
-                    alert('Error: ' + data.error);
+                })
+                .catch(err => {
+                    alert('Error: ' + err);
                     if (screenshotDiv && originalContent) {
                         screenshotDiv.innerHTML = originalContent;
                     }
-                }
-            })
-            .catch(err => {
-                alert('Error: ' + err);
-                if (screenshotDiv && originalContent) {
-                    screenshotDiv.innerHTML = originalContent;
-                }
-            });
+                });
         }
 
         // Tag autocomplete functionality
@@ -1035,7 +1058,7 @@ $totalPages = ceil($total / $limit);
 
             let selectedIndex = -1;
 
-            input.addEventListener('input', async function() {
+            input.addEventListener('input', async function () {
                 const value = this.value;
                 const cursorPos = this.selectionStart;
 
@@ -1078,7 +1101,7 @@ $totalPages = ceil($total / $limit);
 
                 // Add click handlers to suggestions
                 suggestionsDiv.querySelectorAll('.tag-suggestion').forEach(suggestionEl => {
-                    suggestionEl.addEventListener('click', function() {
+                    suggestionEl.addEventListener('click', function () {
                         const tag = this.getAttribute('data-tag');
                         insertTag(input, tag, lastComma, cursorPos, nextComma === -1 ? value.length : cursorPos + nextComma);
                         suggestionsDiv.classList.remove('active');
@@ -1086,7 +1109,7 @@ $totalPages = ceil($total / $limit);
                 });
             });
 
-            input.addEventListener('keydown', function(e) {
+            input.addEventListener('keydown', function (e) {
                 const suggestions = suggestionsDiv.querySelectorAll('.tag-suggestion');
 
                 if (!suggestionsDiv.classList.contains('active') || suggestions.length === 0) {
@@ -1112,7 +1135,7 @@ $totalPages = ceil($total / $limit);
             });
 
             // Close suggestions when clicking outside
-            document.addEventListener('click', function(e) {
+            document.addEventListener('click', function (e) {
                 if (!input.contains(e.target) && !suggestionsDiv.contains(e.target)) {
                     suggestionsDiv.classList.remove('active');
                 }
@@ -1142,4 +1165,5 @@ $totalPages = ceil($total / $limit);
         }
     </script>
 </body>
+
 </html>
