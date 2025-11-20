@@ -1102,11 +1102,12 @@ $isLoggedIn = is_logged_in();
                 source = source.replace(/^<svg/, '<svg xmlns:xlink="http://www.w3.org/1999/xlink"');
             }
 
-            // Add font styles to ensure text renders correctly
+            // Add font styles and line styles to ensure everything renders correctly
             const style = `
                 <style>
                     text { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif; }
                     .network-node text { font-weight: 600; text-shadow: 0 1px 4px white, 0 0 10px white; }
+                    .network-link { stroke: #bdc3c7; stroke-opacity: 0.4; fill: none; }
                 </style>
             `;
             source = source.replace('</svg>', style + '</svg>');
