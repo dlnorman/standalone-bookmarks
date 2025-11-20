@@ -22,6 +22,7 @@ $isLoggedIn = is_logged_in();
 ?>
 <!DOCTYPE html>
 <html lang="en">
+
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
@@ -65,7 +66,7 @@ $isLoggedIn = is_logged_in();
             background: white;
             padding: 15px 20px;
             border-radius: 12px;
-            box-shadow: 0 4px 12px rgba(0,0,0,0.1);
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
             display: flex;
             flex-direction: column;
             justify-content: space-between;
@@ -74,7 +75,7 @@ $isLoggedIn = is_logged_in();
 
         .stat-card:hover {
             transform: translateY(-2px);
-            box-shadow: 0 6px 20px rgba(0,0,0,0.15);
+            box-shadow: 0 6px 20px rgba(0, 0, 0, 0.15);
         }
 
         .stat-card .label {
@@ -111,7 +112,7 @@ $isLoggedIn = is_logged_in();
         .panel {
             background: white;
             border-radius: 12px;
-            box-shadow: 0 4px 12px rgba(0,0,0,0.1);
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
             padding: 20px;
             overflow: hidden;
             display: flex;
@@ -130,7 +131,13 @@ $isLoggedIn = is_logged_in();
             align-items: center;
         }
 
-        .fullscreen-btn {
+        .panel-controls {
+            display: flex;
+            gap: 5px;
+        }
+
+        .fullscreen-btn,
+        .download-btn {
             background: none;
             border: none;
             cursor: pointer;
@@ -141,9 +148,20 @@ $isLoggedIn = is_logged_in();
             border-radius: 4px;
         }
 
-        .fullscreen-btn:hover {
+        .fullscreen-btn:hover,
+        .download-btn:hover {
             background: #ecf0f1;
             color: #2c3e50;
+        }
+
+        .download-btn {
+            display: none;
+            /* Hidden by default */
+        }
+
+        .panel.fullscreen .download-btn {
+            display: inline-block;
+            /* Visible in fullscreen */
         }
 
         .panel.fullscreen {
@@ -304,9 +322,20 @@ $isLoggedIn = is_logged_in();
         }
 
         @keyframes dots {
-            0%, 20% { content: '.'; }
-            40% { content: '..'; }
-            60%, 100% { content: '...'; }
+
+            0%,
+            20% {
+                content: '.';
+            }
+
+            40% {
+                content: '..';
+            }
+
+            60%,
+            100% {
+                content: '...';
+            }
         }
 
         /* Tooltip */
@@ -322,7 +351,7 @@ $isLoggedIn = is_logged_in();
             transition: opacity 0.2s;
             z-index: 1000;
             max-width: 250px;
-            box-shadow: 0 4px 12px rgba(0,0,0,0.3);
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
         }
 
         .tooltip.visible {
@@ -339,7 +368,7 @@ $isLoggedIn = is_logged_in();
             border-radius: 8px;
             font-size: 11px;
             color: #7f8c8d;
-            box-shadow: 0 4px 12px rgba(0,0,0,0.1);
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
             z-index: 1000;
         }
 
@@ -354,11 +383,19 @@ $isLoggedIn = is_logged_in();
         }
 
         @keyframes pulse {
-            0%, 100% { opacity: 1; }
-            50% { opacity: 0.5; }
+
+            0%,
+            100% {
+                opacity: 1;
+            }
+
+            50% {
+                opacity: 0.5;
+            }
         }
     </style>
 </head>
+
 <body>
     <?php render_nav($config, $isLoggedIn, 'dashboard', 'Dashboard'); ?>
 
@@ -400,7 +437,11 @@ $isLoggedIn = is_logged_in();
             <div class="panel" id="tagNetworkPanel">
                 <div class="panel-title">
                     <span>Tag Co-occurrence Network</span>
-                    <button class="fullscreen-btn" onclick="toggleFullscreen('tagNetworkPanel')" title="Toggle fullscreen">⛶</button>
+                    <div class="panel-controls">
+                        <button class="download-btn" onclick="downloadTagNetwork()" title="Download as PNG">⬇</button>
+                        <button class="fullscreen-btn" onclick="toggleFullscreen('tagNetworkPanel')"
+                            title="Toggle fullscreen">⛶</button>
+                    </div>
                 </div>
                 <div class="panel-content">
                     <div class="loading">Loading tag network</div>
@@ -411,7 +452,8 @@ $isLoggedIn = is_logged_in();
             <div class="panel" id="velocityPanel">
                 <div class="panel-title">
                     <span>Bookmarking Velocity (90 Days)</span>
-                    <button class="fullscreen-btn" onclick="toggleFullscreen('velocityPanel')" title="Toggle fullscreen">⛶</button>
+                    <button class="fullscreen-btn" onclick="toggleFullscreen('velocityPanel')"
+                        title="Toggle fullscreen">⛶</button>
                 </div>
                 <div class="panel-content">
                     <div class="loading">Loading velocity data</div>
@@ -422,7 +464,8 @@ $isLoggedIn = is_logged_in();
             <div class="panel" id="tagEvolutionPanel">
                 <div class="panel-title">
                     <span>Tag Activity Trends (Daily)</span>
-                    <button class="fullscreen-btn" onclick="toggleFullscreen('tagEvolutionPanel')" title="Toggle fullscreen">⛶</button>
+                    <button class="fullscreen-btn" onclick="toggleFullscreen('tagEvolutionPanel')"
+                        title="Toggle fullscreen">⛶</button>
                 </div>
                 <div class="panel-content">
                     <div class="loading">Loading tag activity</div>
@@ -595,7 +638,7 @@ $isLoggedIn = is_logged_in();
 
             // Tooltip and click handling
             const tooltip = document.getElementById('tooltip');
-            node.on('mouseenter', function(event, d) {
+            node.on('mouseenter', function (event, d) {
                 tooltip.innerHTML = `
                     <strong>${d.label}</strong><br>
                     Count: ${d.count} bookmarks<br>
@@ -609,18 +652,18 @@ $isLoggedIn = is_logged_in();
                     l.source.id === d.id || l.target.id === d.id
                 );
             })
-            .on('mousemove', function(event) {
-                tooltip.style.left = (event.pageX + 10) + 'px';
-                tooltip.style.top = (event.pageY + 10) + 'px';
-            })
-            .on('mouseleave', function() {
-                tooltip.classList.remove('visible');
-                link.classed('highlighted', false);
-            })
-            .on('click', function(event, d) {
-                // Navigate to tag page
-                window.location.href = `${BASE_PATH}/?tag=${encodeURIComponent(d.label)}`;
-            });
+                .on('mousemove', function (event) {
+                    tooltip.style.left = (event.pageX + 10) + 'px';
+                    tooltip.style.top = (event.pageY + 10) + 'px';
+                })
+                .on('mouseleave', function () {
+                    tooltip.classList.remove('visible');
+                    link.classed('highlighted', false);
+                })
+                .on('click', function (event, d) {
+                    // Navigate to tag page
+                    window.location.href = `${BASE_PATH}/?tag=${encodeURIComponent(d.label)}`;
+                });
 
             // Measure actual text widths for collision detection
             const tempSvg = svg.append('g').attr('class', 'temp-measure');
@@ -752,7 +795,7 @@ $isLoggedIn = is_logged_in();
             parent.querySelector('.loading').style.display = 'none';
             container.style.display = 'block';
 
-            const margin = {top: 20, right: 20, bottom: 30, left: 40};
+            const margin = { top: 20, right: 20, bottom: 30, left: 40 };
             const width = parent.clientWidth - margin.left - margin.right;
             const height = parent.clientHeight - margin.top - margin.bottom;
 
@@ -804,7 +847,7 @@ $isLoggedIn = is_logged_in();
                 .attr('y', d => y(parseInt(d.count, 10)))
                 .attr('width', barWidth)
                 .attr('height', d => height - y(parseInt(d.count, 10)))
-                .on('mouseenter', function(event, d) {
+                .on('mouseenter', function (event, d) {
                     const count = parseInt(d.count, 10);
                     tooltip.innerHTML = `
                         <strong>${d.date.toLocaleDateString()}</strong><br>
@@ -812,11 +855,11 @@ $isLoggedIn = is_logged_in();
                     `;
                     tooltip.classList.add('visible');
                 })
-                .on('mousemove', function(event) {
+                .on('mousemove', function (event) {
                     tooltip.style.left = (event.pageX + 10) + 'px';
                     tooltip.style.top = (event.pageY + 10) + 'px';
                 })
-                .on('mouseleave', function() {
+                .on('mouseleave', function () {
                     tooltip.classList.remove('visible');
                 });
 
@@ -850,7 +893,7 @@ $isLoggedIn = is_logged_in();
             parent.querySelector('.loading').style.display = 'none';
             container.style.display = 'block';
 
-            const margin = {top: 30, right: 120, bottom: 40, left: 50};
+            const margin = { top: 30, right: 120, bottom: 40, left: 50 };
             const width = parent.clientWidth - margin.left - margin.right;
             const height = parent.clientHeight - margin.top - margin.bottom;
 
@@ -958,7 +1001,7 @@ $isLoggedIn = is_logged_in();
                 .attr('fill', d => colorScale(d.key))
                 .attr('d', area)
                 .attr('opacity', 0.7)
-                .on('mouseenter', function(event, d) {
+                .on('mouseenter', function (event, d) {
                     d3.select(this).attr('opacity', 0.9);
                     const tagInfo = tagData.find(t => t.tag === d.key);
                     tooltip.innerHTML = `
@@ -967,11 +1010,11 @@ $isLoggedIn = is_logged_in();
                     `;
                     tooltip.classList.add('visible');
                 })
-                .on('mousemove', function(event) {
+                .on('mousemove', function (event) {
                     tooltip.style.left = (event.pageX + 10) + 'px';
                     tooltip.style.top = (event.pageY + 10) + 'px';
                 })
-                .on('mouseleave', function() {
+                .on('mouseleave', function () {
                     d3.select(this).attr('opacity', 0.7);
                     tooltip.classList.remove('visible');
                 });
@@ -1042,8 +1085,66 @@ $isLoggedIn = is_logged_in();
             }, 100);
         }
 
+        // Download Tag Network as Image
+        function downloadTagNetwork() {
+            const svg = document.getElementById('tagNetwork');
+            if (!svg) return;
+
+            // Get SVG data
+            const serializer = new XMLSerializer();
+            let source = serializer.serializeToString(svg);
+
+            // Add namespaces if missing
+            if (!source.match(/^<svg[^>]+xmlns="http\:\/\/www\.w3\.org\/2000\/svg"/)) {
+                source = source.replace(/^<svg/, '<svg xmlns="http://www.w3.org/2000/svg"');
+            }
+            if (!source.match(/^<svg[^>]+xmlns:xlink="http\:\/\/www\.w3\.org\/1999\/xlink"/)) {
+                source = source.replace(/^<svg/, '<svg xmlns:xlink="http://www.w3.org/1999/xlink"');
+            }
+
+            // Add font styles to ensure text renders correctly
+            const style = `
+                <style>
+                    text { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif; }
+                    .network-node text { font-weight: 600; text-shadow: 0 1px 4px white, 0 0 10px white; }
+                </style>
+            `;
+            source = source.replace('</svg>', style + '</svg>');
+
+            // Create canvas
+            const canvas = document.createElement('canvas');
+            const rect = svg.getBoundingClientRect();
+            canvas.width = rect.width;
+            canvas.height = rect.height;
+            const ctx = canvas.getContext('2d');
+
+            // Fill background
+            ctx.fillStyle = '#ffffff';
+            ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+            // Create image from SVG
+            const img = new Image();
+            const svgBlob = new Blob([source], { type: 'image/svg+xml;charset=utf-8' });
+            const url = URL.createObjectURL(svgBlob);
+
+            img.onload = function () {
+                ctx.drawImage(img, 0, 0);
+                URL.revokeObjectURL(url);
+
+                // Trigger download
+                const a = document.createElement('a');
+                a.download = 'tag-network-' + new Date().toISOString().slice(0, 10) + '.png';
+                a.href = canvas.toDataURL('image/png');
+                document.body.appendChild(a);
+                a.click();
+                document.body.removeChild(a);
+            };
+
+            img.src = url;
+        }
+
         // Allow ESC key to exit fullscreen
-        document.addEventListener('keydown', function(event) {
+        document.addEventListener('keydown', function (event) {
             if (event.key === 'Escape') {
                 const fullscreenPanel = document.querySelector('.panel.fullscreen');
                 if (fullscreenPanel) {
@@ -1066,4 +1167,5 @@ $isLoggedIn = is_logged_in();
     </script>
     <?php render_nav_scripts(); ?>
 </body>
+
 </html>
