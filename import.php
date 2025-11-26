@@ -11,6 +11,7 @@ if (!file_exists(__DIR__ . '/config.php')) {
 $config = require __DIR__ . '/config.php';
 require_once __DIR__ . '/auth.php';
 require_once __DIR__ . '/includes/csrf.php';
+require_once __DIR__ . '/includes/nav.php';
 
 // Set timezone
 if (isset($config['timezone'])) {
@@ -59,7 +60,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_FILES['import_file'])) {
     }
 }
 
-function importBookmarks($db, $content) {
+function importBookmarks($db, $content)
+{
     $added = 0;
     $skipped = 0;
     $errors = [];
@@ -184,10 +186,12 @@ function importBookmarks($db, $content) {
 ?>
 <!DOCTYPE html>
 <html lang="en">
+
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Import Bookmarks - <?= htmlspecialchars($config['site_title']) ?></title>
+    <?php render_nav_styles(); ?>
     <style>
         * {
             box-sizing: border-box;
@@ -195,47 +199,24 @@ function importBookmarks($db, $content) {
 
         body {
             font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
-            max-width: 800px;
-            margin: 0 auto;
-            padding: 20px;
+            margin: 0;
+            padding: 0;
             line-height: 1.6;
             background: #f5f5f5;
             color: #333;
         }
 
-        header {
-            background: white;
+        .page-container {
+            max-width: 800px;
+            margin: 0 auto;
             padding: 20px;
-            border-radius: 8px;
-            margin-bottom: 20px;
-            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
-        }
-
-        h1 {
-            margin: 0 0 10px 0;
-            font-size: 24px;
-            color: #2c3e50;
-        }
-
-        .breadcrumb {
-            margin-bottom: 15px;
-            font-size: 14px;
-        }
-
-        .breadcrumb a {
-            color: #3498db;
-            text-decoration: none;
-        }
-
-        .breadcrumb a:hover {
-            text-decoration: underline;
         }
 
         .content {
             background: white;
             padding: 30px;
             border-radius: 8px;
-            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+            box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
         }
 
         .message {
@@ -354,63 +335,66 @@ function importBookmarks($db, $content) {
                 padding: 10px;
             }
 
-            header, .content {
+            header,
+            .content {
                 padding: 15px;
             }
         }
     </style>
 </head>
+
 <body>
-    <header>
-        <div class="breadcrumb">
-            <a href="<?= $config['base_path'] ?>">← Back to Bookmarks</a>
-        </div>
-        <h1>Import Bookmarks</h1>
-    </header>
+    <?php render_nav($config, is_logged_in(), 'import', 'Import Bookmarks'); ?>
 
-    <div class="content">
-        <?php if ($message): ?>
-            <div class="message"><?= htmlspecialchars($message) ?></div>
-            <?php if ($stats && !empty($stats['errors'])): ?>
-                <div class="stats">
-                    <h3>Errors during import:</h3>
-                    <ul>
-                        <?php foreach ($stats['errors'] as $err): ?>
-                            <li><?= htmlspecialchars($err) ?></li>
-                        <?php endforeach; ?>
-                    </ul>
-                </div>
+    <div class="page-container">
+        <div class="content">
+            <?php if ($message): ?>
+                <div class="message"><?= htmlspecialchars($message) ?></div>
+                <?php if ($stats && !empty($stats['errors'])): ?>
+                    <div class="stats">
+                        <h3>Errors during import:</h3>
+                        <ul>
+                            <?php foreach ($stats['errors'] as $err): ?>
+                                <li><?= htmlspecialchars($err) ?></li>
+                            <?php endforeach; ?>
+                        </ul>
+                    </div>
+                <?php endif; ?>
             <?php endif; ?>
-        <?php endif; ?>
 
-        <?php if ($error): ?>
-            <div class="error"><?= htmlspecialchars($error) ?></div>
-        <?php endif; ?>
+            <?php if ($error): ?>
+                <div class="error"><?= htmlspecialchars($error) ?></div>
+            <?php endif; ?>
 
-        <div class="info-box">
-            <h3>About Import</h3>
-            <p>This tool imports bookmarks from the Netscape Bookmark File Format, which is used by:</p>
-            <ul>
-                <li><strong>Pinboard</strong> - Export from <a href="https://pinboard.in/export/" target="_blank">pinboard.in/export/</a></li>
-                <li><strong>Delicious</strong> - Export in HTML format</li>
-                <li><strong>Most browsers</strong> - Firefox, Chrome, Safari, Edge bookmark exports</li>
-                <li><strong>Other bookmarking services</strong> - Most services support this standard format</li>
-            </ul>
-            <p><strong>Note:</strong> Duplicate URLs will be skipped automatically.</p>
+            <div class="info-box">
+                <h3>About Import</h3>
+                <p>This tool imports bookmarks from the Netscape Bookmark File Format, which is used by:</p>
+                <ul>
+                    <li><strong>Pinboard</strong> - Export from <a href="https://pinboard.in/export/"
+                            target="_blank">pinboard.in/export/</a></li>
+                    <li><strong>Delicious</strong> - Export in HTML format</li>
+                    <li><strong>Most browsers</strong> - Firefox, Chrome, Safari, Edge bookmark exports</li>
+                    <li><strong>Other bookmarking services</strong> - Most services support this standard format</li>
+                </ul>
+                <p><strong>Note:</strong> Duplicate URLs will be skipped automatically.</p>
+            </div>
+
+            <form method="post" enctype="multipart/form-data">
+                <?php csrf_field(); ?>
+                <div class="form-group">
+                    <label for="import_file">Select Bookmark File:</label>
+                    <input type="file" id="import_file" name="import_file" accept=".html,.htm" required>
+                </div>
+
+                <div class="actions">
+                    <button type="submit" class="btn">Import Bookmarks</button>
+                    <a href="<?= $config['base_path'] ?>" class="btn btn-secondary">Cancel</a>
+                </div>
+            </form>
         </div>
-
-        <form method="post" enctype="multipart/form-data">
-            <?php csrf_field(); ?>
-            <div class="form-group">
-                <label for="import_file">Select Bookmark File:</label>
-                <input type="file" id="import_file" name="import_file" accept=".html,.htm" required>
-            </div>
-
-            <div class="actions">
-                <button type="submit" class="btn">Import Bookmarks</button>
-                <a href="<?= $config['base_path'] ?>" class="btn btn-secondary">Cancel</a>
-            </div>
-        </form>
     </div>
+
+    <?php render_nav_scripts(); ?>
 </body>
+
 </html>
