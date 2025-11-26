@@ -15,6 +15,10 @@ A feature-rich, self-hosted bookmarks manager built with PHP and SQLite. Perfect
 - **Responsive design** - Works seamlessly on desktop, tablet, and mobile
 
 ### Advanced Features
+- **Account Management** - Manage your profile, display name, and password securely.
+- **Multi-User Support** - Role-based access control (Admin/User).
+  - **Admins**: Manage users, reset passwords, and configure system settings.
+  - **Users**: Manage bookmarks (shared collection).
 - **Dashboard Analytics** - Interactive visualizations powered by D3.js:
   - **Tag Co-occurrence Network**: Interactive graph showing tag relationships. **New:** Download chart as PNG image (fullscreen mode).
   - **Bookmarking Velocity**: Charts tracking activity over time.
@@ -59,11 +63,12 @@ A feature-rich, self-hosted bookmarks manager built with PHP and SQLite. Perfect
     ```bash
     php init_db.php
     ```
+    *Note: This script handles both fresh installs and upgrades.*
 
 3.  **Set Permissions**
     ```bash
-    mkdir -p screenshots archives backups
-    chmod 775 screenshots archives backups
+    mkdir -p screenshots archives backups sessions
+    chmod 775 screenshots archives backups sessions
     chmod 664 bookmarks.db
     # Ensure web server owns these (e.g., chown -R www-data:www-data .)
     ```
@@ -73,6 +78,18 @@ A feature-rich, self-hosted bookmarks manager built with PHP and SQLite. Perfect
     php -S localhost:8000
     ```
     Visit `http://localhost:8000` (Login: `admin` / your password)
+
+### Upgrading
+
+To upgrade an existing installation:
+
+1.  **Backup** your database (`cp bookmarks.db bookmarks.db.bak`).
+2.  **Upload** the new files (overwrite existing).
+3.  **Run** the initialization script:
+    ```bash
+    php init_db.php
+    ```
+    This will automatically update your database schema and migrate your user account if needed.
 
 ### Web Server Configuration (Production)
 
@@ -132,6 +149,10 @@ crontab -e
 - **Index**: Main list. Click the **image or title** to open the URL.
 - **Gallery**: Visual grid. Click **image** to open URL. Click **ℹ️ icon** for details.
 - **Dashboard**: View analytics. Toggle fullscreen (⛶) on the Network Chart to see the **Download (⬇)** button.
+
+### Account Management
+- **Profile**: Click "Account" in the menu to change your display name or password.
+- **User Management** (Admin only): Click "User Management" to add or remove users.
 
 ### API & Integrations
 - **RSS Feed**: `https://yoursite.com/rss.php`

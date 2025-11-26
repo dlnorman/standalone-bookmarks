@@ -1,10 +1,15 @@
 #!/usr/bin/env php
 <?php
 /**
- * Database Initialization Script
+ * Database Initialization & Upgrade Script
  *
- * Creates the database schema with all necessary tables and indexes
- * Run this once when setting up a fresh installation
+ * Handles:
+ * 1. Database creation
+ * 2. Schema creation (tables, indexes)
+ * 3. Schema upgrades (adding missing columns)
+ * 4. Data migration (config user -> db user)
+ *
+ * Run this when setting up a fresh installation OR upgrading.
  *
  * Usage: php init_db.php
  */
@@ -17,7 +22,7 @@ if (!file_exists(__DIR__ . '/config.php')) {
 $config = require __DIR__ . '/config.php';
 
 try {
-    echo "=== Bookmarks Database Initialization ===\n\n";
+    echo "=== Bookmarks Database Initialization & Upgrade ===\n\n";
 
     // Connect to database (will create file if it doesn't exist)
     $db = new PDO('sqlite:' . $config['db_path']);
@@ -25,21 +30,11 @@ try {
 
     echo "Database: " . $config['db_path'] . "\n\n";
 
-    // Check if tables already exist
-    $existingTables = $db->query("SELECT name FROM sqlite_master WHERE type='table'")->fetchAll(PDO::FETCH_COLUMN);
+    // 1. Create/Update Tables
+    echo "--- Checking Tables ---\n";
 
-    if (in_array('bookmarks', $existingTables)) {
-        echo "⚠ Warning: 'bookmarks' table already exists!\n";
-        echo "Do you want to continue? This will NOT drop existing data. (y/N): ";
-        $confirm = trim(fgets(STDIN));
-        if (strtolower($confirm) !== 'y') {
-            die("Aborted.\n");
-        }
-        echo "\n";
-    }
-
-    // Create bookmarks table
-    echo "Creating 'bookmarks' table...\n";
+    // Bookmarks Table
+    echo "Checking 'bookmarks' table... ";
     $db->exec("
         CREATE TABLE IF NOT EXISTS bookmarks (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -56,10 +51,25 @@ try {
             updated_at DATETIME NOT NULL
         )
     ");
-    echo "✓ Table 'bookmarks' created\n";
+    echo "✓ Ready\n";
 
-    // Create jobs table for background processing
-    echo "Creating 'jobs' table...\n";
+    // Users Table
+    echo "Checking 'users' table... ";
+    $db->exec("
+        CREATE TABLE IF NOT EXISTS users (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            username TEXT NOT NULL UNIQUE,
+            password_hash TEXT NOT NULL,
+            display_name TEXT,
+            role TEXT DEFAULT 'user',
+            created_at DATETIME NOT NULL,
+            updated_at DATETIME NOT NULL
+        )
+    ");
+    echo "✓ Ready\n";
+
+    // Jobs Table
+    echo "Checking 'jobs' table... ";
     $db->exec("
         CREATE TABLE IF NOT EXISTS jobs (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -74,68 +84,97 @@ try {
             FOREIGN KEY (bookmark_id) REFERENCES bookmarks(id) ON DELETE CASCADE
         )
     ");
-    echo "✓ Table 'jobs' created\n";
+    echo "✓ Ready\n";
 
-    // Create indexes for performance
-    echo "\nCreating performance indexes...\n";
+    // 2. Schema Upgrades (Add missing columns)
+    echo "\n--- Checking Schema Updates ---\n";
 
-    // Bookmarks indexes
-    $db->exec("CREATE INDEX IF NOT EXISTS idx_bookmarks_created_at ON bookmarks(created_at DESC)");
-    echo "✓ Index: idx_bookmarks_created_at\n";
+    // Check users.role
+    $columns = $db->query("PRAGMA table_info(users)")->fetchAll(PDO::FETCH_ASSOC);
+    $hasRole = false;
+    foreach ($columns as $column) {
+        if ($column['name'] === 'role') {
+            $hasRole = true;
+            break;
+        }
+    }
 
-    $db->exec("CREATE INDEX IF NOT EXISTS idx_bookmarks_private ON bookmarks(private)");
-    echo "✓ Index: idx_bookmarks_private\n";
+    if (!$hasRole) {
+        echo "Upgrading 'users' table: Adding 'role' column... ";
+        $db->exec("ALTER TABLE users ADD COLUMN role TEXT DEFAULT 'user'");
+        echo "✓ Done\n";
+    } else {
+        echo "Schema is up to date.\n";
+    }
 
-    $db->exec("CREATE INDEX IF NOT EXISTS idx_bookmarks_private_created ON bookmarks(private, created_at DESC)");
-    echo "✓ Index: idx_bookmarks_private_created\n";
+    // 3. Data Migration (Config -> DB)
+    echo "\n--- Checking Data Migration ---\n";
 
-    $db->exec("CREATE INDEX IF NOT EXISTS idx_bookmarks_broken_url ON bookmarks(broken_url)");
-    echo "✓ Index: idx_bookmarks_broken_url\n";
+    $userCount = $db->query("SELECT COUNT(*) FROM users")->fetchColumn();
 
-    $db->exec("CREATE INDEX IF NOT EXISTS idx_bookmarks_url ON bookmarks(url)");
-    echo "✓ Index: idx_bookmarks_url\n";
+    if ($userCount == 0) {
+        if (isset($config['username']) && isset($config['password'])) {
+            echo "Migrating initial user from config.php... ";
 
-    // Jobs indexes
-    $db->exec("CREATE INDEX IF NOT EXISTS idx_jobs_status ON jobs(status)");
-    echo "✓ Index: idx_jobs_status\n";
+            $passwordHash = password_hash($config['password'], PASSWORD_DEFAULT);
+            $now = date('Y-m-d H:i:s');
 
-    $db->exec("CREATE INDEX IF NOT EXISTS idx_jobs_type ON jobs(job_type)");
-    echo "✓ Index: idx_jobs_type\n";
+            $stmt = $db->prepare("
+                INSERT INTO users (username, password_hash, display_name, role, created_at, updated_at)
+                VALUES (?, ?, ?, 'admin', ?, ?)
+            ");
 
-    $db->exec("CREATE INDEX IF NOT EXISTS idx_jobs_status_created ON jobs(status, created_at)");
-    echo "✓ Index: idx_jobs_status_created\n";
+            $stmt->execute([
+                $config['username'],
+                $passwordHash,
+                $config['username'],
+                $now,
+                $now
+            ]);
+            echo "✓ Done (Created Admin: {$config['username']})\n";
+        } else {
+            echo "⚠ No users in DB and no credentials in config.php. Please register a user manually.\n";
+        }
+    } else {
+        // Ensure at least one admin exists
+        $adminCount = $db->query("SELECT COUNT(*) FROM users WHERE role = 'admin'")->fetchColumn();
+        if ($adminCount == 0) {
+            echo "No admin found. Promoting user ID 1 to admin... ";
+            $db->exec("UPDATE users SET role = 'admin' WHERE id = 1");
+            echo "✓ Done\n";
+        } else {
+            echo "Users already exist. Skipping migration.\n";
+        }
+    }
 
-    $db->exec("CREATE INDEX IF NOT EXISTS idx_jobs_bookmark_id ON jobs(bookmark_id)");
-    echo "✓ Index: idx_jobs_bookmark_id\n";
+    // 4. Indexes
+    echo "\n--- Checking Indexes ---\n";
 
-    // Optimize database
-    echo "\nOptimizing database...\n";
+    $indexes = [
+        'idx_bookmarks_created_at' => 'CREATE INDEX IF NOT EXISTS idx_bookmarks_created_at ON bookmarks(created_at DESC)',
+        'idx_bookmarks_private' => 'CREATE INDEX IF NOT EXISTS idx_bookmarks_private ON bookmarks(private)',
+        'idx_bookmarks_private_created' => 'CREATE INDEX IF NOT EXISTS idx_bookmarks_private_created ON bookmarks(private, created_at DESC)',
+        'idx_bookmarks_broken_url' => 'CREATE INDEX IF NOT EXISTS idx_bookmarks_broken_url ON bookmarks(broken_url)',
+        'idx_bookmarks_url' => 'CREATE INDEX IF NOT EXISTS idx_bookmarks_url ON bookmarks(url)',
+        'idx_jobs_status' => 'CREATE INDEX IF NOT EXISTS idx_jobs_status ON jobs(status)',
+        'idx_jobs_type' => 'CREATE INDEX IF NOT EXISTS idx_jobs_type ON jobs(job_type)',
+        'idx_jobs_status_created' => 'CREATE INDEX IF NOT EXISTS idx_jobs_status_created ON jobs(status, created_at)',
+        'idx_jobs_bookmark_id' => 'CREATE INDEX IF NOT EXISTS idx_jobs_bookmark_id ON jobs(bookmark_id)'
+    ];
+
+    foreach ($indexes as $name => $sql) {
+        $db->exec($sql);
+    }
+    echo "✓ Indexes verified\n";
+
+    // 5. Optimization
+    echo "\n--- Optimizing ---\n";
     $db->exec("PRAGMA journal_mode=WAL");
-    echo "✓ Enabled Write-Ahead Logging (WAL)\n";
-
     $db->exec("ANALYZE");
-    echo "✓ Updated query planner statistics\n";
+    echo "✓ Database optimized (WAL enabled)\n";
 
-    // Get final stats
-    $tables = $db->query("SELECT name FROM sqlite_master WHERE type='table' ORDER BY name")->fetchAll(PDO::FETCH_COLUMN);
-    $indexes = $db->query("SELECT name FROM sqlite_master WHERE type='index' AND sql IS NOT NULL ORDER BY name")->fetchAll(PDO::FETCH_COLUMN);
-    $dbSize = filesize($config['db_path']);
-
-    echo "\n=== Database Initialization Complete ===\n";
-    echo "Tables created: " . count($tables) . "\n";
-    foreach ($tables as $table) {
-        echo "  - $table\n";
-    }
-    echo "\nIndexes created: " . count($indexes) . "\n";
-    foreach ($indexes as $index) {
-        echo "  - $index\n";
-    }
-    echo "\nDatabase size: " . round($dbSize / 1024, 2) . " KB\n";
-    echo "\n✓ Database is ready to use!\n";
-    echo "\nNext steps:\n";
-    echo "1. Visit your application URL to start using it\n";
-    echo "2. Set up cron job for background processing:\n";
-    echo "   */5 * * * * /usr/bin/php " . __DIR__ . "/process_jobs.php\n";
+    echo "\n=== Initialization Complete ===\n";
+    echo "Database is ready to use.\n";
 
 } catch (PDOException $e) {
     die("\nError: " . $e->getMessage() . "\n");

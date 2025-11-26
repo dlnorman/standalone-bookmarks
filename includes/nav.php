@@ -78,7 +78,8 @@ $nav_items = [
 /**
  * Render the navigation header
  */
-function render_nav($config, $isLoggedIn, $current_page, $page_title = null) {
+function render_nav($config, $isLoggedIn, $current_page, $page_title = null)
+{
     global $nav_items;
 
     $title = $page_title ?? $config['site_title'];
@@ -95,14 +96,16 @@ function render_nav($config, $isLoggedIn, $current_page, $page_title = null) {
                 <!-- Primary Navigation -->
                 <div class="nav-primary">
                     <?php foreach ($nav_items['primary'] as $item): ?>
-                        <?php if (isset($item['auth_required']) && $item['auth_required'] && !$isLoggedIn) continue; ?>
+                        <?php if (isset($item['auth_required']) && $item['auth_required'] && !$isLoggedIn)
+                            continue; ?>
                         <?php if (isset($item['show_always']) || $isLoggedIn): ?>
                             <?php
-                                $is_active = ($current_page === $item['id']) ||
-                                            ($current_page === 'index' && $item['id'] === 'index');
-                                $active_class = $is_active ? ' active' : '';
+                            $is_active = ($current_page === $item['id']) ||
+                                ($current_page === 'index' && $item['id'] === 'index');
+                            $active_class = $is_active ? ' active' : '';
                             ?>
-                            <a href="<?= $item['url'] ?>" class="nav-link<?= $active_class ?>" aria-current="<?= $is_active ? 'page' : 'false' ?>">
+                            <a href="<?= $item['url'] ?>" class="nav-link<?= $active_class ?>"
+                                aria-current="<?= $is_active ? 'page' : 'false' ?>">
                                 <?= htmlspecialchars($item['label']) ?>
                             </a>
                         <?php endif; ?>
@@ -112,13 +115,15 @@ function render_nav($config, $isLoggedIn, $current_page, $page_title = null) {
                 <!-- Secondary Navigation (Dropdown) -->
                 <div class="nav-secondary">
                     <?php if ($isLoggedIn): ?>
-                        <button class="nav-btn nav-btn-primary" onclick="showAddBookmark(); return false;" aria-label="Add new bookmark">
+                        <button class="nav-btn nav-btn-primary" onclick="showAddBookmark(); return false;"
+                            aria-label="Add new bookmark">
                             <span class="btn-label">Add Bookmark</span>
                         </button>
                     <?php endif; ?>
 
                     <div class="nav-dropdown">
-                        <button class="nav-dropdown-trigger" onclick="toggleNavDropdown(event)" aria-haspopup="true" aria-expanded="false" id="navMenuButton">
+                        <button class="nav-dropdown-trigger" onclick="toggleNavDropdown(event)" aria-haspopup="true"
+                            aria-expanded="false" id="navMenuButton">
                             <span class="dropdown-label">Menu</span>
                         </button>
                         <div class="nav-dropdown-content" id="navDropdownMenu" role="menu" aria-labelledby="navMenuButton">
@@ -128,16 +133,25 @@ function render_nav($config, $isLoggedIn, $current_page, $page_title = null) {
                                 <?php elseif (isset($item['auth_required']) && $item['auth_required'] && !$isLoggedIn): ?>
                                     <?php continue; ?>
                                 <?php else: ?>
-                                    <a href="<?= $item['url'] ?>" class="dropdown-item" role="menuitem"><?= htmlspecialchars($item['label']) ?></a>
+                                    <a href="<?= $item['url'] ?>" class="dropdown-item"
+                                        role="menuitem"><?= htmlspecialchars($item['label']) ?></a>
                                 <?php endif; ?>
                             <?php endforeach; ?>
 
                             <?php if ($isLoggedIn): ?>
                                 <div class="dropdown-divider" role="separator"></div>
-                                <a href="<?= $config['base_path'] ?>/logout.php" class="dropdown-item" role="menuitem">Logout</a>
+                                <?php if (function_exists('is_admin') && is_admin()): ?>
+                                    <a href="<?= $config['base_path'] ?>/admin.php" class="dropdown-item" role="menuitem">User
+                                        Management</a>
+                                <?php endif; ?>
+                                <a href="<?= $config['base_path'] ?>/account.php" class="dropdown-item"
+                                    role="menuitem">Account</a>
+                                <a href="<?= $config['base_path'] ?>/logout.php" class="dropdown-item"
+                                    role="menuitem">Logout</a>
                             <?php else: ?>
                                 <div class="dropdown-divider" role="separator"></div>
-                                <a href="<?= $config['base_path'] ?>/login.php" class="dropdown-item dropdown-item-highlight" role="menuitem">Login</a>
+                                <a href="<?= $config['base_path'] ?>/login.php" class="dropdown-item dropdown-item-highlight"
+                                    role="menuitem">Login</a>
                             <?php endif; ?>
                         </div>
                     </div>
@@ -145,7 +159,8 @@ function render_nav($config, $isLoggedIn, $current_page, $page_title = null) {
             </div>
 
             <!-- Mobile Menu Toggle -->
-            <button class="nav-mobile-toggle" onclick="toggleMobileNav()" aria-label="Toggle navigation menu" aria-expanded="false" id="mobileNavToggle">
+            <button class="nav-mobile-toggle" onclick="toggleMobileNav()" aria-label="Toggle navigation menu"
+                aria-expanded="false" id="mobileNavToggle">
                 <span class="hamburger-icon"></span>
             </button>
         </div>
@@ -156,15 +171,16 @@ function render_nav($config, $isLoggedIn, $current_page, $page_title = null) {
 /**
  * Render navigation styles
  */
-function render_nav_styles() {
+function render_nav_styles()
+{
     ?>
     <style>
         /* Navigation Container */
         .app-nav {
-            background: linear-gradient(135deg, rgba(255,255,255,0.98) 0%, rgba(249,250,251,0.98) 100%);
+            background: linear-gradient(135deg, rgba(255, 255, 255, 0.98) 0%, rgba(249, 250, 251, 0.98) 100%);
             backdrop-filter: blur(10px);
-            border-bottom: 1px solid rgba(0,0,0,0.08);
-            box-shadow: 0 2px 8px rgba(0,0,0,0.04);
+            border-bottom: 1px solid rgba(0, 0, 0, 0.08);
+            box-shadow: 0 2px 8px rgba(0, 0, 0, 0.04);
             position: sticky;
             top: 0;
             z-index: 1000;
@@ -269,7 +285,7 @@ function render_nav_styles() {
             padding: 8px 14px;
             background: transparent;
             color: #5a6c7d;
-            border: 1px solid rgba(0,0,0,0.1);
+            border: 1px solid rgba(0, 0, 0, 0.1);
             border-radius: 8px;
             font-size: 14px;
             font-weight: 500;
@@ -278,8 +294,8 @@ function render_nav_styles() {
         }
 
         .nav-btn:hover {
-            background: rgba(0,0,0,0.04);
-            border-color: rgba(0,0,0,0.15);
+            background: rgba(0, 0, 0, 0.04);
+            border-color: rgba(0, 0, 0, 0.15);
         }
 
         .nav-btn-primary {
@@ -305,7 +321,7 @@ function render_nav_styles() {
             padding: 8px 14px;
             background: transparent;
             color: #5a6c7d;
-            border: 1px solid rgba(0,0,0,0.1);
+            border: 1px solid rgba(0, 0, 0, 0.1);
             border-radius: 8px;
             font-size: 14px;
             font-weight: 500;
@@ -314,12 +330,12 @@ function render_nav_styles() {
         }
 
         .nav-dropdown-trigger:hover {
-            background: rgba(0,0,0,0.04);
-            border-color: rgba(0,0,0,0.15);
+            background: rgba(0, 0, 0, 0.04);
+            border-color: rgba(0, 0, 0, 0.15);
         }
 
         .nav-dropdown-trigger[aria-expanded="true"] {
-            background: rgba(0,0,0,0.06);
+            background: rgba(0, 0, 0, 0.06);
         }
 
         .nav-dropdown-content {
@@ -330,8 +346,8 @@ function render_nav_styles() {
             min-width: 200px;
             background: white;
             border-radius: 8px;
-            box-shadow: 0 4px 16px rgba(0,0,0,0.12);
-            border: 1px solid rgba(0,0,0,0.08);
+            box-shadow: 0 4px 16px rgba(0, 0, 0, 0.12);
+            border: 1px solid rgba(0, 0, 0, 0.08);
             overflow: hidden;
             animation: dropdownFadeIn 0.15s ease-out;
         }
@@ -345,6 +361,7 @@ function render_nav_styles() {
                 opacity: 0;
                 transform: translateY(-8px);
             }
+
             to {
                 opacity: 1;
                 transform: translateY(0);
@@ -372,7 +389,7 @@ function render_nav_styles() {
 
         .dropdown-divider {
             height: 1px;
-            background: rgba(0,0,0,0.08);
+            background: rgba(0, 0, 0, 0.08);
             margin: 4px 0;
         }
 
@@ -494,7 +511,7 @@ function render_nav_styles() {
             .nav-dropdown-content {
                 position: static;
                 box-shadow: none;
-                border: 1px solid rgba(0,0,0,0.08);
+                border: 1px solid rgba(0, 0, 0, 0.08);
                 margin-top: 4px;
             }
         }
@@ -505,7 +522,8 @@ function render_nav_styles() {
 /**
  * Render navigation JavaScript
  */
-function render_nav_scripts() {
+function render_nav_scripts()
+{
     ?>
     <script>
         // Dropdown toggle
@@ -530,7 +548,7 @@ function render_nav_scripts() {
         }
 
         // Close dropdown when clicking outside
-        document.addEventListener('click', function(event) {
+        document.addEventListener('click', function (event) {
             const dropdown = document.querySelector('.nav-dropdown');
             const menu = document.getElementById('navDropdownMenu');
             const trigger = document.getElementById('navMenuButton');
@@ -543,7 +561,7 @@ function render_nav_scripts() {
 
         // Close mobile nav when clicking a link
         document.querySelectorAll('.nav-link').forEach(link => {
-            link.addEventListener('click', function() {
+            link.addEventListener('click', function () {
                 const navContent = document.querySelector('.nav-content');
                 const toggle = document.getElementById('mobileNavToggle');
                 if (navContent.classList.contains('mobile-active')) {
@@ -554,7 +572,7 @@ function render_nav_scripts() {
         });
 
         // Close mobile nav on escape key
-        document.addEventListener('keydown', function(e) {
+        document.addEventListener('keydown', function (e) {
             if (e.key === 'Escape') {
                 const navContent = document.querySelector('.nav-content');
                 const toggle = document.getElementById('mobileNavToggle');

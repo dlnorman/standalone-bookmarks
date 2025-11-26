@@ -39,8 +39,10 @@ if (session_status() === PHP_SESSION_NONE) {
     // Validate session integrity
     if (isset($_SESSION['authenticated']) && $_SESSION['authenticated'] === true) {
         // Check if session has expired based on last activity
-        if (isset($_SESSION['last_activity']) &&
-            (time() - $_SESSION['last_activity'] > $config['session_timeout'])) {
+        if (
+            isset($_SESSION['last_activity']) &&
+            (time() - $_SESSION['last_activity'] > $config['session_timeout'])
+        ) {
             // Session expired - destroy it
             session_unset();
             $_SESSION['session_expired'] = true;
@@ -54,14 +56,16 @@ if (session_status() === PHP_SESSION_NONE) {
 /**
  * Check if user is logged in
  */
-function is_logged_in() {
+function is_logged_in()
+{
     return isset($_SESSION['authenticated']) && $_SESSION['authenticated'] === true;
 }
 
 /**
  * Require authentication - redirect to login if not logged in
  */
-function require_auth($config) {
+function require_auth($config)
+{
     // Load security functions if not already loaded
     if (!function_exists('validate_redirect_url')) {
         require_once __DIR__ . '/includes/security.php';
@@ -87,31 +91,148 @@ function require_auth($config) {
 /**
  * Perform login
  */
-function login($username, $password, $config) {
-    if ($username === $config['username'] && $password === $config['password']) {
-        // Regenerate session ID to prevent session fixation
-        session_regenerate_id(true);
+function login($username, $password, $config)
+{
+    try {
+        $db = new PDO('sqlite:' . $config['db_path']);
+        $db->setAttribute(PDO::ATTR_ERRMODE, PDO::ERRMODE_EXCEPTION);
 
-        $_SESSION['authenticated'] = true;
-        $_SESSION['last_activity'] = time();
-        $_SESSION['login_time'] = time();
-        return true;
+        $stmt = $db->prepare("SELECT id, username, password_hash, display_name, role FROM users WHERE username = ?");
+        $stmt->execute([$username]);
+        $user = $stmt->fetch(PDO::FETCH_ASSOC);
+
+        if ($user && password_verify($password, $user['password_hash'])) {
+            // Regenerate session ID to prevent session fixation
+            session_regenerate_id(true);
+
+            $_SESSION['authenticated'] = true;
+            $_SESSION['user_id'] = $user['id'];
+            $_SESSION['username'] = $user['username'];
+            $_SESSION['display_name'] = $user['display_name'];
+            $_SESSION['role'] = $user['role'] ?? 'user';
+            $_SESSION['last_activity'] = time();
+            $_SESSION['login_time'] = time();
+            return true;
+        }
+    } catch (PDOException $e) {
+        // Log error but don't expose DB details
+        error_log("Login error: " . $e->getMessage());
     }
+
+    // Fallback to config auth if DB fails or user not found (optional, but good for transition)
+    // For now, we strictly use DB auth as migration should have happened.
+
     return false;
+}
+
+/**
+ * Check if current user is admin
+ */
+function is_admin()
+{
+    return is_logged_in() && isset($_SESSION['role']) && $_SESSION['role'] === 'admin';
+}
+
+/**
+ * Require admin authentication
+ */
+function require_admin($config)
+{
+    require_auth($config);
+
+    if (!is_admin()) {
+        header('HTTP/1.1 403 Forbidden');
+        die('Access Denied: Admin privileges required.');
+    }
+}
+
+/**
+ * Get current user info
+ */
+function get_current_user_info($config)
+{
+    if (!is_logged_in() || !isset($_SESSION['user_id'])) {
+        return null;
+    }
+
+    try {
+        $db = new PDO('sqlite:' . $config['db_path']);
+        $db->setAttribute(PDO::ATTR_ERRMODE, PDO::ERRMODE_EXCEPTION);
+
+        $stmt = $db->prepare("SELECT id, username, display_name, role FROM users WHERE id = ?");
+        $stmt->execute([$_SESSION['user_id']]);
+        return $stmt->fetch(PDO::FETCH_ASSOC);
+    } catch (PDOException $e) {
+        return null;
+    }
+}
+
+/**
+ * Update user display name
+ */
+function update_user_display_name($userId, $displayName, $config)
+{
+    try {
+        $db = new PDO('sqlite:' . $config['db_path']);
+        $db->setAttribute(PDO::ATTR_ERRMODE, PDO::ERRMODE_EXCEPTION);
+
+        $stmt = $db->prepare("UPDATE users SET display_name = ?, updated_at = datetime('now') WHERE id = ?");
+        $result = $stmt->execute([$displayName, $userId]);
+
+        if ($result) {
+            $_SESSION['display_name'] = $displayName;
+        }
+
+        return $result;
+    } catch (PDOException $e) {
+        return false;
+    }
+}
+
+/**
+ * Update user password
+ */
+function update_user_password($userId, $currentPassword, $newPassword, $config)
+{
+    try {
+        $db = new PDO('sqlite:' . $config['db_path']);
+        $db->setAttribute(PDO::ATTR_ERRMODE, PDO::ERRMODE_EXCEPTION);
+
+        // Verify current password first
+        $stmt = $db->prepare("SELECT password_hash FROM users WHERE id = ?");
+        $stmt->execute([$userId]);
+        $hash = $stmt->fetchColumn();
+
+        if (!$hash || !password_verify($currentPassword, $hash)) {
+            return false;
+        }
+
+        $newHash = password_hash($newPassword, PASSWORD_DEFAULT);
+        $updateStmt = $db->prepare("UPDATE users SET password_hash = ?, updated_at = datetime('now') WHERE id = ?");
+        return $updateStmt->execute([$newHash, $userId]);
+    } catch (PDOException $e) {
+        return false;
+    }
 }
 
 /**
  * Perform logout
  */
-function logout() {
+function logout()
+{
     $_SESSION = array();
 
     // Delete the session cookie
     if (ini_get("session.use_cookies")) {
         $params = session_get_cookie_params();
-        setcookie(session_name(), '', time() - 42000,
-            $params["path"], $params["domain"],
-            $params["secure"], $params["httponly"]
+        setcookie(
+            session_name(),
+            '',
+            time() - 42000,
+            $params["path"],
+            $params["domain"],
+            $params["secure"],
+            $params["httponly"]
         );
     }
 
