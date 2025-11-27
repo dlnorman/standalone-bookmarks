@@ -809,45 +809,6 @@ $totalPages = ceil($total / $limit);
         const IS_LOGGED_IN = <?= json_encode($isLoggedIn) ?>;
         const CSRF_TOKEN = <?= json_encode(csrf_get_token()) ?>;
 
-        function showAddBookmark() {
-            if (!IS_LOGGED_IN) return;
-            const url = prompt('Enter URL:');
-            if (!url) return;
-
-            const title = prompt('Enter title:');
-            if (!title) return;
-
-            const description = prompt('Enter description (optional):') || '';
-            const tags = prompt('Enter tags (comma-separated, optional):') || '';
-            const isPrivate = confirm('Make this bookmark private? (Hidden from RSS feed and recent bookmarks)');
-
-            const formData = new FormData();
-            formData.append('action', 'add');
-            formData.append('csrf_token', CSRF_TOKEN);
-            formData.append('url', url);
-            formData.append('title', title);
-            formData.append('description', description);
-            formData.append('tags', tags);
-            if (isPrivate) {
-                formData.append('private', '1');
-            }
-
-            fetch(BASE_PATH + '/api.php', {
-                method: 'POST',
-                body: formData
-            })
-                .then(r => r.json())
-                .then(data => {
-                    if (data.success) {
-                        alert('Bookmark added successfully!');
-                        location.reload();
-                    } else {
-                        alert('Error: ' + data.error);
-                    }
-                })
-                .catch(err => alert('Error: ' + err));
-        }
-
         function editBookmark(id) {
             if (!IS_LOGGED_IN) return;
             // Close any other open edit forms

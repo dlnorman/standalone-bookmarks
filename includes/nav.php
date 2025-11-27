@@ -115,10 +115,9 @@ function render_nav($config, $isLoggedIn, $current_page, $page_title = null)
                 <!-- Secondary Navigation (Dropdown) -->
                 <div class="nav-secondary">
                     <?php if ($isLoggedIn): ?>
-                        <button class="nav-btn nav-btn-primary" onclick="showAddBookmark(); return false;"
-                            aria-label="Add new bookmark">
+                        <a href="<?= $config['base_path'] ?>/add-bookmark.php" class="nav-btn nav-btn-primary">
                             <span class="btn-label">Add Bookmark</span>
-                        </button>
+                        </a>
                     <?php endif; ?>
 
                     <div class="nav-dropdown">
@@ -291,6 +290,7 @@ function render_nav_styles()
             font-weight: 500;
             cursor: pointer;
             transition: all 0.2s;
+            text-decoration: none;
         }
 
         .nav-btn:hover {

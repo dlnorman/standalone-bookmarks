@@ -244,6 +244,7 @@ if (!empty($export) && !empty($bookmarks)) {
 ?>
 <!DOCTYPE html>
 <html lang="en">
+
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
@@ -306,7 +307,7 @@ if (!empty($export) && !empty($bookmarks)) {
             padding: 20px;
             border-radius: 8px;
             margin-bottom: 20px;
-            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+            box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
         }
 
         .control-section {
@@ -396,7 +397,7 @@ if (!empty($export) && !empty($bookmarks)) {
             padding: 20px;
             margin-bottom: 20px;
             border-radius: 8px;
-            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+            box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
         }
 
         .group-header {
@@ -496,12 +497,29 @@ if (!empty($export) && !empty($bookmarks)) {
             font-weight: 600;
         }
 
-        .bookmark .description h1 { font-size: 1.5em; }
-        .bookmark .description h2 { font-size: 1.3em; }
-        .bookmark .description h3 { font-size: 1.1em; }
-        .bookmark .description h4 { font-size: 1em; }
-        .bookmark .description h5 { font-size: 0.9em; }
-        .bookmark .description h6 { font-size: 0.85em; }
+        .bookmark .description h1 {
+            font-size: 1.5em;
+        }
+
+        .bookmark .description h2 {
+            font-size: 1.3em;
+        }
+
+        .bookmark .description h3 {
+            font-size: 1.1em;
+        }
+
+        .bookmark .description h4 {
+            font-size: 1em;
+        }
+
+        .bookmark .description h5 {
+            font-size: 0.9em;
+        }
+
+        .bookmark .description h6 {
+            font-size: 0.85em;
+        }
 
         .bookmark .description strong {
             font-weight: 600;
@@ -658,127 +676,134 @@ if (!empty($export) && !empty($bookmarks)) {
         }
     </style>
 </head>
+
 <body>
     <?php render_nav($config, $isLoggedIn, 'archive', 'Archive'); ?>
 
     <div class="page-container">
 
-    <div class="archive-controls">
-        <div class="control-section">
-            <h3>View Period</h3>
-            <div class="view-tabs">
-                <button class="<?= $view === 'day' ? 'active' : '' ?>" onclick="changeView('day')">Day</button>
-                <button class="<?= $view === 'week' ? 'active' : '' ?>" onclick="changeView('week')">Week</button>
-                <button class="<?= $view === 'month' ? 'active' : '' ?>" onclick="changeView('month')">Month</button>
-            </div>
-
-            <div class="date-navigation">
-                <button class="btn" onclick="navigateDate(-1)">← Previous</button>
-                <input type="date" id="datePicker" value="<?= htmlspecialchars($date) ?>" onchange="goToDate(this.value)">
-                <button class="btn" onclick="navigateDate(1)">Next →</button>
-                <button class="btn btn-secondary" onclick="goToToday()">Today</button>
-            </div>
-
-            <div class="custom-range" style="margin-top: 15px;">
-                <span style="font-size: 14px; color: #7f8c8d;">Custom Range:</span>
-                <input type="date" id="startDate" value="<?= htmlspecialchars($startDate) ?>">
-                <span style="color: #7f8c8d;">to</span>
-                <input type="date" id="endDate" value="<?= htmlspecialchars($endDate) ?>">
-                <button class="btn btn-secondary" onclick="applyCustomRange()">Apply</button>
-            </div>
-        </div>
-
-        <div class="control-section">
-            <h3>Group By</h3>
-            <div class="view-tabs">
-                <button class="<?= $groupBy === 'day' ? 'active' : '' ?>" onclick="changeGroupBy('day')">Day</button>
-                <button class="<?= $groupBy === 'week' ? 'active' : '' ?>" onclick="changeGroupBy('week')">Week</button>
-                <button class="<?= $groupBy === 'month' ? 'active' : '' ?>" onclick="changeGroupBy('month')">Month</button>
-            </div>
-        </div>
-
-        <?php if (!empty($bookmarks)): ?>
-        <div class="control-section">
-            <h3>Export</h3>
-            <div class="export-section">
-                <button class="btn btn-secondary" onclick="exportAs('markdown')">Download as Markdown</button>
-                <button class="btn btn-secondary" onclick="exportAs('html')">Download as HTML</button>
-            </div>
-        </div>
-        <?php endif; ?>
-
-        <div class="stats-summary">
-            <div class="stat-item">
-                <strong><?= count($bookmarks) ?></strong>
-                Bookmarks in <?= htmlspecialchars($viewTitle) ?>
-            </div>
-            <div class="stat-item">
-                <strong><?= count($groupedBookmarks) ?></strong>
-                <?= ucfirst($groupBy) ?><?= count($groupedBookmarks) !== 1 ? 's' : '' ?>
-            </div>
-        </div>
-    </div>
-
-    <?php if (empty($bookmarks)): ?>
-        <div class="no-results">
-            <p>No bookmarks found for <?= htmlspecialchars($viewTitle) ?></p>
-        </div>
-    <?php else: ?>
-        <?php foreach ($groupedBookmarks as $group): ?>
-            <div class="group-section">
-                <div class="group-header" onclick="toggleGroup(this)">
-                    <h2><?= htmlspecialchars($group['label']) ?></h2>
-                    <span class="group-count"><?= count($group['bookmarks']) ?></span>
+        <div class="archive-controls">
+            <div class="control-section">
+                <h3>View Period</h3>
+                <div class="view-tabs">
+                    <button class="<?= $view === 'day' ? 'active' : '' ?>" onclick="changeView('day')">Day</button>
+                    <button class="<?= $view === 'week' ? 'active' : '' ?>" onclick="changeView('week')">Week</button>
+                    <button class="<?= $view === 'month' ? 'active' : '' ?>"
+                        onclick="changeView('month')">Month</button>
                 </div>
 
-                <div class="group-bookmarks">
-                    <?php foreach ($group['bookmarks'] as $bookmark): ?>
-                        <div class="bookmark<?= !empty($bookmark['private']) ? ' private' : '' ?>">
-                            <h3>
-                                <a href="<?= htmlspecialchars($bookmark['url']) ?>" target="_blank" rel="noopener noreferrer"><?= htmlspecialchars($bookmark['title']) ?></a>
-                                <?php if (!empty($bookmark['private'])): ?>
-                                    <span class="private-badge">PRIVATE</span>
+                <div class="date-navigation">
+                    <button class="btn" onclick="navigateDate(-1)">← Previous</button>
+                    <input type="date" id="datePicker" value="<?= htmlspecialchars($date) ?>"
+                        onchange="goToDate(this.value)">
+                    <button class="btn" onclick="navigateDate(1)">Next →</button>
+                    <button class="btn btn-secondary" onclick="goToToday()">Today</button>
+                </div>
+
+                <div class="custom-range" style="margin-top: 15px;">
+                    <span style="font-size: 14px; color: #7f8c8d;">Custom Range:</span>
+                    <input type="date" id="startDate" value="<?= htmlspecialchars($startDate) ?>">
+                    <span style="color: #7f8c8d;">to</span>
+                    <input type="date" id="endDate" value="<?= htmlspecialchars($endDate) ?>">
+                    <button class="btn btn-secondary" onclick="applyCustomRange()">Apply</button>
+                </div>
+            </div>
+
+            <div class="control-section">
+                <h3>Group By</h3>
+                <div class="view-tabs">
+                    <button class="<?= $groupBy === 'day' ? 'active' : '' ?>"
+                        onclick="changeGroupBy('day')">Day</button>
+                    <button class="<?= $groupBy === 'week' ? 'active' : '' ?>"
+                        onclick="changeGroupBy('week')">Week</button>
+                    <button class="<?= $groupBy === 'month' ? 'active' : '' ?>"
+                        onclick="changeGroupBy('month')">Month</button>
+                </div>
+            </div>
+
+            <?php if (!empty($bookmarks)): ?>
+                <div class="control-section">
+                    <h3>Export</h3>
+                    <div class="export-section">
+                        <button class="btn btn-secondary" onclick="exportAs('markdown')">Download as Markdown</button>
+                        <button class="btn btn-secondary" onclick="exportAs('html')">Download as HTML</button>
+                    </div>
+                </div>
+            <?php endif; ?>
+
+            <div class="stats-summary">
+                <div class="stat-item">
+                    <strong><?= count($bookmarks) ?></strong>
+                    Bookmarks in <?= htmlspecialchars($viewTitle) ?>
+                </div>
+                <div class="stat-item">
+                    <strong><?= count($groupedBookmarks) ?></strong>
+                    <?= ucfirst($groupBy) ?><?= count($groupedBookmarks) !== 1 ? 's' : '' ?>
+                </div>
+            </div>
+        </div>
+
+        <?php if (empty($bookmarks)): ?>
+            <div class="no-results">
+                <p>No bookmarks found for <?= htmlspecialchars($viewTitle) ?></p>
+            </div>
+        <?php else: ?>
+            <?php foreach ($groupedBookmarks as $group): ?>
+                <div class="group-section">
+                    <div class="group-header" onclick="toggleGroup(this)">
+                        <h2><?= htmlspecialchars($group['label']) ?></h2>
+                        <span class="group-count"><?= count($group['bookmarks']) ?></span>
+                    </div>
+
+                    <div class="group-bookmarks">
+                        <?php foreach ($group['bookmarks'] as $bookmark): ?>
+                            <div class="bookmark<?= !empty($bookmark['private']) ? ' private' : '' ?>">
+                                <h3>
+                                    <a href="<?= htmlspecialchars($bookmark['url']) ?>" target="_blank"
+                                        rel="noopener noreferrer"><?= htmlspecialchars($bookmark['title']) ?></a>
+                                    <?php if (!empty($bookmark['private'])): ?>
+                                        <span class="private-badge">PRIVATE</span>
+                                    <?php endif; ?>
+                                </h3>
+                                <div class="url"><?= htmlspecialchars($bookmark['url']) ?></div>
+                                <?php if (!empty($bookmark['description'])): ?>
+                                    <div class="description"><?= parseMarkdown($bookmark['description']) ?></div>
                                 <?php endif; ?>
-                            </h3>
-                            <div class="url"><?= htmlspecialchars($bookmark['url']) ?></div>
-                            <?php if (!empty($bookmark['description'])): ?>
-                                <div class="description"><?= parseMarkdown($bookmark['description']) ?></div>
-                            <?php endif; ?>
-                            <?php if (!empty($bookmark['screenshot'])): ?>
-                                <div class="screenshot">
-                                    <img src="<?= $config['base_path'] . '/' . htmlspecialchars($bookmark['screenshot']) ?>"
-                                         class="thumbnail"
-                                         alt="Screenshot"
-                                         onclick="this.classList.toggle('thumbnail')"
-                                         title="Click to toggle size">
-                                </div>
-                            <?php endif; ?>
-                            <div class="meta">
-                                <div>
-                                    <?php if (!empty($bookmark['tags'])): ?>
-                                        <span class="tags">Tags:
-                                        <?php
-                                            $tagList = array_map('trim', explode(',', $bookmark['tags']));
-                                            $tagLinks = [];
-                                            foreach ($tagList as $tagItem) {
-                                                $tagLinks[] = '<a href="' . $config['base_path'] . '/?tag=' . urlencode($tagItem) . '" style="color: #3498db; text-decoration: none;">' . htmlspecialchars($tagItem) . '</a>';
-                                            }
-                                            echo implode(', ', $tagLinks);
-                                        ?>
-                                        </span>
-                                    <?php endif; ?>
-                                    <span> &middot; <?= date($config['date_format'], strtotime($bookmark['created_at'])) ?></span>
-                                    <?php if (!empty($bookmark['archive_url'])): ?>
-                                        <span> &middot; <a href="<?= htmlspecialchars($bookmark['archive_url']) ?>" target="_blank" rel="noopener noreferrer" style="color: #27ae60;">Archive</a></span>
-                                    <?php endif; ?>
+                                <?php if (!empty($bookmark['screenshot'])): ?>
+                                    <div class="screenshot">
+                                        <img src="<?= $config['base_path'] . '/' . htmlspecialchars($bookmark['screenshot']) ?>"
+                                            class="thumbnail" alt="Screenshot" onclick="this.classList.toggle('thumbnail')"
+                                            title="Click to toggle size">
+                                    </div>
+                                <?php endif; ?>
+                                <div class="meta">
+                                    <div>
+                                        <?php if (!empty($bookmark['tags'])): ?>
+                                            <span class="tags">Tags:
+                                                <?php
+                                                $tagList = array_map('trim', explode(',', $bookmark['tags']));
+                                                $tagLinks = [];
+                                                foreach ($tagList as $tagItem) {
+                                                    $tagLinks[] = '<a href="' . $config['base_path'] . '/?tag=' . urlencode($tagItem) . '" style="color: #3498db; text-decoration: none;">' . htmlspecialchars($tagItem) . '</a>';
+                                                }
+                                                echo implode(', ', $tagLinks);
+                                                ?>
+                                            </span>
+                                        <?php endif; ?>
+                                        <span> &middot;
+                                            <?= date($config['date_format'], strtotime($bookmark['created_at'])) ?></span>
+                                        <?php if (!empty($bookmark['archive_url'])): ?>
+                                            <span> &middot; <a href="<?= htmlspecialchars($bookmark['archive_url']) ?>" target="_blank"
+                                                    rel="noopener noreferrer" style="color: #27ae60;">Archive</a></span>
+                                        <?php endif; ?>
+                                    </div>
                                 </div>
                             </div>
-                        </div>
-                    <?php endforeach; ?>
+                        <?php endforeach; ?>
+                    </div>
                 </div>
-            </div>
-        <?php endforeach; ?>
-    <?php endif; ?>
+            <?php endforeach; ?>
+        <?php endif; ?>
     </div>
 
     <?php render_nav_scripts(); ?>
@@ -864,44 +889,7 @@ if (!empty($export) && !empty($bookmarks)) {
             const bookmarksDiv = header.nextElementSibling;
             bookmarksDiv.classList.toggle('collapsed');
         }
-
-        function showAddBookmark() {
-            if (!IS_LOGGED_IN) return;
-            const url = prompt('Enter URL:');
-            if (!url) return;
-
-            const title = prompt('Enter title:');
-            if (!title) return;
-
-            const description = prompt('Enter description (optional):') || '';
-            const tags = prompt('Enter tags (comma-separated, optional):') || '';
-            const isPrivate = confirm('Make this bookmark private? (Hidden from RSS feed and recent bookmarks)');
-
-            const formData = new FormData();
-            formData.append('action', 'add');
-            formData.append('url', url);
-            formData.append('title', title);
-            formData.append('description', description);
-            formData.append('tags', tags);
-            if (isPrivate) {
-                formData.append('private', '1');
-            }
-
-            fetch(BASE_PATH + '/api.php', {
-                method: 'POST',
-                body: formData
-            })
-            .then(r => r.json())
-            .then(data => {
-                if (data.success) {
-                    alert('Bookmark added successfully!');
-                    location.reload();
-                } else {
-                    alert('Error: ' + data.error);
-                }
-            })
-            .catch(err => alert('Error: ' + err));
-        }
     </script>
 </body>
+
 </html>
