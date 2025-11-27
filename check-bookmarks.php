@@ -28,11 +28,13 @@ $csrfToken = csrf_get_token();
 ?>
 <!DOCTYPE html>
 <html lang="en">
+
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Check Bookmarks - <?= htmlspecialchars($config['site_title']) ?></title>
     <?php render_nav_styles(); ?>
+    <link rel="stylesheet" href="css/main.css">
     <style>
         * {
             box-sizing: border-box;
@@ -42,11 +44,12 @@ $csrfToken = csrf_get_token();
 
         body {
             font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
-            background: #f5f5f5;
-            color: #333;
+            background: var(--bg-primary);
+            color: var(--text-primary);
             margin: 0;
             padding: 0;
             min-height: 100vh;
+            transition: background-color 0.3s ease, color 0.3s ease;
         }
 
         .container {
@@ -56,22 +59,22 @@ $csrfToken = csrf_get_token();
         }
 
         .header {
-            background: white;
+            background: var(--bg-secondary);
             padding: 30px;
             border-radius: 12px;
-            box-shadow: 0 4px 12px rgba(0,0,0,0.1);
+            box-shadow: var(--shadow-sm);
             margin-bottom: 20px;
         }
 
         .header h1 {
             font-size: 28px;
             font-weight: 700;
-            color: #2c3e50;
+            color: var(--text-primary);
             margin-bottom: 10px;
         }
 
         .header p {
-            color: #7f8c8d;
+            color: var(--text-secondary);
             font-size: 14px;
         }
 
@@ -83,17 +86,17 @@ $csrfToken = csrf_get_token();
         }
 
         .stat-card {
-            background: white;
+            background: var(--bg-secondary);
             padding: 20px;
             border-radius: 12px;
-            box-shadow: 0 4px 12px rgba(0,0,0,0.1);
+            box-shadow: var(--shadow-sm);
         }
 
         .stat-card .label {
             font-size: 11px;
             text-transform: uppercase;
             letter-spacing: 0.5px;
-            color: #7f8c8d;
+            color: var(--text-tertiary);
             font-weight: 600;
             margin-bottom: 8px;
         }
@@ -101,12 +104,12 @@ $csrfToken = csrf_get_token();
         .stat-card .value {
             font-size: 32px;
             font-weight: 700;
-            color: #2c3e50;
+            color: var(--text-primary);
             line-height: 1;
         }
 
         .stat-card.broken .value {
-            color: #e74c3c;
+            color: var(--accent-red);
         }
 
         .stat-card.clickable {
@@ -116,29 +119,29 @@ $csrfToken = csrf_get_token();
 
         .stat-card.clickable:hover {
             transform: translateY(-3px);
-            box-shadow: 0 6px 20px rgba(0,0,0,0.15);
+            box-shadow: var(--shadow-md);
         }
 
         .stat-card .hint {
             font-size: 10px;
-            color: #95a5a6;
+            color: var(--text-secondary);
             margin-top: 5px;
         }
 
         .stat-card.completed .value {
-            color: #27ae60;
+            color: var(--accent-green);
         }
 
         .actions {
-            background: white;
+            background: var(--bg-secondary);
             padding: 20px;
             border-radius: 12px;
-            box-shadow: 0 4px 12px rgba(0,0,0,0.1);
+            box-shadow: var(--shadow-sm);
             margin-bottom: 20px;
         }
 
         .btn {
-            background: #667eea;
+            background: var(--accent-blue);
             color: white;
             border: none;
             padding: 12px 24px;
@@ -150,22 +153,22 @@ $csrfToken = csrf_get_token();
         }
 
         .btn:hover {
-            background: #5568d3;
+            background: var(--accent-blue-hover);
             transform: translateY(-1px);
-            box-shadow: 0 4px 12px rgba(102, 126, 234, 0.3);
+            box-shadow: var(--shadow-md);
         }
 
         .btn:disabled {
-            background: #95a5a6;
+            background: var(--text-tertiary);
             cursor: not-allowed;
             transform: none;
         }
 
         .progress {
-            background: white;
+            background: var(--bg-secondary);
             padding: 20px;
             border-radius: 12px;
-            box-shadow: 0 4px 12px rgba(0,0,0,0.1);
+            box-shadow: var(--shadow-sm);
             margin-bottom: 20px;
             display: none;
         }
@@ -175,7 +178,7 @@ $csrfToken = csrf_get_token();
         }
 
         .progress-bar {
-            background: #ecf0f1;
+            background: var(--bg-tertiary);
             height: 30px;
             border-radius: 15px;
             overflow: hidden;
@@ -183,7 +186,7 @@ $csrfToken = csrf_get_token();
         }
 
         .progress-fill {
-            background: linear-gradient(90deg, #667eea 0%, #764ba2 100%);
+            background: linear-gradient(90deg, var(--accent-blue) 0%, var(--accent-purple) 100%);
             height: 100%;
             width: 0%;
             transition: width 0.3s;
@@ -197,27 +200,27 @@ $csrfToken = csrf_get_token();
 
         .progress-text {
             text-align: center;
-            color: #7f8c8d;
+            color: var(--text-secondary);
             font-size: 14px;
         }
 
         .results {
-            background: white;
+            background: var(--bg-secondary);
             padding: 20px;
             border-radius: 12px;
-            box-shadow: 0 4px 12px rgba(0,0,0,0.1);
+            box-shadow: var(--shadow-sm);
         }
 
         .results h2 {
             font-size: 20px;
             font-weight: 700;
-            color: #2c3e50;
+            color: var(--text-primary);
             margin-bottom: 15px;
         }
 
         .result-item {
             padding: 15px;
-            border-bottom: 1px solid #ecf0f1;
+            border-bottom: 1px solid var(--border-subtle);
             display: flex;
             align-items: center;
             gap: 15px;
@@ -235,15 +238,15 @@ $csrfToken = csrf_get_token();
         }
 
         .result-status.ok {
-            background: #27ae60;
+            background: var(--accent-green);
         }
 
         .result-status.broken {
-            background: #e74c3c;
+            background: var(--accent-red);
         }
 
         .result-status.pending {
-            background: #f39c12;
+            background: var(--accent-orange);
         }
 
         .result-info {
@@ -253,7 +256,7 @@ $csrfToken = csrf_get_token();
 
         .result-title {
             font-weight: 600;
-            color: #2c3e50;
+            color: var(--text-primary);
             margin-bottom: 3px;
             white-space: nowrap;
             overflow: hidden;
@@ -262,7 +265,7 @@ $csrfToken = csrf_get_token();
 
         .result-url {
             font-size: 12px;
-            color: #7f8c8d;
+            color: var(--text-secondary);
             white-space: nowrap;
             overflow: hidden;
             text-overflow: ellipsis;
@@ -270,19 +273,19 @@ $csrfToken = csrf_get_token();
 
         .result-message {
             font-size: 12px;
-            color: #95a5a6;
+            color: var(--text-tertiary);
         }
 
         .result-time {
             font-size: 11px;
-            color: #bdc3c7;
+            color: var(--text-tertiary);
             flex-shrink: 0;
         }
 
         .empty-state {
             text-align: center;
             padding: 40px 20px;
-            color: #7f8c8d;
+            color: var(--text-tertiary);
         }
 
         @media (max-width: 768px) {
@@ -298,6 +301,7 @@ $csrfToken = csrf_get_token();
         }
     </style>
 </head>
+
 <body>
     <?php
     $isLoggedIn = is_logged_in();
@@ -308,7 +312,8 @@ $csrfToken = csrf_get_token();
         <div class="header">
             <h1>Check Bookmarks</h1>
             <p>Validate URLs and detect broken links across your bookmark collection</p>
-            <p style="margin-top: 10px;"><a href="check-diagnostics.php" style="color: #7f8c8d; font-size: 13px;">🔍 View Diagnostics</a> (helpful if you encounter issues)</p>
+            <p style="margin-top: 10px;"><a href="check-diagnostics.php" style="color: #7f8c8d; font-size: 13px;">🔍
+                    View Diagnostics</a> (helpful if you encounter issues)</p>
         </div>
 
         <div class="stats">
@@ -333,7 +338,8 @@ $csrfToken = csrf_get_token();
 
         <div class="actions">
             <button id="start-check" class="btn">Start URL Check</button>
-            <button id="refresh-status" class="btn" style="margin-left: 10px; background: #95a5a6;">Refresh Status</button>
+            <button id="refresh-status" class="btn" style="margin-left: 10px; background: #95a5a6;">Refresh
+                Status</button>
         </div>
 
         <div class="progress" id="progress">
@@ -378,57 +384,57 @@ $csrfToken = csrf_get_token();
                 },
                 body: 'csrf_token=' + encodeURIComponent(csrfToken)
             })
-            .then(res => res.json())
-            .then(data => {
-                console.log('Queue response:', data);
-                if (data.success) {
-                    if (data.queued > 0) {
-                        alert(data.message + '\n\nThe background job processor (process_jobs.php via cron) will check these URLs. This page will auto-refresh to show progress.');
-                        document.getElementById('progress').classList.add('active');
-                        startPolling();
-                        loadStatus();
-                    } else if (data.total === 0) {
-                        alert('No bookmarks found in the database. Please add some bookmarks first.');
-                        btn.disabled = false;
-                        btn.textContent = 'Start URL Check';
+                .then(res => res.json())
+                .then(data => {
+                    console.log('Queue response:', data);
+                    if (data.success) {
+                        if (data.queued > 0) {
+                            alert(data.message + '\n\nThe background job processor (process_jobs.php via cron) will check these URLs. This page will auto-refresh to show progress.');
+                            document.getElementById('progress').classList.add('active');
+                            startPolling();
+                            loadStatus();
+                        } else if (data.total === 0) {
+                            alert('No bookmarks found in the database. Please add some bookmarks first.');
+                            btn.disabled = false;
+                            btn.textContent = 'Start URL Check';
+                        } else {
+                            alert(data.message + '\n\nIf you just ran a check, wait for it to complete before running again.');
+                            btn.disabled = false;
+                            btn.textContent = 'Start URL Check';
+                            loadStatus(); // Still load status to show existing jobs
+                        }
                     } else {
-                        alert(data.message + '\n\nIf you just ran a check, wait for it to complete before running again.');
+                        alert('Error: ' + (data.error || 'Failed to queue URL checks'));
                         btn.disabled = false;
                         btn.textContent = 'Start URL Check';
-                        loadStatus(); // Still load status to show existing jobs
                     }
-                } else {
-                    alert('Error: ' + (data.error || 'Failed to queue URL checks'));
+                })
+                .catch(err => {
+                    console.error('Queue error:', err);
+                    alert('Error: ' + err.message);
                     btn.disabled = false;
                     btn.textContent = 'Start URL Check';
-                }
-            })
-            .catch(err => {
-                console.error('Queue error:', err);
-                alert('Error: ' + err.message);
-                btn.disabled = false;
-                btn.textContent = 'Start URL Check';
-            });
+                });
         }
 
         function loadStatus() {
             fetch('api.php?action=check_status')
-            .then(res => res.json())
-            .then(data => {
-                updateStats(data.stats, data.broken_count);
-                updateResults(data.recent_checks);
+                .then(res => res.json())
+                .then(data => {
+                    updateStats(data.stats, data.broken_count);
+                    updateResults(data.recent_checks);
 
-                // Auto-enable button if no pending jobs
-                if (data.stats.pending === 0 && data.stats.processing === 0) {
-                    const btn = document.getElementById('start-check');
-                    btn.disabled = false;
-                    btn.textContent = 'Start URL Check';
-                    stopPolling();
-                }
-            })
-            .catch(err => {
-                console.error('Failed to load status:', err);
-            });
+                    // Auto-enable button if no pending jobs
+                    if (data.stats.pending === 0 && data.stats.processing === 0) {
+                        const btn = document.getElementById('start-check');
+                        btn.disabled = false;
+                        btn.textContent = 'Start URL Check';
+                        stopPolling();
+                    }
+                })
+                .catch(err => {
+                    console.error('Failed to load status:', err);
+                });
         }
 
         function updateStats(stats, brokenCount) {
@@ -463,7 +469,7 @@ $csrfToken = csrf_get_token();
 
             list.innerHTML = checks.map(check => {
                 const statusClass = check.broken_url == 1 ? 'broken' :
-                                   check.status === 'completed' ? 'ok' : 'pending';
+                    check.status === 'completed' ? 'ok' : 'pending';
                 const timeAgo = formatTimeAgo(check.updated_at);
 
                 return `
@@ -516,4 +522,5 @@ $csrfToken = csrf_get_token();
         }
     </script>
 </body>
+
 </html>

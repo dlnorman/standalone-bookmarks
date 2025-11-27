@@ -62,95 +62,15 @@ $timeout_msg = isset($_GET['timeout']) ? 'Your session has expired. Please login
 ?>
 <!DOCTYPE html>
 <html lang="en">
+
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Login - <?= htmlspecialchars($config['site_title']) ?></title>
-    <style>
-        * {
-            box-sizing: border-box;
-        }
-
-        body {
-            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
-            margin: 0;
-            padding: 20px;
-            background: #f5f5f5;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            min-height: 100vh;
-        }
-
-        .login-container {
-            background: white;
-            padding: 40px;
-            border-radius: 8px;
-            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
-            width: 100%;
-            max-width: 400px;
-        }
-
-        h1 {
-            margin: 0 0 30px 0;
-            font-size: 24px;
-            color: #2c3e50;
-            text-align: center;
-        }
-
-        .form-group {
-            margin-bottom: 20px;
-        }
-
-        label {
-            display: block;
-            margin-bottom: 5px;
-            font-weight: 500;
-            color: #555;
-        }
-
-        input[type="text"],
-        input[type="password"] {
-            width: 100%;
-            padding: 10px;
-            border: 1px solid #ddd;
-            border-radius: 4px;
-            font-size: 14px;
-        }
-
-        button {
-            width: 100%;
-            padding: 12px;
-            background: #3498db;
-            color: white;
-            border: none;
-            border-radius: 4px;
-            font-size: 16px;
-            cursor: pointer;
-        }
-
-        button:hover {
-            background: #2980b9;
-        }
-
-        .error {
-            background: #f8d7da;
-            color: #721c24;
-            padding: 12px;
-            border-radius: 4px;
-            margin-bottom: 20px;
-        }
-
-        .info {
-            background: #d1ecf1;
-            color: #0c5460;
-            padding: 12px;
-            border-radius: 4px;
-            margin-bottom: 20px;
-        }
-    </style>
+    <link rel="stylesheet" href="css/main.css">
 </head>
-<body>
+
+<body class="login-page">
     <div class="login-container">
         <h1><?= htmlspecialchars($config['site_title']) ?></h1>
 
@@ -178,4 +98,5 @@ $timeout_msg = isset($_GET['timeout']) ? 'Your session has expired. Please login
         </form>
     </div>
 </body>
+
 </html>

@@ -199,10 +199,12 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['submit'])) {
 ?>
 <!DOCTYPE html>
 <html lang="en">
+
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Add Bookmark</title>
+    <link rel="stylesheet" href="css/main.css">
     <style>
         * {
             box-sizing: border-box;
@@ -221,7 +223,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['submit'])) {
             background: white;
             padding: 20px;
             border-radius: 8px;
-            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+            box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
         }
 
         h1 {
@@ -329,7 +331,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['submit'])) {
             overflow-y: auto;
             z-index: 1000;
             display: none;
-            box-shadow: 0 4px 6px rgba(0,0,0,0.1);
+            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
         }
 
         .tag-suggestions.active {
@@ -357,6 +359,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['submit'])) {
         }
     </style>
 </head>
+
 <body>
     <div class="container">
         <h1><?= $isEdit ? 'Edit Bookmark' : 'Add Bookmark' ?></h1>
@@ -366,7 +369,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['submit'])) {
                 Bookmark <?= $isEdit ? 'updated' : 'added' ?> successfully!
             </div>
             <script>
-                setTimeout(function() {
+                setTimeout(function () {
                     window.close();
                 }, 1500);
             </script>
@@ -381,7 +384,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['submit'])) {
         <form method="post" action="">
             <?php csrf_field(); ?>
             <?php if ($isEdit): ?>
-            <input type="hidden" name="bookmark_id" value="<?= $existingBookmark['id'] ?>">
+                <input type="hidden" name="bookmark_id" value="<?= $existingBookmark['id'] ?>">
             <?php endif; ?>
 
             <div class="form-group">
@@ -408,7 +411,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['submit'])) {
 
             <div class="form-group">
                 <label style="display: flex; align-items: center; cursor: pointer;">
-                    <input type="checkbox" id="private" name="private" style="margin-right: 8px; width: auto;" <?= ($isEdit && !empty($existingBookmark['private'])) ? 'checked' : '' ?>>
+                    <input type="checkbox" id="private" name="private" style="margin-right: 8px; width: auto;"
+                        <?= ($isEdit && !empty($existingBookmark['private'])) ? 'checked' : '' ?>>
                     <span>Private (hidden from RSS feed and recent bookmarks)</span>
                 </label>
             </div>
@@ -456,7 +460,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['submit'])) {
 
             let selectedIndex = -1;
 
-            input.addEventListener('input', async function() {
+            input.addEventListener('input', async function () {
                 const value = this.value;
                 const cursorPos = this.selectionStart;
 
@@ -499,7 +503,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['submit'])) {
 
                 // Add click handlers to suggestions
                 suggestionsDiv.querySelectorAll('.tag-suggestion').forEach(suggestionEl => {
-                    suggestionEl.addEventListener('click', function() {
+                    suggestionEl.addEventListener('click', function () {
                         const tag = this.getAttribute('data-tag');
                         insertTag(input, tag, lastComma, cursorPos, nextComma === -1 ? value.length : cursorPos + nextComma);
                         suggestionsDiv.classList.remove('active');
@@ -507,7 +511,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['submit'])) {
                 });
             });
 
-            input.addEventListener('keydown', function(e) {
+            input.addEventListener('keydown', function (e) {
                 const suggestions = suggestionsDiv.querySelectorAll('.tag-suggestion');
 
                 if (!suggestionsDiv.classList.contains('active') || suggestions.length === 0) {
@@ -533,7 +537,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['submit'])) {
             });
 
             // Close suggestions when clicking outside
-            document.addEventListener('click', function(e) {
+            document.addEventListener('click', function (e) {
                 if (!input.contains(e.target) && !suggestionsDiv.contains(e.target)) {
                     suggestionsDiv.classList.remove('active');
                 }
@@ -563,9 +567,10 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['submit'])) {
         }
 
         // Initialize autocomplete when the page loads
-        document.addEventListener('DOMContentLoaded', function() {
+        document.addEventListener('DOMContentLoaded', function () {
             initTagAutocomplete('tags', 'tags-suggestions');
         });
     </script>
 </body>
+
 </html>

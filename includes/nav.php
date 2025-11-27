@@ -127,10 +127,13 @@ function render_nav($config, $isLoggedIn, $current_page, $page_title = null)
                         </button>
                         <div class="nav-dropdown-content" id="navDropdownMenu" role="menu" aria-labelledby="navMenuButton">
                             <?php foreach ($nav_items['secondary'] as $item): ?>
+                                <?php
+                                if (isset($item['auth_required']) && $item['auth_required'] && !$isLoggedIn) {
+                                    continue;
+                                }
+                                ?>
                                 <?php if (isset($item['type']) && $item['type'] === 'divider'): ?>
                                     <div class="dropdown-divider" role="separator"></div>
-                                <?php elseif (isset($item['auth_required']) && $item['auth_required'] && !$isLoggedIn): ?>
-                                    <?php continue; ?>
                                 <?php else: ?>
                                     <a href="<?= $item['url'] ?>" class="dropdown-item"
                                         role="menuitem"><?= htmlspecialchars($item['label']) ?></a>
@@ -172,18 +175,33 @@ function render_nav($config, $isLoggedIn, $current_page, $page_title = null)
  */
 function render_nav_styles()
 {
+    global $config;
     ?>
+    <link rel="stylesheet" href="<?= $config['base_path'] ?>/css/dark-mode.css">
     <style>
         /* Navigation Container */
         .app-nav {
-            background: linear-gradient(135deg, rgba(255, 255, 255, 0.98) 0%, rgba(249, 250, 251, 0.98) 100%);
+            background: var(--bg-secondary);
             backdrop-filter: blur(10px);
-            border-bottom: 1px solid rgba(0, 0, 0, 0.08);
-            box-shadow: 0 2px 8px rgba(0, 0, 0, 0.04);
+            border-bottom: 1px solid var(--border-subtle);
+            box-shadow: var(--shadow-sm);
             position: sticky;
             top: 0;
             z-index: 1000;
             margin-bottom: 20px;
+            transition: background-color 0.3s ease, border-color 0.3s ease;
+        }
+
+        @supports (backdrop-filter: blur(10px)) {
+            .app-nav {
+                background: rgba(255, 255, 255, 0.8);
+            }
+
+            @media (prefers-color-scheme: dark) {
+                .app-nav {
+                    background: rgba(45, 55, 72, 0.8);
+                }
+            }
         }
 
         .nav-container {
@@ -208,10 +226,10 @@ function render_nav_styles()
             align-items: center;
             gap: 10px;
             text-decoration: none;
-            color: #2c3e50;
+            color: var(--text-primary);
             font-weight: 600;
             font-size: 18px;
-            transition: opacity 0.2s;
+            transition: opacity 0.2s, color 0.3s ease;
             white-space: nowrap;
             overflow: hidden;
             text-overflow: ellipsis;
@@ -248,7 +266,7 @@ function render_nav_styles()
             gap: 6px;
             padding: 8px 14px;
             text-decoration: none;
-            color: #5a6c7d;
+            color: var(--text-secondary);
             font-size: 14px;
             font-weight: 500;
             border-radius: 8px;
@@ -258,16 +276,16 @@ function render_nav_styles()
 
         .nav-link:hover {
             background: rgba(52, 152, 219, 0.1);
-            color: #3498db;
+            color: var(--accent-blue);
         }
 
         .nav-link.active {
-            background: #3498db;
+            background: var(--accent-blue);
             color: white;
         }
 
         .nav-link.active:hover {
-            background: #2980b9;
+            background: var(--accent-blue-hover);
         }
 
         /* Secondary Navigation */
@@ -283,8 +301,8 @@ function render_nav_styles()
             gap: 6px;
             padding: 8px 14px;
             background: transparent;
-            color: #5a6c7d;
-            border: 1px solid rgba(0, 0, 0, 0.1);
+            color: var(--text-secondary);
+            border: 1px solid var(--border-color);
             border-radius: 8px;
             font-size: 14px;
             font-weight: 500;
@@ -294,19 +312,19 @@ function render_nav_styles()
         }
 
         .nav-btn:hover {
-            background: rgba(0, 0, 0, 0.04);
-            border-color: rgba(0, 0, 0, 0.15);
+            background: var(--bg-tertiary);
+            border-color: var(--text-tertiary);
         }
 
         .nav-btn-primary {
-            background: #27ae60;
+            background: var(--accent-green);
             color: white;
-            border-color: #27ae60;
+            border-color: var(--accent-green);
         }
 
         .nav-btn-primary:hover {
-            background: #229954;
-            border-color: #229954;
+            background: var(--accent-green-hover);
+            border-color: var(--accent-green-hover);
         }
 
         /* Dropdown */
@@ -320,8 +338,8 @@ function render_nav_styles()
             gap: 6px;
             padding: 8px 14px;
             background: transparent;
-            color: #5a6c7d;
-            border: 1px solid rgba(0, 0, 0, 0.1);
+            color: var(--text-secondary);
+            border: 1px solid var(--border-color);
             border-radius: 8px;
             font-size: 14px;
             font-weight: 500;
@@ -330,12 +348,12 @@ function render_nav_styles()
         }
 
         .nav-dropdown-trigger:hover {
-            background: rgba(0, 0, 0, 0.04);
-            border-color: rgba(0, 0, 0, 0.15);
+            background: var(--bg-tertiary);
+            border-color: var(--text-tertiary);
         }
 
         .nav-dropdown-trigger[aria-expanded="true"] {
-            background: rgba(0, 0, 0, 0.06);
+            background: var(--bg-tertiary);
         }
 
         .nav-dropdown-content {
@@ -344,10 +362,10 @@ function render_nav_styles()
             right: 0;
             top: calc(100% + 8px);
             min-width: 200px;
-            background: white;
+            background: var(--bg-secondary);
             border-radius: 8px;
-            box-shadow: 0 4px 16px rgba(0, 0, 0, 0.12);
-            border: 1px solid rgba(0, 0, 0, 0.08);
+            box-shadow: var(--shadow-md);
+            border: 1px solid var(--border-subtle);
             overflow: hidden;
             animation: dropdownFadeIn 0.15s ease-out;
         }
@@ -371,7 +389,7 @@ function render_nav_styles()
         .dropdown-item {
             display: block;
             padding: 10px 16px;
-            color: #2c3e50;
+            color: var(--text-primary);
             text-decoration: none;
             font-size: 14px;
             transition: background 0.15s;
@@ -379,17 +397,17 @@ function render_nav_styles()
 
         .dropdown-item:hover {
             background: rgba(52, 152, 219, 0.08);
-            color: #3498db;
+            color: var(--accent-blue);
         }
 
         .dropdown-item-highlight {
             font-weight: 600;
-            color: #3498db;
+            color: var(--accent-blue);
         }
 
         .dropdown-divider {
             height: 1px;
-            background: rgba(0, 0, 0, 0.08);
+            background: var(--border-subtle);
             margin: 4px 0;
         }
 
@@ -407,7 +425,7 @@ function render_nav_styles()
             display: block;
             width: 24px;
             height: 2px;
-            background: #2c3e50;
+            background: var(--text-primary);
             position: relative;
             transition: background 0.3s;
         }
@@ -418,7 +436,7 @@ function render_nav_styles()
             display: block;
             width: 24px;
             height: 2px;
-            background: #2c3e50;
+            background: var(--text-primary);
             position: absolute;
             left: 0;
             transition: all 0.3s;
@@ -511,7 +529,7 @@ function render_nav_styles()
             .nav-dropdown-content {
                 position: static;
                 box-shadow: none;
-                border: 1px solid rgba(0, 0, 0, 0.08);
+                border: 1px solid var(--border-subtle);
                 margin-top: 4px;
             }
         }

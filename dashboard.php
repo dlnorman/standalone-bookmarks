@@ -29,6 +29,7 @@ $isLoggedIn = is_logged_in();
     <title>Dashboard - <?= htmlspecialchars($config['site_title']) ?></title>
     <script src="https://d3js.org/d3.v7.min.js"></script>
     <?php render_nav_styles(); ?>
+    <link rel="stylesheet" href="css/main.css">
     <style>
         * {
             box-sizing: border-box;
@@ -38,11 +39,12 @@ $isLoggedIn = is_logged_in();
 
         body {
             font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
-            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-            color: #333;
+            background: var(--bg-primary);
+            color: var(--text-primary);
             margin: 0;
             padding: 0;
             min-height: 100vh;
+            transition: background-color 0.3s ease, color 0.3s ease;
         }
 
         .dashboard-container {
@@ -63,10 +65,10 @@ $isLoggedIn = is_logged_in();
         }
 
         .stat-card {
-            background: white;
+            background: var(--bg-secondary);
             padding: 15px 20px;
             border-radius: 12px;
-            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+            box-shadow: var(--shadow-sm);
             display: flex;
             flex-direction: column;
             justify-content: space-between;
@@ -75,14 +77,14 @@ $isLoggedIn = is_logged_in();
 
         .stat-card:hover {
             transform: translateY(-2px);
-            box-shadow: 0 6px 20px rgba(0, 0, 0, 0.15);
+            box-shadow: var(--shadow-md);
         }
 
         .stat-card .label {
             font-size: 11px;
             text-transform: uppercase;
             letter-spacing: 0.5px;
-            color: #7f8c8d;
+            color: var(--text-tertiary);
             font-weight: 600;
             margin-bottom: 8px;
         }
@@ -90,13 +92,13 @@ $isLoggedIn = is_logged_in();
         .stat-card .value {
             font-size: 32px;
             font-weight: 700;
-            color: #2c3e50;
+            color: var(--text-primary);
             line-height: 1;
         }
 
         .stat-card .subtext {
             font-size: 10px;
-            color: #95a5a6;
+            color: var(--text-secondary);
             margin-top: 5px;
         }
 
@@ -110,9 +112,9 @@ $isLoggedIn = is_logged_in();
         }
 
         .panel {
-            background: white;
+            background: var(--bg-secondary);
             border-radius: 12px;
-            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+            box-shadow: var(--shadow-sm);
             padding: 20px;
             overflow: hidden;
             display: flex;
@@ -122,10 +124,10 @@ $isLoggedIn = is_logged_in();
         .panel-title {
             font-size: 18px;
             font-weight: 600;
-            color: #2c3e50;
+            color: var(--text-primary);
             margin-bottom: 15px;
             padding-bottom: 10px;
-            border-bottom: 2px solid #ecf0f1;
+            border-bottom: 2px solid var(--border-subtle);
             display: flex;
             justify-content: space-between;
             align-items: center;
@@ -143,15 +145,15 @@ $isLoggedIn = is_logged_in();
             cursor: pointer;
             font-size: 16px;
             padding: 5px 10px;
-            color: #7f8c8d;
+            color: var(--text-tertiary);
             transition: all 0.2s;
             border-radius: 4px;
         }
 
         .fullscreen-btn:hover,
         .download-btn:hover {
-            background: #ecf0f1;
-            color: #2c3e50;
+            background: var(--bg-tertiary);
+            color: var(--text-primary);
         }
 
         .download-btn {
@@ -214,185 +216,184 @@ $isLoggedIn = is_logged_in();
         }
 
         .network-node:hover circle {
-            stroke: #3498db;
+            stroke: var(--accent-blue);
             stroke-width: 4px;
             filter: brightness(1.1);
         }
 
         .network-node:hover text {
             font-weight: 700;
-            fill: #1a1a1a;
+            fill: var(--text-primary);
         }
 
         .network-node text {
             font-size: 11px;
             font-weight: 600;
             pointer-events: none;
-            text-shadow: 0 1px 4px white, 0 0 10px white;
+            text-shadow: 0 1px 4px var(--bg-secondary), 0 0 10px var(--bg-secondary);
+            fill: var(--text-primary);
         }
 
         .network-link {
-            stroke: #bdc3c7;
+            stroke: var(--border-color);
             stroke-opacity: 0.4;
         }
 
         .network-link.highlighted {
-            stroke: #3498db;
-            stroke-opacity: 0.8;
+            stroke: var(--accent-blue);
             stroke-width: 3px;
-        }
 
-        /* Chart styles */
-        .chart-container {
-            width: 100%;
-            height: 100%;
-        }
-
-        .axis text {
-            font-size: 10px;
-            fill: #7f8c8d;
-        }
-
-        .axis line,
-        .axis path {
-            stroke: #ecf0f1;
-        }
-
-        .velocity-bar {
-            fill: #3498db;
-            transition: fill 0.2s;
-        }
-
-        .velocity-bar:hover {
-            fill: #2980b9;
-        }
-
-        .velocity-line {
-            fill: none;
-            stroke: #e74c3c;
-            stroke-width: 2;
-        }
-
-        .tag-area {
-            transition: opacity 0.3s;
-        }
-
-        .tag-area:hover {
-            opacity: 0.8;
-            stroke: #2c3e50;
-            stroke-width: 2px;
-        }
-
-        .tag-legend-item {
-            cursor: pointer;
-            transition: opacity 0.2s;
-        }
-
-        .tag-legend-item:hover {
-            opacity: 0.7;
-        }
-
-        .tag-legend-item.inactive {
-            opacity: 0.3;
-        }
-
-        .tag-line {
-            fill: none;
-            stroke-width: 2;
-            transition: all 0.3s;
-        }
-
-        .tag-line:hover {
-            stroke-width: 3;
-        }
-
-        /* Loading state */
-        .loading {
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            height: 100%;
-            color: #95a5a6;
-            font-size: 14px;
-        }
-
-        .loading::after {
-            content: '...';
-            animation: dots 1.5s steps(4, end) infinite;
-        }
-
-        @keyframes dots {
-
-            0%,
-            20% {
-                content: '.';
+            /* Chart styles */
+            .chart-container {
+                width: 100%;
+                height: 100%;
             }
 
-            40% {
-                content: '..';
+            .axis text {
+                font-size: 10px;
+                fill: var(--text-tertiary);
             }
 
-            60%,
-            100% {
+            .axis line,
+            .axis path {
+                stroke: var(--border-subtle);
+            }
+
+            .velocity-bar {
+                fill: var(--accent-blue);
+                transition: fill 0.2s;
+            }
+
+            .velocity-bar:hover {
+                fill: var(--accent-blue-hover);
+            }
+
+            .velocity-line {
+                fill: none;
+                stroke: var(--accent-red);
+                stroke-width: 2;
+            }
+
+            .tag-area {
+                transition: opacity 0.3s;
+            }
+
+            .tag-area:hover {
+                opacity: 0.8;
+                stroke: var(--text-primary);
+                stroke-width: 2px;
+            }
+
+            .tag-legend-item {
+                cursor: pointer;
+                transition: opacity 0.2s;
+            }
+
+            .tag-legend-item:hover {
+                opacity: 0.7;
+            }
+
+            .tag-legend-item.inactive {
+                opacity: 0.3;
+            }
+
+            .tag-line {
+                fill: none;
+                stroke-width: 2;
+                transition: all 0.3s;
+            }
+
+            .tag-line:hover {
+                stroke-width: 3;
+            }
+
+            /* Loading state */
+            .loading {
+                display: flex;
+                align-items: center;
+                justify-content: center;
+                height: 100%;
+                color: var(--text-tertiary);
+                font-size: 14px;
+            }
+
+            .loading::after {
                 content: '...';
+                animation: dots 1.5s steps(4, end) infinite;
             }
-        }
 
-        /* Tooltip */
-        .tooltip {
-            position: absolute;
-            background: rgba(0, 0, 0, 0.85);
-            color: white;
-            padding: 8px 12px;
-            border-radius: 6px;
-            font-size: 12px;
-            pointer-events: none;
-            opacity: 0;
-            transition: opacity 0.2s;
-            z-index: 1000;
-            max-width: 250px;
-            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
-        }
+            @keyframes dots {
 
-        .tooltip.visible {
-            opacity: 1;
-        }
+                0%,
+                20% {
+                    content: '.';
+                }
 
-        /* Last updated indicator */
-        .last-updated {
-            position: fixed;
-            bottom: 20px;
-            right: 20px;
-            background: rgba(255, 255, 255, 0.95);
-            padding: 8px 16px;
-            border-radius: 8px;
-            font-size: 11px;
-            color: #7f8c8d;
-            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
-            z-index: 1000;
-        }
+                40% {
+                    content: '..';
+                }
 
-        .last-updated .dot {
-            display: inline-block;
-            width: 8px;
-            height: 8px;
-            border-radius: 50%;
-            background: #27ae60;
-            margin-right: 6px;
-            animation: pulse 2s infinite;
-        }
+                60%,
+                100% {
+                    content: '...';
+                }
+            }
 
-        @keyframes pulse {
+            /* Tooltip */
+            .tooltip {
+                position: absolute;
+                background: rgba(0, 0, 0, 0.9);
+                color: white;
+                padding: 8px 12px;
+                border-radius: 6px;
+                font-size: 12px;
+                pointer-events: none;
+                opacity: 0;
+                transition: opacity 0.2s;
+                z-index: 1000;
+                max-width: 250px;
+                box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
+            }
 
-            0%,
-            100% {
+            .tooltip.visible {
                 opacity: 1;
             }
 
-            50% {
-                opacity: 0.5;
+            /* Last updated indicator */
+            .last-updated {
+                position: fixed;
+                bottom: 20px;
+                right: 20px;
+                background: var(--bg-secondary);
+                padding: 8px 16px;
+                border-radius: 8px;
+                font-size: 11px;
+                color: var(--text-secondary);
+                box-shadow: var(--shadow-md);
+                z-index: 1000;
             }
-        }
+
+            .last-updated .dot {
+                display: inline-block;
+                width: 8px;
+                height: 8px;
+                border-radius: 50%;
+                background: var(--accent-green);
+                margin-right: 6px;
+                animation: pulse 2s infinite;
+            }
+
+            @keyframes pulse {
+
+                0%,
+                100% {
+                    opacity: 1;
+                }
+
+                50% {
+                    opacity: 0.5;
+                }
+            }
     </style>
 </head>
 
@@ -485,6 +486,11 @@ $isLoggedIn = is_logged_in();
     <script>
         const BASE_PATH = <?= json_encode($config['base_path']) ?>;
         let dashboardData = null;
+
+        // Helper to get CSS variable value
+        function getCSSVariable(name) {
+            return getComputedStyle(document.documentElement).getPropertyValue(name).trim();
+        }
 
         // Fetch dashboard data
         async function fetchDashboardData() {
@@ -625,7 +631,7 @@ $isLoggedIn = is_logged_in();
             node.append('circle')
                 .attr('r', d => sizeScale(d.count))
                 .attr('fill', d => colorScale(d.count))
-                .attr('stroke', '#fff')
+                .attr('stroke', getCSSVariable('--bg-secondary'))
                 .attr('stroke-width', 2);
 
             node.append('text')
@@ -633,7 +639,7 @@ $isLoggedIn = is_logged_in();
                 .attr('x', 0)
                 .attr('y', d => sizeScale(d.count) + (isFullscreen ? 15 : 12))
                 .attr('text-anchor', 'middle')
-                .attr('fill', '#2c3e50')
+                .attr('fill', getCSSVariable('--text-primary'))
                 .attr('font-size', fontSize);
 
             // Tooltip and click handling
@@ -643,7 +649,8 @@ $isLoggedIn = is_logged_in();
                     <strong>${d.label}</strong><br>
                     Count: ${d.count} bookmarks<br>
                     First used: ${new Date(d.first_seen).toLocaleDateString()}<br>
-                    <em style="font-size: 10px; color: #95a5a6;">Click to view bookmarks</em>
+                    First used: ${new Date(d.first_seen).toLocaleDateString()}<br>
+                    <em style="font-size: 10px; color: ${getCSSVariable('--text-secondary')};">Click to view bookmarks</em>
                 `;
                 tooltip.classList.add('visible');
 
@@ -913,7 +920,8 @@ $isLoggedIn = is_logged_in();
                     .attr('x', width / 2)
                     .attr('y', height / 2)
                     .attr('text-anchor', 'middle')
-                    .attr('fill', '#95a5a6')
+                    .attr('text-anchor', 'middle')
+                    .attr('fill', getCSSVariable('--text-secondary'))
                     .text('Not enough data to display chart');
                 return;
             }
@@ -930,7 +938,8 @@ $isLoggedIn = is_logged_in();
                     .attr('x', width / 2)
                     .attr('y', height / 2)
                     .attr('text-anchor', 'middle')
-                    .attr('fill', '#95a5a6')
+                    .attr('text-anchor', 'middle')
+                    .attr('fill', getCSSVariable('--text-secondary'))
                     .text('No recent activity data');
                 return;
             }
@@ -1049,7 +1058,8 @@ $isLoggedIn = is_logged_in();
                 .attr('x', 18)
                 .attr('y', 10)
                 .attr('font-size', '11px')
-                .attr('fill', '#2c3e50')
+                .attr('font-size', '11px')
+                .attr('fill', getCSSVariable('--text-primary'))
                 .text(d => d.tag);
         }
 
@@ -1105,9 +1115,9 @@ $isLoggedIn = is_logged_in();
             // Add font styles and line styles to ensure everything renders correctly
             const style = `
                 <style>
-                    text { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif; }
-                    .network-node text { font-weight: 600; text-shadow: 0 1px 4px white, 0 0 10px white; }
-                    .network-link { stroke: #bdc3c7; stroke-opacity: 0.4; fill: none; }
+                    text { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif; fill: ${getCSSVariable('--text-primary')}; }
+                    .network-node text { font-weight: 600; text-shadow: 0 1px 4px ${getCSSVariable('--bg-secondary')}, 0 0 10px ${getCSSVariable('--bg-secondary')}; }
+                    .network-link { stroke: ${getCSSVariable('--border-color')}; stroke-opacity: 0.4; fill: none; }
                 </style>
             `;
             source = source.replace('</svg>', style + '</svg>');
@@ -1120,7 +1130,7 @@ $isLoggedIn = is_logged_in();
             const ctx = canvas.getContext('2d');
 
             // Fill background
-            ctx.fillStyle = '#ffffff';
+            ctx.fillStyle = getCSSVariable('--bg-secondary');
             ctx.fillRect(0, 0, canvas.width, canvas.height);
 
             // Create image from SVG

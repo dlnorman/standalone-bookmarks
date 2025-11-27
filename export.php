@@ -37,7 +37,8 @@ if (isset($_GET['download']) && $_GET['download'] === '1') {
     exit;
 }
 
-function exportBookmarks($db, $config) {
+function exportBookmarks($db, $config)
+{
     // Fetch all bookmarks
     $stmt = $db->query("SELECT * FROM bookmarks ORDER BY created_at DESC");
     $bookmarks = $stmt->fetchAll(PDO::FETCH_ASSOC);
@@ -92,10 +93,12 @@ $total = $stmt->fetch(PDO::FETCH_ASSOC)['total'];
 ?>
 <!DOCTYPE html>
 <html lang="en">
+
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Export Bookmarks - <?= htmlspecialchars($config['site_title']) ?></title>
+    <link rel="stylesheet" href="css/main.css">
     <style>
         * {
             box-sizing: border-box;
@@ -107,22 +110,23 @@ $total = $stmt->fetch(PDO::FETCH_ASSOC)['total'];
             margin: 0 auto;
             padding: 20px;
             line-height: 1.6;
-            background: #f5f5f5;
-            color: #333;
+            background: var(--bg-primary);
+            color: var(--text-primary);
+            transition: background-color 0.3s ease, color 0.3s ease;
         }
 
         header {
-            background: white;
+            background: var(--bg-secondary);
             padding: 20px;
             border-radius: 8px;
             margin-bottom: 20px;
-            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+            box-shadow: var(--shadow-sm);
         }
 
         h1 {
             margin: 0 0 10px 0;
             font-size: 24px;
-            color: #2c3e50;
+            color: var(--text-primary);
         }
 
         .breadcrumb {
@@ -131,7 +135,7 @@ $total = $stmt->fetch(PDO::FETCH_ASSOC)['total'];
         }
 
         .breadcrumb a {
-            color: #3498db;
+            color: var(--accent-blue);
             text-decoration: none;
         }
 
@@ -140,16 +144,16 @@ $total = $stmt->fetch(PDO::FETCH_ASSOC)['total'];
         }
 
         .content {
-            background: white;
+            background: var(--bg-secondary);
             padding: 30px;
             border-radius: 8px;
-            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+            box-shadow: var(--shadow-sm);
         }
 
         .info-box {
             padding: 15px;
-            background: #e7f3ff;
-            border-left: 4px solid #3498db;
+            background: var(--bg-tertiary);
+            border-left: 4px solid var(--accent-blue);
             border-radius: 4px;
             margin-bottom: 20px;
         }
@@ -157,7 +161,7 @@ $total = $stmt->fetch(PDO::FETCH_ASSOC)['total'];
         .info-box h3 {
             margin: 0 0 10px 0;
             font-size: 16px;
-            color: #2c3e50;
+            color: var(--text-primary);
         }
 
         .info-box ul {
@@ -171,7 +175,7 @@ $total = $stmt->fetch(PDO::FETCH_ASSOC)['total'];
 
         .stats {
             padding: 20px;
-            background: #f8f9fa;
+            background: var(--bg-tertiary);
             border-radius: 4px;
             margin-bottom: 20px;
             text-align: center;
@@ -180,20 +184,20 @@ $total = $stmt->fetch(PDO::FETCH_ASSOC)['total'];
         .stats .count {
             font-size: 48px;
             font-weight: bold;
-            color: #3498db;
+            color: var(--accent-blue);
             margin-bottom: 5px;
         }
 
         .stats .label {
             font-size: 14px;
-            color: #7f8c8d;
+            color: var(--text-tertiary);
             text-transform: uppercase;
             letter-spacing: 1px;
         }
 
         .btn {
             padding: 12px 24px;
-            background: #3498db;
+            background: var(--accent-blue);
             color: white;
             border: none;
             border-radius: 4px;
@@ -204,7 +208,7 @@ $total = $stmt->fetch(PDO::FETCH_ASSOC)['total'];
         }
 
         .btn:hover {
-            background: #2980b9;
+            background: var(--accent-blue-hover);
         }
 
         .btn-large {
@@ -214,11 +218,11 @@ $total = $stmt->fetch(PDO::FETCH_ASSOC)['total'];
         }
 
         .btn-secondary {
-            background: #95a5a6;
+            background: var(--text-tertiary);
         }
 
         .btn-secondary:hover {
-            background: #7f8c8d;
+            background: var(--text-secondary);
         }
 
         .actions {
@@ -233,7 +237,8 @@ $total = $stmt->fetch(PDO::FETCH_ASSOC)['total'];
                 padding: 10px;
             }
 
-            header, .content {
+            header,
+            .content {
                 padding: 15px;
             }
 
@@ -252,6 +257,7 @@ $total = $stmt->fetch(PDO::FETCH_ASSOC)['total'];
         }
     </style>
 </head>
+
 <body>
     <header>
         <div class="breadcrumb">
@@ -265,12 +271,14 @@ $total = $stmt->fetch(PDO::FETCH_ASSOC)['total'];
             <h3>About Export</h3>
             <p>This tool exports all your bookmarks in the Netscape Bookmark File Format, compatible with:</p>
             <ul>
-                <li><strong>Pinboard</strong> - Import at <a href="https://pinboard.in/import/" target="_blank">pinboard.in/import/</a></li>
+                <li><strong>Pinboard</strong> - Import at <a href="https://pinboard.in/import/"
+                        target="_blank">pinboard.in/import/</a></li>
                 <li><strong>Delicious</strong> - Import bookmarks in HTML format</li>
                 <li><strong>Most browsers</strong> - Firefox, Chrome, Safari, Edge can import this format</li>
                 <li><strong>Other bookmarking services</strong> - Most services support this standard format</li>
             </ul>
-            <p>The export includes all bookmark data: URLs, titles, descriptions, tags, privacy settings, and creation dates.</p>
+            <p>The export includes all bookmark data: URLs, titles, descriptions, tags, privacy settings, and creation
+                dates.</p>
         </div>
 
         <div class="stats">
@@ -284,4 +292,5 @@ $total = $stmt->fetch(PDO::FETCH_ASSOC)['total'];
         </div>
     </div>
 </body>
+
 </html>

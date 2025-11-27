@@ -192,6 +192,7 @@ function importBookmarks($db, $content)
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Import Bookmarks - <?= htmlspecialchars($config['site_title']) ?></title>
     <?php render_nav_styles(); ?>
+    <link rel="stylesheet" href="css/main.css">
     <style>
         * {
             box-sizing: border-box;
@@ -202,8 +203,9 @@ function importBookmarks($db, $content)
             margin: 0;
             padding: 0;
             line-height: 1.6;
-            background: #f5f5f5;
-            color: #333;
+            background: var(--bg-primary);
+            color: var(--text-primary);
+            transition: background-color 0.3s ease, color 0.3s ease;
         }
 
         .page-container {
@@ -213,34 +215,34 @@ function importBookmarks($db, $content)
         }
 
         .content {
-            background: white;
+            background: var(--bg-secondary);
             padding: 30px;
             border-radius: 8px;
-            box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+            box-shadow: var(--shadow-sm);
         }
 
         .message {
             padding: 15px;
             margin-bottom: 20px;
             border-radius: 4px;
-            background: #d4edda;
-            color: #155724;
-            border: 1px solid #c3e6cb;
+            background: rgba(39, 174, 96, 0.1);
+            color: var(--accent-green);
+            border: 1px solid rgba(39, 174, 96, 0.2);
         }
 
         .error {
             padding: 15px;
             margin-bottom: 20px;
             border-radius: 4px;
-            background: #f8d7da;
-            color: #721c24;
-            border: 1px solid #f5c6cb;
+            background: rgba(231, 76, 60, 0.1);
+            color: var(--accent-red);
+            border: 1px solid rgba(231, 76, 60, 0.2);
         }
 
         .stats {
             margin-top: 15px;
             padding: 15px;
-            background: #e7f3ff;
+            background: var(--bg-tertiary);
             border-radius: 4px;
         }
 
@@ -256,8 +258,8 @@ function importBookmarks($db, $content)
 
         .info-box {
             padding: 15px;
-            background: #e7f3ff;
-            border-left: 4px solid #3498db;
+            background: var(--bg-tertiary);
+            border-left: 4px solid var(--accent-blue);
             border-radius: 4px;
             margin-bottom: 20px;
         }
@@ -265,7 +267,7 @@ function importBookmarks($db, $content)
         .info-box h3 {
             margin: 0 0 10px 0;
             font-size: 16px;
-            color: #2c3e50;
+            color: var(--text-primary);
         }
 
         .info-box ul {
@@ -285,24 +287,25 @@ function importBookmarks($db, $content)
             display: block;
             margin-bottom: 8px;
             font-weight: 500;
-            color: #2c3e50;
+            color: var(--text-secondary);
         }
 
         input[type="file"] {
             padding: 10px;
-            border: 2px dashed #ddd;
+            border: 2px dashed var(--border-color);
             border-radius: 4px;
             width: 100%;
             cursor: pointer;
+            color: var(--text-primary);
         }
 
         input[type="file"]:hover {
-            border-color: #3498db;
+            border-color: var(--accent-blue);
         }
 
         .btn {
             padding: 12px 24px;
-            background: #3498db;
+            background: var(--accent-blue);
             color: white;
             border: none;
             border-radius: 4px;
@@ -313,15 +316,15 @@ function importBookmarks($db, $content)
         }
 
         .btn:hover {
-            background: #2980b9;
+            background: var(--accent-blue-hover);
         }
 
         .btn-secondary {
-            background: #95a5a6;
+            background: var(--text-tertiary);
         }
 
         .btn-secondary:hover {
-            background: #7f8c8d;
+            background: var(--text-secondary);
         }
 
         .actions {

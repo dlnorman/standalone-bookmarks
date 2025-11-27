@@ -250,431 +250,7 @@ if (!empty($export) && !empty($bookmarks)) {
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Archive - <?= htmlspecialchars($config['site_title']) ?></title>
     <?php render_nav_styles(); ?>
-    <style>
-        * {
-            box-sizing: border-box;
-        }
-
-        body {
-            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
-            margin: 0;
-            padding: 0;
-            line-height: 1.6;
-            background: #f5f5f5;
-            color: #333;
-        }
-
-        .page-container {
-            max-width: 900px;
-            margin: 0 auto;
-            padding: 20px;
-        }
-
-        .btn {
-            padding: 8px 15px;
-            background: #95a5a6;
-            color: white;
-            text-decoration: none;
-            border-radius: 4px;
-            font-size: 13px;
-            display: inline-block;
-            border: none;
-            cursor: pointer;
-        }
-
-        .btn:hover {
-            background: #7f8c8d;
-        }
-
-        .btn-primary {
-            background: #27ae60;
-        }
-
-        .btn-primary:hover {
-            background: #229954;
-        }
-
-        .btn-secondary {
-            background: #3498db;
-        }
-
-        .btn-secondary:hover {
-            background: #2980b9;
-        }
-
-        .archive-controls {
-            background: white;
-            padding: 20px;
-            border-radius: 8px;
-            margin-bottom: 20px;
-            box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
-        }
-
-        .control-section {
-            margin-bottom: 20px;
-        }
-
-        .control-section:last-child {
-            margin-bottom: 0;
-        }
-
-        .control-section h3 {
-            margin: 0 0 10px 0;
-            font-size: 16px;
-            color: #2c3e50;
-        }
-
-        .view-tabs {
-            display: flex;
-            gap: 10px;
-            margin-bottom: 15px;
-            flex-wrap: wrap;
-        }
-
-        .view-tabs button {
-            padding: 8px 16px;
-            background: #ecf0f1;
-            color: #2c3e50;
-            border: none;
-            border-radius: 4px;
-            cursor: pointer;
-            font-size: 13px;
-        }
-
-        .view-tabs button.active {
-            background: #3498db;
-            color: white;
-        }
-
-        .view-tabs button:hover:not(.active) {
-            background: #d5dbdb;
-        }
-
-        .date-navigation {
-            display: flex;
-            align-items: center;
-            gap: 10px;
-            flex-wrap: wrap;
-        }
-
-        .date-navigation input[type="date"] {
-            padding: 8px;
-            border: 1px solid #ddd;
-            border-radius: 4px;
-            font-size: 14px;
-        }
-
-        .custom-range {
-            display: flex;
-            gap: 10px;
-            align-items: center;
-            flex-wrap: wrap;
-        }
-
-        .stats-summary {
-            display: flex;
-            gap: 20px;
-            flex-wrap: wrap;
-            padding: 15px;
-            background: #e8f4f8;
-            border-radius: 4px;
-            margin-top: 15px;
-        }
-
-        .stat-item {
-            font-size: 14px;
-            color: #2c3e50;
-        }
-
-        .stat-item strong {
-            color: #3498db;
-            font-size: 18px;
-            display: block;
-        }
-
-        .group-section {
-            background: white;
-            padding: 20px;
-            margin-bottom: 20px;
-            border-radius: 8px;
-            box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
-        }
-
-        .group-header {
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-            margin-bottom: 15px;
-            padding-bottom: 10px;
-            border-bottom: 2px solid #3498db;
-            cursor: pointer;
-        }
-
-        .group-header h2 {
-            margin: 0;
-            font-size: 20px;
-            color: #2c3e50;
-        }
-
-        .group-count {
-            background: #3498db;
-            color: white;
-            padding: 4px 12px;
-            border-radius: 12px;
-            font-size: 13px;
-            font-weight: bold;
-        }
-
-        .group-bookmarks {
-            display: block;
-        }
-
-        .group-bookmarks.collapsed {
-            display: none;
-        }
-
-        .bookmark {
-            background: #f8f9fa;
-            padding: 15px;
-            margin-bottom: 15px;
-            border-radius: 6px;
-            border-left: 3px solid #3498db;
-        }
-
-        .bookmark:last-child {
-            margin-bottom: 0;
-        }
-
-        .bookmark h3 {
-            margin: 0 0 8px 0;
-            font-size: 16px;
-        }
-
-        .bookmark h3 a {
-            color: #2c3e50;
-            text-decoration: none;
-        }
-
-        .bookmark h3 a:hover {
-            color: #3498db;
-        }
-
-        .bookmark .url {
-            color: #7f8c8d;
-            font-size: 12px;
-            word-break: break-all;
-            margin-bottom: 8px;
-        }
-
-        .bookmark .description {
-            color: #555;
-            font-size: 14px;
-            margin-bottom: 8px;
-            line-height: 1.6;
-        }
-
-        /* Markdown styling within descriptions */
-        .bookmark .description p {
-            margin: 0.75em 0;
-        }
-
-        .bookmark .description p:first-child {
-            margin-top: 0;
-        }
-
-        .bookmark .description p:last-child {
-            margin-bottom: 0;
-        }
-
-        .bookmark .description h1,
-        .bookmark .description h2,
-        .bookmark .description h3,
-        .bookmark .description h4,
-        .bookmark .description h5,
-        .bookmark .description h6 {
-            margin: 15px 0 10px 0;
-            color: #2c3e50;
-            font-weight: 600;
-        }
-
-        .bookmark .description h1 {
-            font-size: 1.5em;
-        }
-
-        .bookmark .description h2 {
-            font-size: 1.3em;
-        }
-
-        .bookmark .description h3 {
-            font-size: 1.1em;
-        }
-
-        .bookmark .description h4 {
-            font-size: 1em;
-        }
-
-        .bookmark .description h5 {
-            font-size: 0.9em;
-        }
-
-        .bookmark .description h6 {
-            font-size: 0.85em;
-        }
-
-        .bookmark .description strong {
-            font-weight: 600;
-            color: #2c3e50;
-        }
-
-        .bookmark .description em {
-            font-style: italic;
-        }
-
-        .bookmark .description code {
-            background: #f4f4f4;
-            padding: 2px 6px;
-            border-radius: 3px;
-            font-family: 'Monaco', 'Menlo', 'Courier New', monospace;
-            font-size: 0.9em;
-            color: #c7254e;
-        }
-
-        .bookmark .description pre {
-            background: #f4f4f4;
-            border: 1px solid #ddd;
-            border-radius: 4px;
-            padding: 0 12px;
-            overflow-x: auto;
-            margin: 0;
-        }
-
-        .bookmark .description pre code {
-            background: none;
-            padding: 0;
-            color: #333;
-            font-size: 0.85em;
-        }
-
-        .bookmark .description ul,
-        .bookmark .description ol {
-            margin: 10px 0;
-            padding-left: 30px;
-        }
-
-        .bookmark .description li {
-            margin: 5px 0;
-        }
-
-        .bookmark .description blockquote {
-            border-left: 4px solid #3498db;
-            padding-left: 15px;
-            margin: 0;
-            color: #666;
-            font-style: italic;
-        }
-
-        .bookmark .description hr {
-            border: none;
-            border-top: 2px solid #ddd;
-            margin: 15px 0;
-        }
-
-        .bookmark .description a {
-            color: #3498db;
-            text-decoration: none;
-        }
-
-        .bookmark .description a:hover {
-            text-decoration: underline;
-        }
-
-        .bookmark .screenshot {
-            margin: 10px 0;
-        }
-
-        .bookmark .screenshot img {
-            max-width: 100%;
-            height: auto;
-            border: 1px solid #ddd;
-            border-radius: 4px;
-            cursor: pointer;
-        }
-
-        .bookmark .screenshot img.thumbnail {
-            max-width: 300px;
-        }
-
-        .bookmark .meta {
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-            flex-wrap: wrap;
-            gap: 10px;
-            font-size: 12px;
-            color: #7f8c8d;
-        }
-
-        .bookmark.private {
-            border-left-color: #e67e22;
-        }
-
-        .bookmark .private-badge {
-            display: inline-block;
-            padding: 2px 8px;
-            background: #e67e22;
-            color: white;
-            border-radius: 3px;
-            font-size: 11px;
-            font-weight: bold;
-            margin-left: 10px;
-        }
-
-        .bookmark .tags {
-            color: #3498db;
-        }
-
-        .no-results {
-            background: white;
-            padding: 40px;
-            text-align: center;
-            border-radius: 8px;
-            color: #7f8c8d;
-        }
-
-        .export-section {
-            display: flex;
-            gap: 10px;
-            flex-wrap: wrap;
-        }
-
-        @media (max-width: 600px) {
-            .page-container {
-                padding: 10px;
-            }
-
-            .archive-controls {
-                padding: 15px;
-            }
-
-            .date-navigation {
-                flex-direction: column;
-                align-items: stretch;
-            }
-
-            .date-navigation button,
-            .date-navigation input {
-                width: 100%;
-            }
-
-            .group-section {
-                padding: 15px;
-            }
-
-            .bookmark {
-                padding: 12px;
-            }
-        }
-    </style>
+    <link rel="stylesheet" href="css/main.css">
 </head>
 
 <body>
@@ -758,44 +334,61 @@ if (!empty($export) && !empty($bookmarks)) {
                     <div class="group-bookmarks">
                         <?php foreach ($group['bookmarks'] as $bookmark): ?>
                             <div class="bookmark<?= !empty($bookmark['private']) ? ' private' : '' ?>">
-                                <h3>
-                                    <a href="<?= htmlspecialchars($bookmark['url']) ?>" target="_blank"
-                                        rel="noopener noreferrer"><?= htmlspecialchars($bookmark['title']) ?></a>
-                                    <?php if (!empty($bookmark['private'])): ?>
-                                        <span class="private-badge">PRIVATE</span>
-                                    <?php endif; ?>
-                                </h3>
-                                <div class="url"><?= htmlspecialchars($bookmark['url']) ?></div>
-                                <?php if (!empty($bookmark['description'])): ?>
-                                    <div class="description"><?= parseMarkdown($bookmark['description']) ?></div>
-                                <?php endif; ?>
+
+                                <!-- Screenshot Container (floats right) -->
                                 <?php if (!empty($bookmark['screenshot'])): ?>
-                                    <div class="screenshot">
+                                    <div class="bookmark-screenshot-container">
                                         <img src="<?= $config['base_path'] . '/' . htmlspecialchars($bookmark['screenshot']) ?>"
-                                            class="thumbnail" alt="Screenshot" onclick="this.classList.toggle('thumbnail')"
-                                            title="Click to toggle size">
+                                            alt="Screenshot" onclick="this.classList.toggle('thumbnail')" title="Click to toggle size">
+                                    </div>
+                                <?php else: ?>
+                                    <div class="bookmark-screenshot-container">
+                                        <div class="bookmark-screenshot-placeholder">
+                                            <?= strtoupper(substr($bookmark['title'], 0, 1)) ?>
+                                        </div>
                                     </div>
                                 <?php endif; ?>
-                                <div class="meta">
-                                    <div>
-                                        <?php if (!empty($bookmark['tags'])): ?>
-                                            <span class="tags">Tags:
-                                                <?php
-                                                $tagList = array_map('trim', explode(',', $bookmark['tags']));
-                                                $tagLinks = [];
-                                                foreach ($tagList as $tagItem) {
-                                                    $tagLinks[] = '<a href="' . $config['base_path'] . '/?tag=' . urlencode($tagItem) . '" style="color: #3498db; text-decoration: none;">' . htmlspecialchars($tagItem) . '</a>';
-                                                }
-                                                echo implode(', ', $tagLinks);
-                                                ?>
+
+                                <!-- Content (wraps around screenshot) -->
+                                <div class="bookmark-content">
+                                    <div class="bookmark-header">
+                                        <h2>
+                                            <a href="<?= htmlspecialchars($bookmark['url']) ?>" target="_blank"
+                                                rel="noopener noreferrer"><?= htmlspecialchars($bookmark['title']) ?></a>
+                                            <?php if (!empty($bookmark['private'])): ?>
+                                                <span class="private-badge">PRIVATE</span>
+                                            <?php endif; ?>
+                                        </h2>
+                                        <div class="url"><?= htmlspecialchars($bookmark['url']) ?></div>
+                                    </div>
+
+                                    <?php if (!empty($bookmark['description'])): ?>
+                                        <div class="description"><?= parseMarkdown($bookmark['description']) ?></div>
+                                    <?php endif; ?>
+
+                                    <?php if (!empty($bookmark['tags'])): ?>
+                                        <div class="bookmark-tags">
+                                            <?php
+                                            $tagList = array_map('trim', explode(',', $bookmark['tags']));
+                                            foreach ($tagList as $tagItem) {
+                                                echo '<a href="' . $config['base_path'] . '/?tag=' . urlencode($tagItem) . '" class="bookmark-tag">' . htmlspecialchars($tagItem) . '</a>';
+                                            }
+                                            ?>
+                                        </div>
+                                    <?php endif; ?>
+
+                                    <div class="meta">
+                                        <div class="bookmark-meta-left">
+                                            <span class="bookmark-meta-item">
+                                                <?= date($config['date_format'], strtotime($bookmark['created_at'])) ?>
                                             </span>
-                                        <?php endif; ?>
-                                        <span> &middot;
-                                            <?= date($config['date_format'], strtotime($bookmark['created_at'])) ?></span>
-                                        <?php if (!empty($bookmark['archive_url'])): ?>
-                                            <span> &middot; <a href="<?= htmlspecialchars($bookmark['archive_url']) ?>" target="_blank"
-                                                    rel="noopener noreferrer" style="color: #27ae60;">Archive</a></span>
-                                        <?php endif; ?>
+                                            <?php if (!empty($bookmark['archive_url'])): ?>
+                                                <span class="bookmark-meta-item">
+                                                    <a href="<?= htmlspecialchars($bookmark['archive_url']) ?>" target="_blank"
+                                                        rel="noopener noreferrer" class="bookmark-archive-link">📦 Archive</a>
+                                                </span>
+                                            <?php endif; ?>
+                                        </div>
                                     </div>
                                 </div>
                             </div>
