@@ -204,6 +204,8 @@ $users = $db->query("SELECT * FROM users ORDER BY created_at DESC")->fetchAll(PD
         </div>
     </div>
 
+    <?php render_nav_scripts(); ?>
+
     <!-- Reset Password Modal -->
     <div id="resetModal" class="modal">
         <div class="modal-content">

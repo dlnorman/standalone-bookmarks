@@ -35,271 +35,6 @@ $csrfToken = csrf_get_token();
     <title>Check Bookmarks - <?= htmlspecialchars($config['site_title']) ?></title>
     <?php render_nav_styles(); ?>
     <link rel="stylesheet" href="css/main.css">
-    <style>
-        * {
-            box-sizing: border-box;
-            margin: 0;
-            padding: 0;
-        }
-
-        body {
-            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
-            background: var(--bg-primary);
-            color: var(--text-primary);
-            margin: 0;
-            padding: 0;
-            min-height: 100vh;
-            transition: background-color 0.3s ease, color 0.3s ease;
-        }
-
-        .container {
-            max-width: 1200px;
-            margin: 0 auto;
-            padding: 20px;
-        }
-
-        .header {
-            background: var(--bg-secondary);
-            padding: 30px;
-            border-radius: 12px;
-            box-shadow: var(--shadow-sm);
-            margin-bottom: 20px;
-        }
-
-        .header h1 {
-            font-size: 28px;
-            font-weight: 700;
-            color: var(--text-primary);
-            margin-bottom: 10px;
-        }
-
-        .header p {
-            color: var(--text-secondary);
-            font-size: 14px;
-        }
-
-        .stats {
-            display: grid;
-            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
-            gap: 15px;
-            margin-bottom: 20px;
-        }
-
-        .stat-card {
-            background: var(--bg-secondary);
-            padding: 20px;
-            border-radius: 12px;
-            box-shadow: var(--shadow-sm);
-        }
-
-        .stat-card .label {
-            font-size: 11px;
-            text-transform: uppercase;
-            letter-spacing: 0.5px;
-            color: var(--text-tertiary);
-            font-weight: 600;
-            margin-bottom: 8px;
-        }
-
-        .stat-card .value {
-            font-size: 32px;
-            font-weight: 700;
-            color: var(--text-primary);
-            line-height: 1;
-        }
-
-        .stat-card.broken .value {
-            color: var(--accent-red);
-        }
-
-        .stat-card.clickable {
-            cursor: pointer;
-            transition: transform 0.2s, box-shadow 0.2s;
-        }
-
-        .stat-card.clickable:hover {
-            transform: translateY(-3px);
-            box-shadow: var(--shadow-md);
-        }
-
-        .stat-card .hint {
-            font-size: 10px;
-            color: var(--text-secondary);
-            margin-top: 5px;
-        }
-
-        .stat-card.completed .value {
-            color: var(--accent-green);
-        }
-
-        .actions {
-            background: var(--bg-secondary);
-            padding: 20px;
-            border-radius: 12px;
-            box-shadow: var(--shadow-sm);
-            margin-bottom: 20px;
-        }
-
-        .btn {
-            background: var(--accent-blue);
-            color: white;
-            border: none;
-            padding: 12px 24px;
-            border-radius: 8px;
-            font-size: 14px;
-            font-weight: 600;
-            cursor: pointer;
-            transition: all 0.2s;
-        }
-
-        .btn:hover {
-            background: var(--accent-blue-hover);
-            transform: translateY(-1px);
-            box-shadow: var(--shadow-md);
-        }
-
-        .btn:disabled {
-            background: var(--text-tertiary);
-            cursor: not-allowed;
-            transform: none;
-        }
-
-        .progress {
-            background: var(--bg-secondary);
-            padding: 20px;
-            border-radius: 12px;
-            box-shadow: var(--shadow-sm);
-            margin-bottom: 20px;
-            display: none;
-        }
-
-        .progress.active {
-            display: block;
-        }
-
-        .progress-bar {
-            background: var(--bg-tertiary);
-            height: 30px;
-            border-radius: 15px;
-            overflow: hidden;
-            margin-bottom: 10px;
-        }
-
-        .progress-fill {
-            background: linear-gradient(90deg, var(--accent-blue) 0%, var(--accent-purple) 100%);
-            height: 100%;
-            width: 0%;
-            transition: width 0.3s;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            color: white;
-            font-size: 12px;
-            font-weight: 600;
-        }
-
-        .progress-text {
-            text-align: center;
-            color: var(--text-secondary);
-            font-size: 14px;
-        }
-
-        .results {
-            background: var(--bg-secondary);
-            padding: 20px;
-            border-radius: 12px;
-            box-shadow: var(--shadow-sm);
-        }
-
-        .results h2 {
-            font-size: 20px;
-            font-weight: 700;
-            color: var(--text-primary);
-            margin-bottom: 15px;
-        }
-
-        .result-item {
-            padding: 15px;
-            border-bottom: 1px solid var(--border-subtle);
-            display: flex;
-            align-items: center;
-            gap: 15px;
-        }
-
-        .result-item:last-child {
-            border-bottom: none;
-        }
-
-        .result-status {
-            width: 8px;
-            height: 8px;
-            border-radius: 50%;
-            flex-shrink: 0;
-        }
-
-        .result-status.ok {
-            background: var(--accent-green);
-        }
-
-        .result-status.broken {
-            background: var(--accent-red);
-        }
-
-        .result-status.pending {
-            background: var(--accent-orange);
-        }
-
-        .result-info {
-            flex: 1;
-            min-width: 0;
-        }
-
-        .result-title {
-            font-weight: 600;
-            color: var(--text-primary);
-            margin-bottom: 3px;
-            white-space: nowrap;
-            overflow: hidden;
-            text-overflow: ellipsis;
-        }
-
-        .result-url {
-            font-size: 12px;
-            color: var(--text-secondary);
-            white-space: nowrap;
-            overflow: hidden;
-            text-overflow: ellipsis;
-        }
-
-        .result-message {
-            font-size: 12px;
-            color: var(--text-tertiary);
-        }
-
-        .result-time {
-            font-size: 11px;
-            color: var(--text-tertiary);
-            flex-shrink: 0;
-        }
-
-        .empty-state {
-            text-align: center;
-            padding: 40px 20px;
-            color: var(--text-tertiary);
-        }
-
-        @media (max-width: 768px) {
-            .stats {
-                grid-template-columns: repeat(2, 1fr);
-            }
-
-            .result-item {
-                flex-direction: column;
-                align-items: flex-start;
-                gap: 8px;
-            }
-        }
-    </style>
 </head>
 
 <body>
@@ -308,54 +43,56 @@ $csrfToken = csrf_get_token();
     render_nav($config, $isLoggedIn, 'check-bookmarks');
     ?>
 
-    <div class="container">
-        <div class="header">
+    <div class="check-bookmarks-container">
+        <div class="check-bookmarks-header">
             <h1>Check Bookmarks</h1>
             <p>Validate URLs and detect broken links across your bookmark collection</p>
             <p style="margin-top: 10px;"><a href="check-diagnostics.php" style="color: #7f8c8d; font-size: 13px;">🔍
                     View Diagnostics</a> (helpful if you encounter issues)</p>
         </div>
 
-        <div class="stats">
-            <div class="stat-card">
+        <div class="check-stats">
+            <div class="check-stat-card">
                 <div class="label">Total Jobs</div>
                 <div class="value" id="stat-total">-</div>
             </div>
-            <div class="stat-card">
+            <div class="check-stat-card">
                 <div class="label">Pending</div>
                 <div class="value" id="stat-pending">-</div>
             </div>
-            <div class="stat-card completed">
+            <div class="check-stat-card completed">
                 <div class="label">Completed</div>
                 <div class="value" id="stat-completed">-</div>
             </div>
-            <div class="stat-card broken clickable" id="broken-card" onclick="viewBrokenLinks()">
+            <div class="check-stat-card broken clickable" id="broken-card" onclick="viewBrokenLinks()">
                 <div class="label">Broken Links</div>
                 <div class="value" id="stat-broken">-</div>
                 <div class="hint">Click to view</div>
             </div>
         </div>
 
-        <div class="actions">
+        <div class="check-actions">
             <button id="start-check" class="btn">Start URL Check</button>
             <button id="refresh-status" class="btn" style="margin-left: 10px; background: #95a5a6;">Refresh
                 Status</button>
         </div>
 
-        <div class="progress" id="progress">
+        <div class="check-progress" id="progress">
             <div class="progress-bar">
                 <div class="progress-fill" id="progress-fill"></div>
             </div>
             <div class="progress-text" id="progress-text">Checking URLs...</div>
         </div>
 
-        <div class="results">
+        <div class="check-results">
             <h2>Recent Check Results</h2>
             <div id="results-list">
                 <div class="empty-state">Click "Start URL Check" to begin validating your bookmarks</div>
             </div>
         </div>
     </div>
+
+    <?php render_nav_scripts(); ?>
 
     <script>
         const csrfToken = <?= json_encode($csrfToken) ?>;

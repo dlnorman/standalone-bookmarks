@@ -68,109 +68,42 @@ $diagnostics['sample_jobs'] = $db->query("SELECT id, bookmark_id, job_type, stat
 <head>
     <title>URL Checker Diagnostics</title>
     <link rel="stylesheet" href="css/main.css">
-    <style>
-        body {
-            font-family: monospace;
-            padding: 20px;
-            max-width: 1000px;
-            margin: 0 auto;
-            background: #f5f5f5;
-        }
-
-        h1 {
-            color: #2c3e50;
-        }
-
-        h2 {
-            color: #3498db;
-            margin-top: 30px;
-        }
-
-        .stat {
-            background: white;
-            padding: 10px;
-            margin: 5px 0;
-            border-left: 3px solid #3498db;
-        }
-
-        .stat strong {
-            color: #2c3e50;
-        }
-
-        .good {
-            border-left-color: #27ae60;
-        }
-
-        .warn {
-            border-left-color: #f39c12;
-        }
-
-        .bad {
-            border-left-color: #e74c3c;
-        }
-
-        pre {
-            background: white;
-            padding: 15px;
-            border: 1px solid #ddd;
-            overflow: auto;
-        }
-
-        table {
-            width: 100%;
-            background: white;
-            border-collapse: collapse;
-            margin: 10px 0;
-        }
-
-        th,
-        td {
-            padding: 8px;
-            border: 1px solid #ddd;
-            text-align: left;
-        }
-
-        th {
-            background: #3498db;
-            color: white;
-        }
-    </style>
 </head>
 
-<body>
+<body class="diagnostics-page">
     <h1>URL Checker Diagnostics</h1>
     <p><a href="check-bookmarks.php">← Back to Check Bookmarks</a></p>
 
     <h2>Database Status</h2>
-    <div class="stat <?= $diagnostics['total_bookmarks'] > 0 ? 'good' : 'bad' ?>">
+    <div class="diagnostic-stat <?= $diagnostics['total_bookmarks'] > 0 ? 'good' : 'bad' ?>">
         <strong>Total Bookmarks:</strong> <?= $diagnostics['total_bookmarks'] ?>
     </div>
-    <div class="stat <?= $diagnostics['has_broken_url_column'] ? 'good' : 'warn' ?>">
+    <div class="diagnostic-stat <?= $diagnostics['has_broken_url_column'] ? 'good' : 'warn' ?>">
         <strong>Has broken_url column:</strong>
         <?= $diagnostics['has_broken_url_column'] ? 'Yes' : 'No (will be created on first check)' ?>
     </div>
-    <div class="stat <?= $diagnostics['has_last_checked_column'] ? 'good' : 'warn' ?>">
+    <div class="diagnostic-stat <?= $diagnostics['has_last_checked_column'] ? 'good' : 'warn' ?>">
         <strong>Has last_checked column:</strong>
         <?= $diagnostics['has_last_checked_column'] ? 'Yes' : 'No (will be created on first check)' ?>
     </div>
 
     <h2>Jobs Status</h2>
-    <div class="stat">
+    <div class="diagnostic-stat">
         <strong>Total Jobs:</strong> <?= $diagnostics['total_jobs'] ?>
     </div>
-    <div class="stat">
+    <div class="diagnostic-stat">
         <strong>Check URL Jobs:</strong> <?= $diagnostics['check_url_jobs'] ?>
     </div>
-    <div class="stat">
+    <div class="diagnostic-stat">
         <strong>Pending:</strong> <?= $diagnostics['pending_check_url_jobs'] ?>
     </div>
-    <div class="stat">
+    <div class="diagnostic-stat">
         <strong>Processing:</strong> <?= $diagnostics['processing_check_url_jobs'] ?>
     </div>
-    <div class="stat">
+    <div class="diagnostic-stat">
         <strong>Completed:</strong> <?= $diagnostics['completed_check_url_jobs'] ?>
     </div>
-    <div class="stat">
+    <div class="diagnostic-stat">
         <strong>Failed:</strong> <?= $diagnostics['failed_check_url_jobs'] ?>
     </div>
 
@@ -214,18 +147,18 @@ $diagnostics['sample_jobs'] = $db->query("SELECT id, bookmark_id, job_type, stat
 
     <h2>Recommendations</h2>
     <?php if ($diagnostics['total_bookmarks'] === 0): ?>
-        <div class="stat bad">
+        <div class="diagnostic-stat bad">
             <strong>Issue:</strong> No bookmarks found. Please add some bookmarks first.
         </div>
     <?php elseif ($diagnostics['pending_check_url_jobs'] > 0 || $diagnostics['processing_check_url_jobs'] > 0): ?>
-        <div class="stat warn">
+        <div class="diagnostic-stat warn">
             <strong>Info:</strong> You have
             <?= $diagnostics['pending_check_url_jobs'] + $diagnostics['processing_check_url_jobs'] ?> jobs waiting to be
             processed.
             Make sure your cron job is running: <code>php <?= __DIR__ ?>/process_jobs.php</code>
         </div>
     <?php else: ?>
-        <div class="stat good">
+        <div class="diagnostic-stat good">
             <strong>Ready:</strong> You can queue URL checks. Click "Start URL Check" on the main page.
         </div>
     <?php endif; ?>

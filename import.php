@@ -85,6 +85,10 @@ function importBookmarks($db, $content)
     $now = date('Y-m-d H:i:s');
 
     foreach ($anchors as $anchor) {
+        if (!($anchor instanceof DOMElement)) {
+            continue;
+        }
+
         $url = trim($anchor->getAttribute('HREF'));
         if (empty($url)) {
             $url = trim($anchor->getAttribute('href'));
@@ -193,157 +197,7 @@ function importBookmarks($db, $content)
     <title>Import Bookmarks - <?= htmlspecialchars($config['site_title']) ?></title>
     <?php render_nav_styles(); ?>
     <link rel="stylesheet" href="css/main.css">
-    <style>
-        * {
-            box-sizing: border-box;
-        }
 
-        body {
-            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
-            margin: 0;
-            padding: 0;
-            line-height: 1.6;
-            background: var(--bg-primary);
-            color: var(--text-primary);
-            transition: background-color 0.3s ease, color 0.3s ease;
-        }
-
-        .page-container {
-            max-width: 800px;
-            margin: 0 auto;
-            padding: 20px;
-        }
-
-        .content {
-            background: var(--bg-secondary);
-            padding: 30px;
-            border-radius: 8px;
-            box-shadow: var(--shadow-sm);
-        }
-
-        .message {
-            padding: 15px;
-            margin-bottom: 20px;
-            border-radius: 4px;
-            background: rgba(39, 174, 96, 0.1);
-            color: var(--accent-green);
-            border: 1px solid rgba(39, 174, 96, 0.2);
-        }
-
-        .error {
-            padding: 15px;
-            margin-bottom: 20px;
-            border-radius: 4px;
-            background: rgba(231, 76, 60, 0.1);
-            color: var(--accent-red);
-            border: 1px solid rgba(231, 76, 60, 0.2);
-        }
-
-        .stats {
-            margin-top: 15px;
-            padding: 15px;
-            background: var(--bg-tertiary);
-            border-radius: 4px;
-        }
-
-        .stats h3 {
-            margin: 0 0 10px 0;
-            font-size: 16px;
-        }
-
-        .stats ul {
-            margin: 0;
-            padding-left: 20px;
-        }
-
-        .info-box {
-            padding: 15px;
-            background: var(--bg-tertiary);
-            border-left: 4px solid var(--accent-blue);
-            border-radius: 4px;
-            margin-bottom: 20px;
-        }
-
-        .info-box h3 {
-            margin: 0 0 10px 0;
-            font-size: 16px;
-            color: var(--text-primary);
-        }
-
-        .info-box ul {
-            margin: 10px 0 0 0;
-            padding-left: 20px;
-        }
-
-        .info-box li {
-            margin-bottom: 5px;
-        }
-
-        .form-group {
-            margin-bottom: 20px;
-        }
-
-        label {
-            display: block;
-            margin-bottom: 8px;
-            font-weight: 500;
-            color: var(--text-secondary);
-        }
-
-        input[type="file"] {
-            padding: 10px;
-            border: 2px dashed var(--border-color);
-            border-radius: 4px;
-            width: 100%;
-            cursor: pointer;
-            color: var(--text-primary);
-        }
-
-        input[type="file"]:hover {
-            border-color: var(--accent-blue);
-        }
-
-        .btn {
-            padding: 12px 24px;
-            background: var(--accent-blue);
-            color: white;
-            border: none;
-            border-radius: 4px;
-            cursor: pointer;
-            font-size: 14px;
-            text-decoration: none;
-            display: inline-block;
-        }
-
-        .btn:hover {
-            background: var(--accent-blue-hover);
-        }
-
-        .btn-secondary {
-            background: var(--text-tertiary);
-        }
-
-        .btn-secondary:hover {
-            background: var(--text-secondary);
-        }
-
-        .actions {
-            display: flex;
-            gap: 10px;
-            margin-top: 20px;
-        }
-
-        @media (max-width: 600px) {
-            body {
-                padding: 10px;
-            }
-
-            header,
-            .content {
-                padding: 15px;
-            }
-        }
-    </style>
 </head>
 
 <body>
@@ -352,9 +206,9 @@ function importBookmarks($db, $content)
     <div class="page-container">
         <div class="content">
             <?php if ($message): ?>
-                <div class="message"><?= htmlspecialchars($message) ?></div>
+                <div class="alert alert-success"><?= htmlspecialchars($message) ?></div>
                 <?php if ($stats && !empty($stats['errors'])): ?>
-                    <div class="stats">
+                    <div class="import-stats">
                         <h3>Errors during import:</h3>
                         <ul>
                             <?php foreach ($stats['errors'] as $err): ?>
@@ -366,7 +220,7 @@ function importBookmarks($db, $content)
             <?php endif; ?>
 
             <?php if ($error): ?>
-                <div class="error"><?= htmlspecialchars($error) ?></div>
+                <div class="alert alert-error"><?= htmlspecialchars($error) ?></div>
             <?php endif; ?>
 
             <div class="info-box">
@@ -389,8 +243,8 @@ function importBookmarks($db, $content)
                     <input type="file" id="import_file" name="import_file" accept=".html,.htm" required>
                 </div>
 
-                <div class="actions">
-                    <button type="submit" class="btn">Import Bookmarks</button>
+                <div class="form-actions">
+                    <button type="submit" class="btn btn-primary">Import Bookmarks</button>
                     <a href="<?= $config['base_path'] ?>" class="btn btn-secondary">Cancel</a>
                 </div>
             </form>

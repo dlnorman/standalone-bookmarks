@@ -99,166 +99,9 @@ $total = $stmt->fetch(PDO::FETCH_ASSOC)['total'];
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Export Bookmarks - <?= htmlspecialchars($config['site_title']) ?></title>
     <link rel="stylesheet" href="css/main.css">
-    <style>
-        * {
-            box-sizing: border-box;
-        }
-
-        body {
-            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
-            max-width: 800px;
-            margin: 0 auto;
-            padding: 20px;
-            line-height: 1.6;
-            background: var(--bg-primary);
-            color: var(--text-primary);
-            transition: background-color 0.3s ease, color 0.3s ease;
-        }
-
-        header {
-            background: var(--bg-secondary);
-            padding: 20px;
-            border-radius: 8px;
-            margin-bottom: 20px;
-            box-shadow: var(--shadow-sm);
-        }
-
-        h1 {
-            margin: 0 0 10px 0;
-            font-size: 24px;
-            color: var(--text-primary);
-        }
-
-        .breadcrumb {
-            margin-bottom: 15px;
-            font-size: 14px;
-        }
-
-        .breadcrumb a {
-            color: var(--accent-blue);
-            text-decoration: none;
-        }
-
-        .breadcrumb a:hover {
-            text-decoration: underline;
-        }
-
-        .content {
-            background: var(--bg-secondary);
-            padding: 30px;
-            border-radius: 8px;
-            box-shadow: var(--shadow-sm);
-        }
-
-        .info-box {
-            padding: 15px;
-            background: var(--bg-tertiary);
-            border-left: 4px solid var(--accent-blue);
-            border-radius: 4px;
-            margin-bottom: 20px;
-        }
-
-        .info-box h3 {
-            margin: 0 0 10px 0;
-            font-size: 16px;
-            color: var(--text-primary);
-        }
-
-        .info-box ul {
-            margin: 10px 0 0 0;
-            padding-left: 20px;
-        }
-
-        .info-box li {
-            margin-bottom: 5px;
-        }
-
-        .stats {
-            padding: 20px;
-            background: var(--bg-tertiary);
-            border-radius: 4px;
-            margin-bottom: 20px;
-            text-align: center;
-        }
-
-        .stats .count {
-            font-size: 48px;
-            font-weight: bold;
-            color: var(--accent-blue);
-            margin-bottom: 5px;
-        }
-
-        .stats .label {
-            font-size: 14px;
-            color: var(--text-tertiary);
-            text-transform: uppercase;
-            letter-spacing: 1px;
-        }
-
-        .btn {
-            padding: 12px 24px;
-            background: var(--accent-blue);
-            color: white;
-            border: none;
-            border-radius: 4px;
-            cursor: pointer;
-            font-size: 14px;
-            text-decoration: none;
-            display: inline-block;
-        }
-
-        .btn:hover {
-            background: var(--accent-blue-hover);
-        }
-
-        .btn-large {
-            padding: 16px 32px;
-            font-size: 16px;
-            font-weight: 500;
-        }
-
-        .btn-secondary {
-            background: var(--text-tertiary);
-        }
-
-        .btn-secondary:hover {
-            background: var(--text-secondary);
-        }
-
-        .actions {
-            display: flex;
-            gap: 10px;
-            justify-content: center;
-            margin-top: 20px;
-        }
-
-        @media (max-width: 600px) {
-            body {
-                padding: 10px;
-            }
-
-            header,
-            .content {
-                padding: 15px;
-            }
-
-            .stats .count {
-                font-size: 36px;
-            }
-
-            .actions {
-                flex-direction: column;
-            }
-
-            .btn {
-                width: 100%;
-                text-align: center;
-            }
-        }
-    </style>
 </head>
 
-<body>
+<body class="export-page">
     <header>
         <div class="breadcrumb">
             <a href="<?= $config['base_path'] ?>">← Back to Bookmarks</a>
@@ -281,12 +124,12 @@ $total = $stmt->fetch(PDO::FETCH_ASSOC)['total'];
                 dates.</p>
         </div>
 
-        <div class="stats">
+        <div class="export-stats">
             <div class="count"><?= number_format($total) ?></div>
             <div class="label">Bookmarks to Export</div>
         </div>
 
-        <div class="actions">
+        <div class="export-actions">
             <a href="?download=1" class="btn btn-large">Download Bookmarks</a>
             <a href="<?= $config['base_path'] ?>" class="btn btn-secondary">Cancel</a>
         </div>
