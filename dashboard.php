@@ -242,158 +242,159 @@ $isLoggedIn = is_logged_in();
         .network-link.highlighted {
             stroke: var(--accent-blue);
             stroke-width: 3px;
+        }
 
-            /* Chart styles */
-            .chart-container {
-                width: 100%;
-                height: 100%;
+        /* Chart styles */
+        .chart-container {
+            width: 100%;
+            height: 100%;
+        }
+
+        .axis text {
+            font-size: 10px;
+            fill: var(--text-tertiary);
+        }
+
+        .axis line,
+        .axis path {
+            stroke: var(--border-subtle);
+        }
+
+        .velocity-bar {
+            fill: var(--accent-blue);
+            transition: fill 0.2s;
+        }
+
+        .velocity-bar:hover {
+            fill: var(--accent-blue-hover);
+        }
+
+        .velocity-line {
+            fill: none;
+            stroke: var(--accent-red);
+            stroke-width: 2;
+        }
+
+        .tag-area {
+            transition: opacity 0.3s;
+        }
+
+        .tag-area:hover {
+            opacity: 0.8;
+            stroke: var(--text-primary);
+            stroke-width: 2px;
+        }
+
+        .tag-legend-item {
+            cursor: pointer;
+            transition: opacity 0.2s;
+        }
+
+        .tag-legend-item:hover {
+            opacity: 0.7;
+        }
+
+        .tag-legend-item.inactive {
+            opacity: 0.3;
+        }
+
+        .tag-line {
+            fill: none;
+            stroke-width: 2;
+            transition: all 0.3s;
+        }
+
+        .tag-line:hover {
+            stroke-width: 3;
+        }
+
+        /* Loading state */
+        .loading {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            height: 100%;
+            color: var(--text-tertiary);
+            font-size: 14px;
+        }
+
+        .loading::after {
+            content: '...';
+            animation: dots 1.5s steps(4, end) infinite;
+        }
+
+        @keyframes dots {
+
+            0%,
+            20% {
+                content: '.';
             }
 
-            .axis text {
-                font-size: 10px;
-                fill: var(--text-tertiary);
+            40% {
+                content: '..';
             }
 
-            .axis line,
-            .axis path {
-                stroke: var(--border-subtle);
-            }
-
-            .velocity-bar {
-                fill: var(--accent-blue);
-                transition: fill 0.2s;
-            }
-
-            .velocity-bar:hover {
-                fill: var(--accent-blue-hover);
-            }
-
-            .velocity-line {
-                fill: none;
-                stroke: var(--accent-red);
-                stroke-width: 2;
-            }
-
-            .tag-area {
-                transition: opacity 0.3s;
-            }
-
-            .tag-area:hover {
-                opacity: 0.8;
-                stroke: var(--text-primary);
-                stroke-width: 2px;
-            }
-
-            .tag-legend-item {
-                cursor: pointer;
-                transition: opacity 0.2s;
-            }
-
-            .tag-legend-item:hover {
-                opacity: 0.7;
-            }
-
-            .tag-legend-item.inactive {
-                opacity: 0.3;
-            }
-
-            .tag-line {
-                fill: none;
-                stroke-width: 2;
-                transition: all 0.3s;
-            }
-
-            .tag-line:hover {
-                stroke-width: 3;
-            }
-
-            /* Loading state */
-            .loading {
-                display: flex;
-                align-items: center;
-                justify-content: center;
-                height: 100%;
-                color: var(--text-tertiary);
-                font-size: 14px;
-            }
-
-            .loading::after {
+            60%,
+            100% {
                 content: '...';
-                animation: dots 1.5s steps(4, end) infinite;
             }
+        }
 
-            @keyframes dots {
+        /* Tooltip */
+        .tooltip {
+            position: absolute;
+            background: rgba(0, 0, 0, 0.9);
+            color: white;
+            padding: 8px 12px;
+            border-radius: 6px;
+            font-size: 12px;
+            pointer-events: none;
+            opacity: 0;
+            transition: opacity 0.2s;
+            z-index: 1000;
+            max-width: 250px;
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
+        }
 
-                0%,
-                20% {
-                    content: '.';
-                }
+        .tooltip.visible {
+            opacity: 1;
+        }
 
-                40% {
-                    content: '..';
-                }
+        /* Last updated indicator */
+        .last-updated {
+            position: fixed;
+            bottom: 20px;
+            right: 20px;
+            background: var(--bg-secondary);
+            padding: 8px 16px;
+            border-radius: 8px;
+            font-size: 11px;
+            color: var(--text-secondary);
+            box-shadow: var(--shadow-md);
+            z-index: 1000;
+        }
 
-                60%,
-                100% {
-                    content: '...';
-                }
-            }
+        .last-updated .dot {
+            display: inline-block;
+            width: 8px;
+            height: 8px;
+            border-radius: 50%;
+            background: var(--accent-green);
+            margin-right: 6px;
+            animation: pulse 2s infinite;
+        }
 
-            /* Tooltip */
-            .tooltip {
-                position: absolute;
-                background: rgba(0, 0, 0, 0.9);
-                color: white;
-                padding: 8px 12px;
-                border-radius: 6px;
-                font-size: 12px;
-                pointer-events: none;
-                opacity: 0;
-                transition: opacity 0.2s;
-                z-index: 1000;
-                max-width: 250px;
-                box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
-            }
+        @keyframes pulse {
 
-            .tooltip.visible {
+            0%,
+            100% {
                 opacity: 1;
             }
 
-            /* Last updated indicator */
-            .last-updated {
-                position: fixed;
-                bottom: 20px;
-                right: 20px;
-                background: var(--bg-secondary);
-                padding: 8px 16px;
-                border-radius: 8px;
-                font-size: 11px;
-                color: var(--text-secondary);
-                box-shadow: var(--shadow-md);
-                z-index: 1000;
+            50% {
+                opacity: 0.5;
             }
-
-            .last-updated .dot {
-                display: inline-block;
-                width: 8px;
-                height: 8px;
-                border-radius: 50%;
-                background: var(--accent-green);
-                margin-right: 6px;
-                animation: pulse 2s infinite;
-            }
-
-            @keyframes pulse {
-
-                0%,
-                100% {
-                    opacity: 1;
-                }
-
-                50% {
-                    opacity: 0.5;
-                }
-            }
+        }
     </style>
 </head>
 

@@ -34,7 +34,7 @@ try {
 $diagnostics = [];
 
 // Check bookmarks table
-$diagnostics['total_bookmarks'] = $db->query("SELECT COUNT(*) as count FROM bookmarks")->fetch(PDO::FETCH_ASSOC)['count'];
+$diagnostics['total_bookmarks'] = $db->query("SELECT COUNT(*) FROM bookmarks")->fetchColumn();
 
 // Check for broken_url column
 $columns = $db->query("PRAGMA table_info(bookmarks)")->fetchAll(PDO::FETCH_ASSOC);
@@ -48,12 +48,12 @@ foreach ($columns as $column) {
 }
 
 // Check jobs table
-$diagnostics['total_jobs'] = $db->query("SELECT COUNT(*) as count FROM jobs")->fetch(PDO::FETCH_ASSOC)['count'];
-$diagnostics['check_url_jobs'] = $db->query("SELECT COUNT(*) as count FROM jobs WHERE job_type = 'check_url'")->fetch(PDO::FETCH_ASSOC)['count'];
-$diagnostics['pending_check_url_jobs'] = $db->query("SELECT COUNT(*) as count FROM jobs WHERE job_type = 'check_url' AND status = 'pending'")->fetch(PDO::FETCH_ASSOC)['count'];
-$diagnostics['processing_check_url_jobs'] = $db->query("SELECT COUNT(*) as count FROM jobs WHERE job_type = 'check_url' AND status = 'processing'")->fetch(PDO::FETCH_ASSOC)['count'];
-$diagnostics['completed_check_url_jobs'] = $db->query("SELECT COUNT(*) as count FROM jobs WHERE job_type = 'check_url' AND status = 'completed'")->fetch(PDO::FETCH_ASSOC)['count'];
-$diagnostics['failed_check_url_jobs'] = $db->query("SELECT COUNT(*) as count FROM jobs WHERE job_type = 'check_url' AND status = 'failed'")->fetch(PDO::FETCH_ASSOC)['count'];
+$diagnostics['total_jobs'] = $db->query("SELECT COUNT(*) FROM jobs")->fetchColumn();
+$diagnostics['check_url_jobs'] = $db->query("SELECT COUNT(*) FROM jobs WHERE job_type = 'check_url'")->fetchColumn();
+$diagnostics['pending_check_url_jobs'] = $db->query("SELECT COUNT(*) FROM jobs WHERE job_type = 'check_url' AND status = 'pending'")->fetchColumn();
+$diagnostics['processing_check_url_jobs'] = $db->query("SELECT COUNT(*) FROM jobs WHERE job_type = 'check_url' AND status = 'processing'")->fetchColumn();
+$diagnostics['completed_check_url_jobs'] = $db->query("SELECT COUNT(*) FROM jobs WHERE job_type = 'check_url' AND status = 'completed'")->fetchColumn();
+$diagnostics['failed_check_url_jobs'] = $db->query("SELECT COUNT(*) FROM jobs WHERE job_type = 'check_url' AND status = 'failed'")->fetchColumn();
 
 // Sample bookmarks
 $diagnostics['sample_bookmarks'] = $db->query("SELECT id, url, title FROM bookmarks LIMIT 5")->fetchAll(PDO::FETCH_ASSOC);
