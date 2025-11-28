@@ -1,169 +1,136 @@
-# Self-Hosted Bookmarks Application
+# Standalone Bookmarks
 
-A feature-rich, self-hosted bookmarks manager built with PHP and SQLite. Perfect for single-user setups with support for multiple devices, automatic archiving, screenshot capture, and advanced analytics. **Optimized for high traffic with HTTP caching and database indexes.**
+A powerful, self-hosted bookmark manager built for speed, privacy, and simplicity.
 
-## Features
+**Standalone Bookmarks** gives you full control over your internet memory. Save links, organize with tags, automatically archive content, and visualize your reading habits—all without subscriptions or third-party tracking.
 
-### Core Functionality
-- **Simple and lightweight** - Pure PHP + SQLite, no framework dependencies
-- **Full-text search** - Search across titles, descriptions, tags, and URLs
-- **Bookmarklet** - Quick bookmark addition with automatic metadata extraction
-- **Import/Export** - Compatible with Pinboard, Delicious, and Netscape Bookmark File Format
-- **Tags** - Organize bookmarks with tags and browse via interactive tag cloud
-- **Public/Private bookmarks** - Control visibility in RSS feeds and public views
-- **Markdown support** - Rich text formatting in bookmark descriptions
-- **Responsive design** - Works seamlessly on desktop, tablet, and mobile
+---
 
-### Advanced Features
-- **Account Management** - Manage your profile, display name, and password securely.
-- **Multi-User Support** - Role-based access control (Admin/User).
-  - **Admins**: Manage users, reset passwords, and configure system settings.
-  - **Users**: Manage bookmarks (shared collection).
-- **Dashboard Analytics** - Interactive visualizations powered by D3.js:
-  - **Tag Co-occurrence Network**: Interactive graph showing tag relationships. **New:** Download chart as PNG image (fullscreen mode).
-  - **Bookmarking Velocity**: Charts tracking activity over time.
-  - **Tag Activity Trends**: Stacked area charts for tag usage.
-  - **Publicly accessible** - No login required.
-- **Screenshot Gallery** - Automatic screenshot capture:
-  - **Click to Open**: Clicking a screenshot opens the bookmark URL directly.
-  - **Details View**: "Details" button (ℹ️) to view full-size screenshot and metadata.
-  - **Masonry Grid**: Responsive layout with filtering.
-- **Archive View** - Time-based bookmark browsing with day/week/month grouping.
-- **Background Job Processing** - Automated archiving, screenshot generation, and image optimization.
-- **RSS Feed** - Public feed with HTTP caching (304 support).
-- **JSON API** - Embed recent bookmarks in other sites (e.g., Hugo, Jekyll).
-- **Automated Backups** - Built-in utility for database and full backups.
+## Why Standalone Bookmarks?
 
-### Performance & Security
-- **HTTP Caching** - 90%+ reduction in database queries via Conditional GET.
-- **Database Indexes** - Optimized for fast queries.
-- **Security** - CSRF protection, SSRF protection, rate limiting, and secure headers.
+*   **🚀 Fast & Lightweight**: Built with pure PHP and SQLite. No heavy frameworks, no complex build steps.
+*   **🔒 Privacy-Focused**: Self-hosted means you own your data. Multi-user support allows you to share your instance or keep it private.
+*   **📸 Visual**: Automatically generates screenshots for your bookmarks using Google PageSpeed Insights or OpenGraph data.
+*   **💾 Forever Safe**: Automatically submits your bookmarks to the Internet Archive (Wayback Machine) so you never lose a link.
+*   **📊 Insightful**: Beautiful D3.js visualizations show you what you're reading and how your interests connect.
 
-## Installation & Setup
+## Key Features
 
-### Requirements
-- PHP 7.4 or higher
-- SQLite3 support
-- Web server (Apache, Nginx, or PHP built-in)
-- GD extension (for image resizing)
-- Cron (recommended for background jobs)
+*   **Smart Capture**:
+    *   **Bookmarklet**: Save links from any browser with a single click.
+    *   **Auto-Metadata**: Automatically extracts titles, descriptions, and tags.
+    *   **Screenshots**: Visual gallery view of your saved pages.
+*   **Organization**:
+    *   **Full-Text Search**: Instantly find anything across titles, URLs, descriptions, and tags.
+    *   **Tagging**: Flexible tagging system with a co-occurrence network graph.
+    *   **Collections**: Public and private visibility settings.
+*   **Management**:
+    *   **Multi-User**: Role-based access (Admin/User). Admins can manage users and system settings.
+    *   **Health Checks**: Background jobs automatically check for broken links.
+    *   **Import/Export**: seamless migration from Pinboard, Delicious, or browser exports (Netscape HTML format).
+*   **Performance**:
+    *   **Caching**: HTTP caching and database indexing for high performance.
+    *   **Background Jobs**: Heavy tasks (archiving, screenshots) run in the background to keep the UI snappy.
 
-### Quick Install
+---
 
-1.  **Download & Configure**
+## Getting Started
+
+### Prerequisites
+
+*   **PHP 7.4+** (with `php-sqlite3`, `php-gd`, `php-curl`, `php-json` extensions)
+*   **Web Server**: Apache, Nginx, or PHP's built-in server.
+*   **Write Permissions**: The web server needs write access to the application directory.
+
+### Installation
+
+1.  **Clone the Repository**
     ```bash
-    # Copy config
-    cp config-example.php config.php
-    
-    # Edit settings (CHANGE THE PASSWORD!)
-    nano config.php
+    git clone https://github.com/yourusername/standalone-bookmarks.git
+    cd standalone-bookmarks
     ```
 
-2.  **Initialize Database**
+2.  **Configure the Application**
+    Copy the example config and edit it.
+    ```bash
+    cp config-example.php config.php
+    nano config.php
+    ```
+    > **Tip**: To enable automatic screenshots, get a free [Google PageSpeed Insights API Key](https://developers.google.com/speed/docs/insights/v5/get-started) and add it to your config.
+
+3.  **Initialize the Database (Optional)**
+    You can initialize the database manually, or let the web installer do it.
     ```bash
     php init_db.php
     ```
-    *Note: This script handles both fresh installs and upgrades.*
 
-3.  **Set Permissions**
+4.  **Set Permissions**
+    Ensure the web server can write to the necessary directories.
     ```bash
     mkdir -p screenshots archives backups sessions
     chmod 775 screenshots archives backups sessions
     chmod 664 bookmarks.db
-    # Ensure web server owns these (e.g., chown -R www-data:www-data .)
+    # If using Apache/Nginx, set ownership (e.g., www-data)
+    # chown -R www-data:www-data .
     ```
 
-4.  **Run (Development)**
+5.  **Run & Install**
+    Start the server:
     ```bash
     php -S localhost:8000
     ```
-    Visit `http://localhost:8000` (Login: `admin` / your password)
+    Visit `http://localhost:8000`. You will be automatically redirected to the **Installation Page** where you can create your admin account.
 
-### Upgrading
+### Setting Up Background Jobs (Recommended)
 
-To upgrade an existing installation:
+To enable automatic archiving, screenshot generation, and link checking, set up a cron job.
 
-1.  **Backup** your database (`cp bookmarks.db bookmarks.db.bak`).
-2.  **Upload** the new files (overwrite existing).
-3.  **Run** the initialization script:
+1.  Open your crontab:
     ```bash
-    php init_db.php
+    crontab -e
     ```
-    This will automatically update your database schema and migrate your user account if needed.
 
-### Web Server Configuration (Production)
+2.  Add the following lines:
+    ```bash
+    # Run background jobs every 5 minutes
+    */5 * * * * /usr/bin/php /path/to/standalone-bookmarks/process_jobs.php >> /path/to/standalone-bookmarks/jobs.log 2>&1
 
-**Apache** (`.htaccess` provided):
-Ensure `mod_rewrite` and `mod_headers` are enabled. The included `.htaccess` protects config files and enables caching.
+    # (Optional) Daily database backup at 2 AM
+    0 2 * * * /usr/bin/php /path/to/standalone-bookmarks/backup.php --auto --database-only --keep=30
+    ```
 
-**Nginx**:
-```nginx
-server {
-    listen 80;
-    server_name bookmarks.example.com;
-    root /var/www/bookmarks;
-    index index.php;
+---
 
-    # Protect sensitive files
-    location ~ (config\.php|\.db)$ { deny all; }
-    location ~ /\. { deny all; }
+## Usage Guide
 
-    # Cache static assets
-    location ~* \.(jpg|jpeg|png|gif|ico|css|js)$ {
-        expires 30d;
-        add_header Cache-Control "public, immutable";
-    }
-
-    location ~ \.php$ {
-        fastcgi_pass unix:/var/run/php/php-fpm.sock;
-        fastcgi_index index.php;
-        include fastcgi_params;
-        fastcgi_param SCRIPT_FILENAME $document_root$fastcgi_script_name;
-    }
-}
-```
-
-### Background Jobs (Recommended)
-
-Set up a cron job for screenshots and backups:
-
-```bash
-crontab -e
-```
-
-```bash
-# Process jobs every 5 minutes (screenshots, archives)
-*/5 * * * * /usr/bin/php /path/to/bookmarks/process_jobs.php >> /path/to/bookmarks/jobs.log 2>&1
-
-# Daily database backup at 2 AM
-0 2 * * * /usr/bin/php /path/to/bookmarks/backup.php --auto --database-only --keep=30
-```
-
-## Usage
-
-### Adding Bookmarks
-- **Web Interface**: Click "Add Bookmark", enter URL/Title/Tags.
-- **Bookmarklet**: Drag the "Bookmarklet" link from the app to your browser bar. Click it on any page to save.
-
-### Viewing Bookmarks
-- **Index**: Main list. Click the **image or title** to open the URL.
-- **Gallery**: Visual grid. Click **image** to open URL. Click **ℹ️ icon** for details.
-- **Dashboard**: View analytics. Toggle fullscreen (⛶) on the Network Chart to see the **Download (⬇)** button.
-
-### Account Management
-- **Profile**: Click "Account" in the menu to change your display name or password.
-- **User Management** (Admin only): Click "User Management" to add or remove users.
+### The Bookmarklet
+The fastest way to save links is the **Bookmarklet**.
+1.  Log in to your instance.
+2.  Look for the "Bookmarklet" link in the footer or settings.
+3.  Drag and drop it to your browser's bookmarks bar.
+4.  When you're on a page you want to save, just click the bookmarklet!
 
 ### API & Integrations
-- **RSS Feed**: `https://yoursite.com/rss.php`
-- **JSON API**: `https://yoursite.com/recent.php?limit=10`
-- **Full API**: See `api.php` for authenticated endpoints (`add`, `edit`, `delete`, `get`).
+Standalone Bookmarks provides a simple API for your own scripts or static site generators.
 
-## Troubleshooting
+*   **RSS Feed**: `https://your-instance.com/rss.php` (Public bookmarks only)
+*   **JSON API**: `https://your-instance.com/recent.php?limit=10`
+*   **Full API**: See `api.php` for authenticated endpoints to add, edit, or delete bookmarks programmatically.
 
-- **Database Errors**: Check permissions on `bookmarks.db` and the directory.
-- **Screenshots Missing**: Check `jobs.log` and ensure `pagespeed_api_key` is set in `config.php`.
-- **Login Failed**: Verify `session.save_path` is writable.
+---
+
+## Development
+
+### Project Structure
+*   `index.php` - Main list view.
+*   `gallery.php` - Grid view with screenshots.
+*   `dashboard.php` - Analytics and visualizations.
+*   `api.php` - REST API endpoints.
+*   `process_jobs.php` - Worker script for background tasks.
+*   `bookmarks.db` - SQLite database (created after init).
+
+### Contributing
+Contributions are welcome! Please feel free to submit a Pull Request.
 
 ## License
 

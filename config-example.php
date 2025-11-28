@@ -23,9 +23,7 @@ return [
     // Recent bookmarks widget settings
     'recent_limit' => 10,  // Number of recent bookmarks to show by default
 
-    // Security settings
-    'username' => 'admin',  // Login username
-    'password' => 'change-this-password',  // Login password (use a strong password)
+    // Session settings
     'session_timeout' => 2592000,  // Session timeout in seconds (default: 30 days)
 
     // Display settings

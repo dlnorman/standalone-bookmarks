@@ -24,6 +24,29 @@ if (is_logged_in()) {
     exit;
 }
 
+// Check if installation is needed (no users in DB)
+try {
+    if (!file_exists($config['db_path'])) {
+        header('Location: install.php');
+        exit;
+    }
+    $db = new PDO('sqlite:' . $config['db_path']);
+    $result = $db->query("SELECT name FROM sqlite_master WHERE type='table' AND name='users'");
+    if (!$result->fetch()) {
+        header('Location: install.php');
+        exit;
+    }
+    $count = $db->query("SELECT COUNT(*) FROM users")->fetchColumn();
+    if ($count == 0) {
+        header('Location: install.php');
+        exit;
+    }
+} catch (Exception $e) {
+    // If DB error, assume install needed
+    header('Location: install.php');
+    exit;
+}
+
 $error = '';
 $redirectParam = $_GET['redirect'] ?? $config['base_path'] . '/';
 $redirect = validate_redirect_url($redirectParam, $config['base_path'], $config['base_path'] . '/');
