@@ -3,12 +3,14 @@
  * Simple markdown parser without external dependencies
  * Supports: headers, bold, italic, links, code blocks, inline code, lists, blockquotes
  */
-function parseMarkdown($text) {
-    if (empty($text)) return '';
+function parseMarkdown($text)
+{
+    if (empty($text))
+        return '';
 
     // Process code blocks first (before escaping, to preserve content)
     $codeBlocks = [];
-    $text = preg_replace_callback('/```([a-z]*)\n(.*?)```/s', function($matches) use (&$codeBlocks) {
+    $text = preg_replace_callback('/```([a-z]*)\n(.*?)```/s', function ($matches) use (&$codeBlocks) {
         $lang = $matches[1] ? ' class="language-' . $matches[1] . '"' : '';
         $placeholder = '___CODE_BLOCK_' . count($codeBlocks) . '___';
         $codeBlocks[$placeholder] = '<pre><code' . $lang . '>' . htmlspecialchars(trim($matches[2]), ENT_QUOTES, 'UTF-8') . '</code></pre>';
@@ -170,10 +172,24 @@ function parseMarkdown($text) {
     $text = preg_replace('/\*(.+?)\*/', '<em>$1</em>', $text);
     $text = preg_replace('/_(.+?)_/', '<em>$1</em>', $text);
 
-    // Links [text](url) - URL needs to be unescaped for href attribute
-    $text = preg_replace_callback('/\[([^\]]+)\]\(([^\)]+)\)/', function($matches) {
+    // Links [text](url) - URL needs to be unescaped for href attribute and protocol checked
+    $text = preg_replace_callback('/\[([^\]]+)\]\(([^\)]+)\)/', function ($matches) {
         $text = $matches[1];
         $url = htmlspecialchars_decode($matches[2], ENT_QUOTES);
+
+        // Security check: Only allow http, https, and mailto protocols
+        $allowedProtocols = ['http', 'https', 'mailto'];
+        $scheme = parse_url($url, PHP_URL_SCHEME);
+
+        // If scheme is present but not allowed, or if it looks like a javascript: link
+        if (
+            ($scheme && !in_array(strtolower($scheme), $allowedProtocols)) ||
+            preg_match('/^\s*javascript:/i', $url)
+        ) {
+            // Unsafe URL - just return the text
+            return htmlspecialchars($text, ENT_QUOTES, 'UTF-8') . ' <small>(unsafe link removed)</small>';
+        }
+
         return '<a href="' . htmlspecialchars($url, ENT_QUOTES, 'UTF-8') . '" target="_blank" rel="noopener noreferrer">' . $text . '</a>';
     }, $text);
 

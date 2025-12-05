@@ -13,7 +13,8 @@
  * @param string $defaultUrl Fallback URL if validation fails
  * @return string Safe redirect URL
  */
-function validate_redirect_url($url, $basePath, $defaultUrl) {
+function validate_redirect_url($url, $basePath, $defaultUrl)
+{
     // Empty URL - use default
     if (empty($url)) {
         return $defaultUrl;
@@ -50,7 +51,8 @@ function validate_redirect_url($url, $basePath, $defaultUrl) {
  * @param string $url The URL to validate
  * @return bool True if URL is safe, false otherwise
  */
-function is_safe_url($url) {
+function is_safe_url($url)
+{
     // Parse URL
     $parsed = parse_url($url);
 
@@ -118,7 +120,8 @@ function is_safe_url($url) {
  * @param int $windowSeconds Time window in seconds
  * @return bool True if rate limit exceeded, false otherwise
  */
-function is_rate_limited($identifier, $maxAttempts = 5, $windowSeconds = 300) {
+function is_rate_limited($identifier, $maxAttempts = 5, $windowSeconds = 300)
+{
     // Use session to track attempts (simple approach for single-user app)
     // For multi-user, you'd want to use database or Redis
 
@@ -167,7 +170,8 @@ function is_rate_limited($identifier, $maxAttempts = 5, $windowSeconds = 300) {
  *
  * @param string $identifier Usually IP address
  */
-function record_failed_login($identifier) {
+function record_failed_login($identifier)
+{
     if (!isset($_SESSION['rate_limit'])) {
         $_SESSION['rate_limit'] = [];
     }
@@ -191,7 +195,8 @@ function record_failed_login($identifier) {
  *
  * @param string $identifier Usually IP address
  */
-function reset_rate_limit($identifier) {
+function reset_rate_limit($identifier)
+{
     if (isset($_SESSION['rate_limit'])) {
         $key = 'login_' . $identifier;
         unset($_SESSION['rate_limit'][$key]);
@@ -204,7 +209,8 @@ function reset_rate_limit($identifier) {
  * @param string $identifier Usually IP address
  * @return int Seconds remaining in lockout, 0 if not locked
  */
-function get_lockout_time($identifier) {
+function get_lockout_time($identifier)
+{
     if (!isset($_SESSION['rate_limit'])) {
         return 0;
     }
@@ -232,7 +238,16 @@ function get_lockout_time($identifier) {
  * @param int $timeout Timeout in seconds
  * @return array ['success' => bool, 'content' => string, 'error' => string]
  */
-function safe_fetch_url($url, $timeout = 10) {
+function safe_fetch_url($url, $timeout = 10, $maxRedirects = 5)
+{
+    if ($maxRedirects < 0) {
+        return [
+            'success' => false,
+            'content' => '',
+            'error' => 'Too many redirects'
+        ];
+    }
+
     // Validate URL against SSRF
     if (!is_safe_url($url)) {
         return [
@@ -243,16 +258,18 @@ function safe_fetch_url($url, $timeout = 10) {
     }
 
     // Create context with timeout and user agent
+    // IMPORTANT: Disable automatic redirect following to prevent SSRF via redirection
     $context = stream_context_create([
         'http' => [
             'timeout' => $timeout,
             'user_agent' => 'Mozilla/5.0 (compatible; BookmarksApp/1.0)',
-            'follow_location' => true,
-            'max_redirects' => 5,
+            'follow_location' => false, // We will handle redirects manually
+            'ignore_errors' => true // To read headers even on error codes
         ]
     ]);
 
-    // Fetch content
+    // Fetch headers first (or content + headers)
+    // file_get_contents populates $http_response_header variable in the local scope
     $content = @file_get_contents($url, false, $context);
 
     if ($content === false) {
@@ -261,6 +278,43 @@ function safe_fetch_url($url, $timeout = 10) {
             'content' => '',
             'error' => 'Failed to fetch URL'
         ];
+    }
+
+    // Check for redirects
+    if (isset($http_response_header)) {
+        // Parse status line
+        if (preg_match('#^HTTP/\d+\.\d+\s+(\d+)#', $http_response_header[0], $matches)) {
+            $statusCode = intval($matches[1]);
+
+            if ($statusCode >= 300 && $statusCode < 400) {
+                // Find location header
+                $redirectUrl = null;
+                foreach ($http_response_header as $header) {
+                    if (stripos($header, 'Location:') === 0) {
+                        $redirectUrl = trim(substr($header, 9));
+                        break;
+                    }
+                }
+
+                if ($redirectUrl) {
+                    // Handle relative URLs
+                    $parts = parse_url($url);
+                    if (strpos($redirectUrl, '//') === 0) {
+                        $redirectUrl = $parts['scheme'] . ':' . $redirectUrl;
+                    } elseif (strpos($redirectUrl, '/') === 0) {
+                        $redirectUrl = $parts['scheme'] . '://' . $parts['host'] . $redirectUrl;
+                    } elseif (!preg_match('#^https?://#i', $redirectUrl)) {
+                        // Relative path
+                        $path = $parts['path'] ?? '/';
+                        $path = substr($path, 0, strrpos($path, '/') + 1);
+                        $redirectUrl = $parts['scheme'] . '://' . $parts['host'] . $path . $redirectUrl;
+                    }
+
+                    // Recursively fetch the redirect
+                    return safe_fetch_url($redirectUrl, $timeout, $maxRedirects - 1);
+                }
+            }
+        }
     }
 
     return [

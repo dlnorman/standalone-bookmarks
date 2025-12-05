@@ -21,21 +21,36 @@
     AddOutputFilterByType DEFLATE text/html text/plain text/xml text/css application/javascript application/json application/rss+xml
 </IfModule>
 
-# Protect sessions directory
+# Security Headers
+<IfModule mod_headers.c>
+    Header set X-Frame-Options "SAMEORIGIN"
+    Header set X-Content-Type-Options "nosniff"
+    Header set Referrer-Policy "strict-origin-when-cross-origin"
+    # Uncomment HSTS if using HTTPS
+    # Header set Strict-Transport-Security "max-age=31536000; includeSubDomains"
+</IfModule>
+
+# Protect sensitive directories
 <IfModule mod_authz_core.c>
-    <DirectoryMatch "^.*/sessions/">
+    <DirectoryMatch "(^|/)(\.git|includes|sessions)/">
         Require all denied
     </DirectoryMatch>
 </IfModule>
 <IfModule !mod_authz_core.c>
-    <DirectoryMatch "^.*/sessions/">
+    <DirectoryMatch "(^|/)(\.git|includes|sessions)/">
         Order deny,allow
         Deny from all
     </DirectoryMatch>
 </IfModule>
 
 # Optional: Pretty URLs
+# Optional: Pretty URLs
 RewriteEngine On
+
+# Force HTTPS (Uncomment to enable)
+# RewriteCond %{HTTPS} off
+# RewriteRule ^(.*)$ https://%{HTTP_HOST}%{REQUEST_URI} [L,R=301]
+
 RewriteCond %{REQUEST_FILENAME} !-f
 RewriteCond %{REQUEST_FILENAME} !-d
 RewriteRule ^(.*)$ index.php [L,QSA]

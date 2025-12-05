@@ -34,6 +34,18 @@ if (session_status() === PHP_SESSION_NONE) {
         'samesite' => 'Lax'
     ]);
 
+    // Security Headers
+    // Prevent clickjacking
+    header('X-Frame-Options: SAMEORIGIN');
+    // Prevent MIME sniffing
+    header('X-Content-Type-Options: nosniff');
+    // strict referrer policy
+    header('Referrer-Policy: strict-origin-when-cross-origin');
+    // HSTS (if HTTPS)
+    if (isset($_SERVER['HTTPS']) && $_SERVER['HTTPS'] === 'on') {
+        header('Strict-Transport-Security: max-age=31536000; includeSubDomains');
+    }
+
     session_start();
 
     // Validate session integrity

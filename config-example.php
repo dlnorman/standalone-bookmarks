@@ -8,6 +8,8 @@
 
 return [
     // Database settings
+    // SECURITY NOTE: For production use, move this file OUTSIDE the web root (e.g., __DIR__ . '/../data/bookmarks.db')
+    // and update this path. If kept in web root, ensure your web server blocks access to .db files.
     'db_path' => __DIR__ . '/bookmarks-dev.db',
 
     // Application settings

@@ -26,7 +26,8 @@ if (isset($config['timezone'])) {
  * @param int $maxWidth Maximum width (default 1200px)
  * @return string|false Resized image data or original if resize not needed/possible
  */
-function resize_image($imageData, $mimeType, $maxWidth = 1200) {
+function resize_image($imageData, $mimeType, $maxWidth = 1200)
+{
     // Check if GD is available
     if (!extension_loaded('gd')) {
         return $imageData; // Return original if GD not available
@@ -69,7 +70,7 @@ function resize_image($imageData, $mimeType, $maxWidth = 1200) {
 
     // Calculate new dimensions maintaining aspect ratio
     $newWidth = $maxWidth;
-    $newHeight = (int)($height * ($maxWidth / $width));
+    $newHeight = (int) ($height * ($maxWidth / $width));
 
     // Create new image
     $newImage = imagecreatetruecolor($newWidth, $newHeight);
@@ -136,7 +137,7 @@ try {
         // Mark job as processing
         $now = date('Y-m-d H:i:s');
         $db->prepare("UPDATE jobs SET status = 'processing', updated_at = ? WHERE id = ?")
-           ->execute([$now, $job['id']]);
+            ->execute([$now, $job['id']]);
 
         $success = false;
         $result = '';
@@ -163,28 +164,28 @@ try {
                     ]);
 
                     $response = @file_get_contents($archiveApiUrl, false, $context);
-                $archiveUrl = '';
+                    $archiveUrl = '';
 
-                if (isset($http_response_header)) {
-                    foreach ($http_response_header as $header) {
-                        if (stripos($header, 'Location:') === 0) {
-                            $archiveUrl = trim(substr($header, 9));
-                            break;
-                        }
-                        if (stripos($header, 'Content-Location:') === 0) {
-                            $archiveUrl = trim(substr($header, 17));
-                            break;
+                    if (isset($http_response_header)) {
+                        foreach ($http_response_header as $header) {
+                            if (stripos($header, 'Location:') === 0) {
+                                $archiveUrl = trim(substr($header, 9));
+                                break;
+                            }
+                            if (stripos($header, 'Content-Location:') === 0) {
+                                $archiveUrl = trim(substr($header, 17));
+                                break;
+                            }
                         }
                     }
-                }
 
-                if (empty($archiveUrl)) {
-                    $archiveUrl = 'https://web.archive.org/web/*/' . $url;
-                }
+                    if (empty($archiveUrl)) {
+                        $archiveUrl = 'https://web.archive.org/web/*/' . $url;
+                    }
 
-                // Update bookmark with archive URL
-                $db->prepare("UPDATE bookmarks SET archive_url = ?, updated_at = ? WHERE id = ?")
-                   ->execute([$archiveUrl, $now, $job['bookmark_id']]);
+                    // Update bookmark with archive URL
+                    $db->prepare("UPDATE bookmarks SET archive_url = ?, updated_at = ? WHERE id = ?")
+                        ->execute([$archiveUrl, $now, $job['bookmark_id']]);
 
                     $result = $archiveUrl;
                     $success = true;
@@ -211,7 +212,7 @@ try {
                     if ($screenshotResult['success']) {
                         // Update bookmark with screenshot path
                         $db->prepare("UPDATE bookmarks SET screenshot = ?, updated_at = ? WHERE id = ?")
-                           ->execute([$screenshotResult['path'], $now, $job['bookmark_id']]);
+                            ->execute([$screenshotResult['path'], $now, $job['bookmark_id']]);
 
                         $method = $screenshotResult['method'] ?? 'unknown';
                         $result = $screenshotResult['path'] . " (via {$method})";
@@ -236,7 +237,7 @@ try {
                     curl_setopt_array($ch, [
                         CURLOPT_RETURNTRANSFER => true,
                         CURLOPT_NOBODY => true, // HEAD request
-                        CURLOPT_FOLLOWLOCATION => true,
+                        CURLOPT_FOLLOWLOCATION => false, // Don't follow redirects to prevent SSRF
                         CURLOPT_MAXREDIRS => 5,
                         CURLOPT_TIMEOUT => 15,
                         CURLOPT_CONNECTTIMEOUT => 10,
@@ -254,9 +255,9 @@ try {
                     $effectiveUrl = curl_getinfo($ch, CURLINFO_EFFECTIVE_URL);
                     curl_close($ch);
 
-                    // Consider 2xx and 3xx codes as success, also some 4xx that might be false positives
+                    // Consider 2xx and 3xx codes as success
                     // 200-299: Success
-                    // 300-399: Redirects (should be followed, but some might return these codes)
+                    // 300-399: Redirects (Link is valid, just points elsewhere)
                     // 401, 403: Unauthorized/Forbidden (site exists but requires auth - not broken)
                     // 405: Method Not Allowed (might not support HEAD, but site exists)
                     // 429: Rate limited (site exists)
@@ -268,7 +269,11 @@ try {
                         $statusMessage = "Connection error: $curlError";
                     } elseif ($httpCode >= 200 && $httpCode < 400) {
                         $isBroken = false;
-                        $statusMessage = "OK (HTTP $httpCode)";
+                        if ($httpCode >= 300) {
+                            $statusMessage = "Redirect (HTTP $httpCode)";
+                        } else {
+                            $statusMessage = "OK (HTTP $httpCode)";
+                        }
                     } elseif (in_array($httpCode, [401, 403, 405, 429])) {
                         // These codes mean the server responded, so URL is not broken
                         $isBroken = false;
@@ -287,8 +292,10 @@ try {
                     $hasBrokenUrl = false;
                     $hasLastChecked = false;
                     foreach ($columns as $column) {
-                        if ($column['name'] === 'broken_url') $hasBrokenUrl = true;
-                        if ($column['name'] === 'last_checked') $hasLastChecked = true;
+                        if ($column['name'] === 'broken_url')
+                            $hasBrokenUrl = true;
+                        if ($column['name'] === 'last_checked')
+                            $hasLastChecked = true;
                     }
 
                     if (!$hasBrokenUrl) {
@@ -299,7 +306,7 @@ try {
                     }
 
                     $db->prepare("UPDATE bookmarks SET broken_url = ?, last_checked = ?, updated_at = ? WHERE id = ?")
-                       ->execute([$isBroken ? 1 : 0, $now, $now, $job['bookmark_id']]);
+                        ->execute([$isBroken ? 1 : 0, $now, $now, $job['bookmark_id']]);
 
                     $result = $statusMessage;
                     $success = true;
@@ -314,12 +321,12 @@ try {
         $attempts = $job['attempts'] + 1;
         if ($success) {
             $db->prepare("UPDATE jobs SET status = 'completed', result = ?, attempts = ?, updated_at = ? WHERE id = ?")
-               ->execute([$result, $attempts, $now, $job['id']]);
+                ->execute([$result, $attempts, $now, $job['id']]);
             echo "✓ Success: $result\n";
         } else {
             $status = ($attempts >= 3) ? 'failed' : 'pending';
             $db->prepare("UPDATE jobs SET status = ?, result = ?, attempts = ?, updated_at = ? WHERE id = ?")
-               ->execute([$status, $result, $attempts, $now, $job['id']]);
+                ->execute([$status, $result, $attempts, $now, $job['id']]);
             echo "✗ Failed (attempt $attempts/3): $result\n";
         }
     }
