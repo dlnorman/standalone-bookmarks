@@ -46,6 +46,12 @@ try {
         die(json_encode(['success' => false, 'error' => 'Not authenticated']));
     }
 
+    // Release session lock to prevent blocking other requests
+    session_write_close();
+
+    // Extend execution time limit for long-running screenshot tasks
+    set_time_limit(300);
+
     // Only accept POST requests
     if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
         http_response_code(405);
@@ -73,6 +79,10 @@ try {
         die(json_encode(['success' => false, 'error' => 'Bookmark not found']));
     }
 
+    // Close database connection to prevent locking during long network operations
+    $stmt = null;
+    $db = null;
+
     // Initialize screenshot generator
     $generator = new ScreenshotGenerator($config);
 
@@ -95,6 +105,10 @@ try {
         ]));
     }
 
+    // Reconnect to database
+    $db = new PDO('sqlite:' . $config['db_path']);
+    $db->setAttribute(PDO::ATTR_ERRMODE, PDO::ERRMODE_EXCEPTION);
+
     // Update database
     $now = date('Y-m-d H:i:s');
     $stmt = $db->prepare("UPDATE bookmarks SET screenshot = ?, updated_at = ? WHERE id = ?");
@@ -105,7 +119,10 @@ try {
     $methodNames = [
         'pagespeed' => 'PageSpeed API screenshot',
         'og:image' => 'Open Graph image',
-        'content-image' => 'content image'
+        'content-image' => 'content image',
+        'favicon' => 'site favicon',
+        'file-icon' => 'file type icon',
+        'placeholder' => 'generated placeholder'
     ];
     $methodName = $methodNames[$method] ?? $method;
 

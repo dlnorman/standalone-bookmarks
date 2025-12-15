@@ -1,8 +1,9 @@
 <?php
 /**
- * Screenshot Generator using Google PageSpeed Insights API
+ * Screenshot Generator using Google PageSpeed Insights API with robust fallbacks
  *
  * Generates real webpage screenshots using the PageSpeed API
+ * Fallbacks: OG Image -> Content Images -> Favicon -> Placeholder
  */
 
 // Load security helpers for SSRF protection
@@ -16,7 +17,7 @@ class ScreenshotGenerator
     // Security constants
     const MAX_IMAGE_SIZE = 10485760; // 10MB max download
     const MAX_IMAGE_MEMORY = 52428800; // 50MB max memory for image processing
-    const DOWNLOAD_TIMEOUT = 30; // 30 seconds max for downloads
+    const DOWNLOAD_TIMEOUT = 15; // Reduced 15 seconds max for faster failure on fallbacks
 
     public function __construct($config)
     {
@@ -261,7 +262,9 @@ class ScreenshotGenerator
      * Generate screenshot with fallback chain:
      * 1. Try PageSpeed API screenshot
      * 2. Try og:image from HTML meta tags
-     * 3. Try first content image from page
+     * 3. Try content images from page (finding first large one)
+     * 4. Try Favicon from Google service
+     * 5. Generate text placeholder
      *
      * @param string $url URL to screenshot
      * @param string $strategy 'mobile' or 'desktop' (for PageSpeed API)
@@ -271,6 +274,31 @@ class ScreenshotGenerator
     public function generateWithFallback($url, $strategy = 'desktop', $baseDir = null)
     {
         $errors = [];
+
+        // Check for specific file extensions that shouldn't be screenshotted
+        $path = parse_url($url, PHP_URL_PATH);
+        $extension = strtolower(pathinfo($path, PATHINFO_EXTENSION));
+
+        $fileTypes = [
+            'pdf' => ['color' => [200, 50, 50], 'label' => 'PDF Doc'],
+            'zip' => ['color' => [200, 150, 50], 'label' => 'Archive'],
+            'rar' => ['color' => [200, 150, 50], 'label' => 'Archive'],
+            'gz' => ['color' => [200, 150, 50], 'label' => 'Archive'],
+            'mp3' => ['color' => [50, 100, 200], 'label' => 'Audio'],
+            'mp4' => ['color' => [50, 150, 200], 'label' => 'Video'],
+            'doc' => ['color' => [50, 50, 200], 'label' => 'Document'],
+            'docx' => ['color' => [50, 50, 200], 'label' => 'Document'],
+            'xls' => ['color' => [50, 150, 50], 'label' => 'Spreadsheet'],
+            'xlsx' => ['color' => [50, 150, 50], 'label' => 'Spreadsheet'],
+        ];
+
+        if (array_key_exists($extension, $fileTypes)) {
+            $typeInfo = $fileTypes[$extension];
+            $iconResult = $this->generateTypeIcon($url, $typeInfo['label'], $typeInfo['color'], $baseDir);
+            if ($iconResult['success']) {
+                return array_merge($iconResult, ['method' => 'file-icon']);
+            }
+        }
 
         // Method 1: Try PageSpeed API screenshot
         $result = $this->generateAndSave($url, $strategy, $baseDir);
@@ -291,17 +319,47 @@ class ScreenshotGenerator
             $errors['og:image'] = $ogImageResult['error'] ?? 'No og:image found';
         }
 
-        // Method 3: Try first content image
-        $contentImageResult = $this->getFirstContentImage($url);
-        if ($contentImageResult['success'] && !empty($contentImageResult['url'])) {
-            $downloadResult = $this->downloadAndSaveImage($contentImageResult['url'], $url, $baseDir);
-            if ($downloadResult['success']) {
-                return array_merge($downloadResult, ['method' => 'content-image']);
+        // Method 3: Try content images
+        // We act on the "First Large" image requirement by trying candidates until one passes the size check
+        $contentImagesResult = $this->getContentImages($url);
+        if ($contentImagesResult['success'] && !empty($contentImagesResult['urls'])) {
+            $attempts = 0;
+            foreach ($contentImagesResult['urls'] as $imageUrl) {
+                // Limit attempts to prevent timeout
+                if (++$attempts > 5)
+                    break;
+
+                // Try to download and save (enforcing 200x100 min size)
+                $downloadResult = $this->downloadAndSaveImage($imageUrl, $url, $baseDir, 200, 100);
+                if ($downloadResult['success']) {
+                    return array_merge($downloadResult, ['method' => 'content-image']);
+                }
             }
-            $errors['content-image'] = $downloadResult['error'];
+            $errors['content-image'] = 'No suitable content images found (checked ' . $attempts . ' candidates)';
         } else {
-            $errors['content-image'] = $contentImageResult['error'] ?? 'No content image found';
+            $errors['content-image'] = $contentImagesResult['error'] ?? 'No content images found';
         }
+
+        // Method 4: Try Favicon
+        $domain = parse_url($url, PHP_URL_HOST);
+        if ($domain) {
+            // Use Google's favicon service which is reliable
+            // Request 128px size, but allow smaller (min 16x16)
+            $faviconUrl = "https://www.google.com/s2/favicons?domain=" . urlencode($domain) . "&sz=128";
+            $downloadResult = $this->downloadAndSaveImage($faviconUrl, $url, $baseDir, 16, 16);
+            if ($downloadResult['success']) {
+                return array_merge($downloadResult, ['method' => 'favicon']);
+            }
+            $errors['favicon'] = $downloadResult['error'];
+        }
+
+        // Method 5: Generate Placeholder (Last Resort)
+        // This should always succeed unless permissions are broken
+        $placeholderResult = $this->generatePlaceholder($url, $baseDir);
+        if ($placeholderResult['success']) {
+            return array_merge($placeholderResult, ['method' => 'placeholder']);
+        }
+        $errors['placeholder'] = $placeholderResult['error'];
 
         // All methods failed
         return [
@@ -364,12 +422,13 @@ class ScreenshotGenerator
     }
 
     /**
-     * Extract first image from page content (excluding navigation)
+     * Extract candidate images from page content (excluding navigation)
+     * Returns a list of potential image URLs
      *
      * @param string $url URL to fetch and parse
-     * @return array ['success' => bool, 'url' => string|null, 'error' => string|null]
+     * @return array ['success' => bool, 'urls' => array, 'error' => string|null]
      */
-    public function getFirstContentImage($url)
+    public function getContentImages($url)
     {
         try {
             // Fetch HTML with timeout
@@ -418,29 +477,40 @@ class ScreenshotGenerator
             }
 
             // Find all images in content area
+            $candidates = [];
             if (@preg_match_all('/<img\s+[^>]*src=["\'](.*?)["\']/i', $contentHtml, $matches, PREG_SET_ORDER)) {
                 $matchCount = 0;
                 foreach ($matches as $match) {
-                    // Limit to first 100 images for performance
-                    if (++$matchCount > 100) break;
+                    // Limit to first 10 candidates to save time
+                    if (++$matchCount > 10)
+                        break;
 
                     $imageUrl = $match[1];
 
-                    // Skip small images (likely icons/avatars)
-                    // Skip data URIs, tracking pixels, etc.
-                    if (strpos($imageUrl, 'data:') === 0) continue;
-                    if (preg_match('/\b(icon|logo|avatar|pixel|1x1|tracking|sprite)\b/i', $imageUrl)) continue;
+                    // Skip common junk
+                    if (strpos($imageUrl, 'data:') === 0)
+                        continue;
+                    if (preg_match('/\b(icon|logo|avatar|pixel|1x1|tracking|sprite)\b/i', $imageUrl))
+                        continue;
+                    if (strpos($imageUrl, '.svg') !== false)
+                        continue; // Skip SVGs for now (GD limitations)
 
                     // Make relative URLs absolute and validate
                     $imageUrl = $this->makeAbsoluteUrl($imageUrl, $url);
-                    if ($imageUrl === null) continue;
+                    if ($imageUrl === null)
+                        continue;
 
-                    // Return first valid image
-                    return ['success' => true, 'url' => $imageUrl, 'error' => null];
+                    if (!in_array($imageUrl, $candidates)) {
+                        $candidates[] = $imageUrl;
+                    }
                 }
             }
 
-            return ['success' => false, 'url' => null, 'error' => 'No content images found'];
+            if (!empty($candidates)) {
+                return ['success' => true, 'urls' => $candidates, 'error' => null];
+            }
+
+            return ['success' => false, 'urls' => [], 'error' => 'No content images found'];
         } catch (Exception $e) {
             return ['success' => false, 'url' => null, 'error' => $e->getMessage()];
         }
@@ -452,9 +522,11 @@ class ScreenshotGenerator
      * @param string $imageUrl URL of the image to download
      * @param string $originalUrl Original page URL (for directory naming)
      * @param string|null $baseDir Base directory for screenshots
+     * @param int $minWidth Minimum width required (default 200)
+     * @param int $minHeight Minimum height required (default 100)
      * @return array ['success' => bool, 'path' => string|null, 'error' => string|null]
      */
-    public function downloadAndSaveImage($imageUrl, $originalUrl, $baseDir = null)
+    public function downloadAndSaveImage($imageUrl, $originalUrl, $baseDir = null, $minWidth = 200, $minHeight = 100)
     {
         try {
             // SECURITY: Validate image URL to prevent SSRF attacks
@@ -514,8 +586,8 @@ class ScreenshotGenerator
             }
 
             // Check minimum dimensions (avoid tiny images)
-            if ($imageInfo[0] < 200 || $imageInfo[1] < 100) {
-                return ['success' => false, 'path' => null, 'error' => 'Image too small (min 200x100)'];
+            if ($imageInfo[0] < $minWidth || $imageInfo[1] < $minHeight) {
+                return ['success' => false, 'path' => null, 'error' => "Image too small ({$imageInfo[0]}x{$imageInfo[1]}, min {$minWidth}x{$minHeight})"];
             }
 
             // SECURITY: Check for potential decompression bombs
@@ -619,7 +691,7 @@ class ScreenshotGenerator
 
         try {
             // Create image from string with error handling
-            set_error_handler(function() { /* Suppress errors */ });
+            set_error_handler(function () { /* Suppress errors */});
             $image = imagecreatefromstring($imageData);
             restore_error_handler();
 
@@ -641,7 +713,7 @@ class ScreenshotGenerator
 
             // Calculate new dimensions
             $newWidth = $maxWidth;
-            $newHeight = (int)($height * ($maxWidth / $width));
+            $newHeight = (int) ($height * ($maxWidth / $width));
 
             // SECURITY: Validate new dimensions
             if ($newHeight > 10000 || $newHeight < 1) {
@@ -693,5 +765,123 @@ class ScreenshotGenerator
             ini_set('memory_limit', $oldMemoryLimit);
             return false;
         }
+    }
+
+    /**
+     * Generate a placeholder image with the domain name
+     *
+     * @param string $url The URL for the bookmark
+     * @param string|null $baseDir Base directory
+     * @return array
+     */
+    public function generatePlaceholder($url, $baseDir = null)
+    {
+        $domain = parse_url($url, PHP_URL_HOST);
+        if (!$domain)
+            $domain = 'Unknown';
+        $domain = str_ireplace('www.', '', $domain);
+
+        // Colors derived from domain name to be consistent but varied
+        $hash = md5($domain);
+        $r = hexdec(substr($hash, 0, 2));
+        $g = hexdec(substr($hash, 2, 2));
+        $b = hexdec(substr($hash, 4, 2));
+
+        // Ensure color isn't too light or too dark
+        $r = max(50, min(200, $r));
+        $g = max(50, min(200, $g));
+        $b = max(50, min(200, $b));
+
+        $width = 256;
+        $height = 256;
+
+        $image = imagecreatetruecolor($width, $height);
+        $bgColor = imagecolorallocate($image, $r, $g, $b);
+        imagefilledrectangle($image, 0, 0, $width, $height, $bgColor);
+
+        // Add text
+        $textColor = imagecolorallocate($image, 255, 255, 255);
+
+        // Use built-in font 5 (approx 9px width, 15px height)
+        $font = 5;
+        $charWidth = 9;
+        $lineHeight = 20;
+
+        // Split domain into parts for multi-line display
+        $parts = explode('.', $domain);
+
+        // Filter out empty parts
+        $parts = array_filter($parts);
+        if (empty($parts))
+            $parts = [$domain];
+
+        // Limit to 3 parts to avoid overflow
+        if (count($parts) > 4) {
+            // If too many parts, just use the main domain logic
+            $parts = [$domain];
+        }
+
+        // Calculate total height to center the block
+        $totalTextHeight = count($parts) * $lineHeight;
+        $startY = ($height - $totalTextHeight) / 2;
+
+        foreach ($parts as $i => $part) {
+            // Truncate part if too long for width
+            if (strlen($part) * $charWidth > $width - 20) {
+                $maxChars = floor(($width - 20) / $charWidth);
+                $part = substr($part, 0, $maxChars - 3) . '...';
+            }
+
+            $currentTextWidth = strlen($part) * $charWidth;
+            $x = ($width - $currentTextWidth) / 2;
+            $y = $startY + ($i * $lineHeight);
+
+            imagestring($image, $font, (int) $x, (int) $y, $part, $textColor);
+        }
+
+        // Capture output
+        ob_start();
+        imagepng($image);
+        $imageData = ob_get_clean();
+        imagedestroy($image);
+
+        return $this->saveScreenshot($url, $imageData, $baseDir);
+    }
+
+    /**
+     * Generate a specific file type icon
+     */
+    public function generateTypeIcon($url, $label, $color, $baseDir = null)
+    {
+        $width = 256;
+        $height = 256;
+
+        $image = imagecreatetruecolor($width, $height);
+
+        // Background color
+        $bg = imagecolorallocate($image, $color[0], $color[1], $color[2]);
+        imagefilledrectangle($image, 0, 0, $width, $height, $bg);
+
+        // Text color
+        $textColor = imagecolorallocate($image, 255, 255, 255);
+
+        // Add "FILE" label or extension
+        $font = 5;
+        $charWidth = 9;
+
+        // Center text
+        $textWidth = strlen($label) * $charWidth;
+        $x = ($width - $textWidth) / 2;
+        $y = ($height - 15) / 2;
+
+        imagestring($image, $font, (int) $x, (int) $y, $label, $textColor);
+
+        // Capture
+        ob_start();
+        imagepng($image);
+        $imageData = ob_get_clean();
+        imagedestroy($image);
+
+        return $this->saveScreenshot($url, $imageData, $baseDir);
     }
 }
