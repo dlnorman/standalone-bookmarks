@@ -3,8 +3,12 @@
  * Authentication helper functions
  */
 
-// Start session if not already started
-if (session_status() === PHP_SESSION_NONE) {
+// Function to start secure session
+function start_secure_session()
+{
+    if (session_status() !== PHP_SESSION_NONE)
+        return;
+
     // Load config to get session timeout
     $config = require __DIR__ . '/config.php';
 
@@ -65,11 +69,22 @@ if (session_status() === PHP_SESSION_NONE) {
     }
 }
 
+// Determine if we should start the session
+// 1. If the user sends a session cookie, they might be logged in, so resume session.
+// 2. If the calling script explicitly requires a session (e.g. login page), force start.
+$should_start_session = isset($_COOKIE[session_name()]) || (defined('FORCE_SESSION_START') && FORCE_SESSION_START === true);
+
+if ($should_start_session) {
+    start_secure_session();
+}
+
 /**
  * Check if user is logged in
  */
 function is_logged_in()
 {
+    if (session_status() === PHP_SESSION_NONE)
+        return false;
     return isset($_SESSION['authenticated']) && $_SESSION['authenticated'] === true;
 }
 

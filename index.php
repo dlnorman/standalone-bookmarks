@@ -331,7 +331,7 @@ $totalPages = ceil($total / $limit);
     <script>
         const BASE_PATH = <?= json_encode($config['base_path']) ?>;
         const IS_LOGGED_IN = <?= json_encode($isLoggedIn) ?>;
-        const CSRF_TOKEN = <?= json_encode(csrf_get_token()) ?>;
+        const CSRF_TOKEN = <?= $isLoggedIn ? json_encode(csrf_get_token()) : 'null' ?>;
 
         function editBookmark(id) {
             if (!IS_LOGGED_IN) return;

@@ -9,9 +9,16 @@
  *
  * @return string The generated CSRF token
  */
-function csrf_generate_token() {
-    if (!isset($_SESSION['csrf_token']) || !isset($_SESSION['csrf_token_time']) ||
-        (time() - $_SESSION['csrf_token_time']) > 3600) {
+function csrf_generate_token()
+{
+    if (session_status() !== PHP_SESSION_ACTIVE) {
+        return '';
+    }
+
+    if (
+        !isset($_SESSION['csrf_token']) || !isset($_SESSION['csrf_token_time']) ||
+        (time() - $_SESSION['csrf_token_time']) > 3600
+    ) {
         // Generate new token if it doesn't exist or is older than 1 hour
         $_SESSION['csrf_token'] = bin2hex(random_bytes(32));
         $_SESSION['csrf_token_time'] = time();
@@ -24,7 +31,8 @@ function csrf_generate_token() {
  *
  * @return string The CSRF token
  */
-function csrf_get_token() {
+function csrf_get_token()
+{
     return csrf_generate_token();
 }
 
@@ -34,8 +42,9 @@ function csrf_get_token() {
  * @param string $token The token to validate
  * @return bool True if valid, false otherwise
  */
-function csrf_validate_token($token) {
-    if (!isset($_SESSION['csrf_token'])) {
+function csrf_validate_token($token)
+{
+    if (session_status() !== PHP_SESSION_ACTIVE || !isset($_SESSION['csrf_token'])) {
         return false;
     }
 
@@ -51,7 +60,8 @@ function csrf_validate_token($token) {
 /**
  * Output a hidden CSRF token field for forms
  */
-function csrf_field() {
+function csrf_field()
+{
     $token = csrf_get_token();
     echo '<input type="hidden" name="csrf_token" value="' . htmlspecialchars($token, ENT_QUOTES, 'UTF-8') . '">';
 }
@@ -61,7 +71,8 @@ function csrf_field() {
  *
  * @param string $error_message Custom error message (optional)
  */
-function csrf_require_valid_token($error_message = 'Invalid CSRF token. Please refresh the page and try again.') {
+function csrf_require_valid_token($error_message = 'Invalid CSRF token. Please refresh the page and try again.')
+{
     $token = $_POST['csrf_token'] ?? '';
 
     if (!csrf_validate_token($token)) {
@@ -83,7 +94,8 @@ function csrf_require_valid_token($error_message = 'Invalid CSRF token. Please r
  *
  * @return string JSON with token
  */
-function csrf_token_json() {
+function csrf_token_json()
+{
     $token = csrf_get_token();
     return json_encode(['csrf_token' => $token]);
 }

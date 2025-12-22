@@ -9,6 +9,7 @@ if (!file_exists(__DIR__ . '/config.php')) {
 }
 
 $config = require __DIR__ . '/config.php';
+define('FORCE_SESSION_START', true);
 require_once __DIR__ . '/auth.php';
 require_once __DIR__ . '/includes/csrf.php';
 require_once __DIR__ . '/includes/security.php';
