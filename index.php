@@ -365,7 +365,7 @@ $totalPages = ceil($total / $limit);
                         </div>
                         <div class="form-group">
                             <div class="checkbox-group">
-                                <input type="checkbox" id="edit-private-${id}" ${bookmark.private ? 'checked' : ''}>
+                                <input type="checkbox" id="edit-private-${id}" ${bookmark.private == 1 ? 'checked' : ''}>
                                 <label for="edit-private-${id}">Private (hidden from RSS feed and recent bookmarks)</label>
                             </div>
                         </div>
