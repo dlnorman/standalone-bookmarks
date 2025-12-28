@@ -74,13 +74,13 @@ if ($showBroken && $hasBrokenUrl) {
         $countStmt = $db->query("SELECT COUNT(*) as total FROM bookmarks WHERE broken_url = 1 AND private = 0");
     }
 } elseif (!empty($tag)) {
-    // Filter by tag (case-insensitive)
-    $tagPattern = '%' . strtolower($tag) . '%';
+    // Filter by tag (case-insensitive, exact match in comma-separated list)
+    $tagPattern = '%,' . strtolower(trim($tag)) . ',%';
 
     if ($isLoggedIn) {
         $stmt = $db->prepare("
             SELECT * FROM bookmarks
-            WHERE LOWER(tags) LIKE ?
+            WHERE ',' || REPLACE(LOWER(tags), ', ', ',') || ',' LIKE ?
             ORDER BY created_at DESC
             LIMIT ? OFFSET ?
         ");
@@ -88,13 +88,13 @@ if ($showBroken && $hasBrokenUrl) {
 
         $countStmt = $db->prepare("
             SELECT COUNT(*) as total FROM bookmarks
-            WHERE LOWER(tags) LIKE ?
+            WHERE ',' || REPLACE(LOWER(tags), ', ', ',') || ',' LIKE ?
         ");
         $countStmt->execute([$tagPattern]);
     } else {
         $stmt = $db->prepare("
             SELECT * FROM bookmarks
-            WHERE LOWER(tags) LIKE ? AND private = 0
+            WHERE (',' || REPLACE(LOWER(tags), ', ', ',') || ',') LIKE ? AND private = 0
             ORDER BY created_at DESC
             LIMIT ? OFFSET ?
         ");
@@ -102,7 +102,7 @@ if ($showBroken && $hasBrokenUrl) {
 
         $countStmt = $db->prepare("
             SELECT COUNT(*) as total FROM bookmarks
-            WHERE LOWER(tags) LIKE ? AND private = 0
+            WHERE (',' || REPLACE(LOWER(tags), ', ', ',') || ',') LIKE ? AND private = 0
         ");
         $countStmt->execute([$tagPattern]);
     }
