@@ -39,8 +39,8 @@ function start_secure_session()
     ]);
 
     // Security Headers
-    // Prevent clickjacking
-    header('X-Frame-Options: SAMEORIGIN');
+    // Allow embedding from same domain and all subdomains of darcynorman.net
+    header("Content-Security-Policy: frame-ancestors 'self' https://*.darcynorman.net");
     // Prevent MIME sniffing
     header('X-Content-Type-Options: nosniff');
     // strict referrer policy

@@ -23,7 +23,8 @@
 
 # Security Headers
 <IfModule mod_headers.c>
-    Header set X-Frame-Options "SAMEORIGIN"
+    # Allow embedding from same domain and all subdomains of darcynorman.net
+    Header set Content-Security-Policy "frame-ancestors 'self' https://*.darcynorman.net"
     Header set X-Content-Type-Options "nosniff"
     Header set Referrer-Policy "strict-origin-when-cross-origin"
     # Uncomment HSTS if using HTTPS
