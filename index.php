@@ -332,6 +332,9 @@ $totalPages = ceil($total / $limit);
         const BASE_PATH = <?= json_encode($config['base_path']) ?>;
         const IS_LOGGED_IN = <?= json_encode($isLoggedIn) ?>;
         const CSRF_TOKEN = <?= $isLoggedIn ? json_encode(csrf_get_token()) : 'null' ?>;
+        const DATE_FORMAT = <?= json_encode($config['date_format']) ?>;
+        const CURRENT_TAG = <?= json_encode($tag) ?>;
+        const CURRENT_BROKEN = <?= json_encode($showBroken) ?>;
 
         function editBookmark(id) {
             if (!IS_LOGGED_IN) return;
@@ -648,6 +651,320 @@ $totalPages = ceil($total / $limit);
                 input.focus();
             }
         }
+
+        // Instant search functionality
+        let searchTimeout;
+        let isSearching = false;
+        const searchInput = document.querySelector('input[name="q"]');
+        const searchForm = document.querySelector('.search-form');
+        const pageContainer = document.querySelector('.page-container');
+
+        if (searchInput) {
+            // Prevent default form submission and use instant search instead
+            searchForm.addEventListener('submit', function(e) {
+                e.preventDefault();
+                performSearch(searchInput.value.trim(), 1);
+            });
+
+            // Debounced instant search on input
+            searchInput.addEventListener('input', function() {
+                const query = this.value.trim();
+
+                clearTimeout(searchTimeout);
+                searchTimeout = setTimeout(() => {
+                    performSearch(query, 1);
+                }, 300); // 300ms debounce
+            });
+        }
+
+        function performSearch(query, page = 1) {
+            if (isSearching) return;
+
+            isSearching = true;
+            showLoadingState();
+
+            // Build URL with current filters
+            const params = new URLSearchParams({
+                action: 'list',
+                q: query,
+                page: page,
+                limit: <?= $limit ?>
+            });
+
+            if (CURRENT_TAG) {
+                params.set('tag', CURRENT_TAG);
+            }
+
+            if (CURRENT_BROKEN) {
+                params.set('broken', '1');
+            }
+
+            fetch(BASE_PATH + '/api.php?' + params.toString())
+                .then(r => r.json())
+                .then(data => {
+                    renderBookmarks(data, query);
+                    isSearching = false;
+                })
+                .catch(err => {
+                    console.error('Search error:', err);
+                    isSearching = false;
+                    hideLoadingState();
+                });
+        }
+
+        function showLoadingState() {
+            // Add loading indicator to search input
+            searchInput.style.backgroundImage = 'linear-gradient(90deg, #3498db 0%, #3498db 50%, transparent 50%)';
+            searchInput.style.backgroundSize = '200% 2px';
+            searchInput.style.backgroundPosition = '100% 100%';
+            searchInput.style.backgroundRepeat = 'no-repeat';
+            searchInput.style.animation = 'searchLoading 1s linear infinite';
+
+            // Dim existing results
+            const existingResults = pageContainer.querySelector('.search-results-container');
+            if (existingResults) {
+                existingResults.style.opacity = '0.5';
+                existingResults.style.pointerEvents = 'none';
+            }
+
+            // Add loading animation styles if not already present
+            if (!document.getElementById('searchLoadingStyles')) {
+                const style = document.createElement('style');
+                style.id = 'searchLoadingStyles';
+                style.textContent = `
+                    @keyframes searchLoading {
+                        0% { background-position: 100% 100%; }
+                        100% { background-position: -100% 100%; }
+                    }
+                `;
+                document.head.appendChild(style);
+            }
+        }
+
+        function hideLoadingState() {
+            // Remove loading indicator
+            searchInput.style.backgroundImage = '';
+            searchInput.style.animation = '';
+
+            // Restore results
+            const existingResults = pageContainer.querySelector('.search-results-container');
+            if (existingResults) {
+                existingResults.style.opacity = '1';
+                existingResults.style.pointerEvents = 'auto';
+            }
+        }
+
+        function renderBookmarks(data, query) {
+            // Remove existing results if any
+            const existingResults = pageContainer.querySelector('.search-results-container');
+            if (existingResults) {
+                existingResults.remove();
+            }
+
+            // Create results container
+            const resultsContainer = document.createElement('div');
+            resultsContainer.className = 'search-results-container';
+
+            if (data.bookmarks.length === 0) {
+                resultsContainer.innerHTML = `
+                    <div class="no-results">
+                        <p>No bookmarks found${query ? ' for "' + escapeHtml(query) + '"' : ''}.</p>
+                    </div>
+                `;
+            } else {
+                // Render bookmarks
+                data.bookmarks.forEach(bookmark => {
+                    resultsContainer.appendChild(createBookmarkElement(bookmark));
+                });
+
+                // Add pagination if needed
+                if (data.pages > 1) {
+                    resultsContainer.appendChild(createPagination(data, query));
+                }
+            }
+
+            // Insert after search header
+            const searchHeader = pageContainer.querySelector('.search-header');
+            searchHeader.after(resultsContainer);
+        }
+
+        function createBookmarkElement(bookmark) {
+            const div = document.createElement('div');
+            div.className = 'bookmark' + (bookmark.private ? ' private' : '') + (bookmark.broken_url ? ' broken' : '');
+            div.id = 'bookmark-' + bookmark.id;
+
+            // Screenshot/placeholder
+            let screenshotHTML = '';
+            if (bookmark.screenshot) {
+                screenshotHTML = `
+                    <div class="bookmark-screenshot-container">
+                        <a href="${escapeHtml(bookmark.url)}" target="_blank" rel="noopener noreferrer">
+                            <img src="${BASE_PATH}/${escapeHtml(bookmark.screenshot)}" alt="Screenshot" title="Click to open bookmark">
+                        </a>
+                    </div>
+                `;
+            } else {
+                screenshotHTML = `
+                    <div class="bookmark-screenshot-container">
+                        <div class="bookmark-screenshot-placeholder">
+                            ${bookmark.title.substring(0, 1).toUpperCase()}
+                        </div>
+                    </div>
+                `;
+            }
+
+            // Tags
+            let tagsHTML = '';
+            if (bookmark.tags) {
+                const tags = bookmark.tags.split(',').map(t => t.trim());
+                tagsHTML = '<div class="bookmark-tags">';
+                tags.forEach(tag => {
+                    tagsHTML += `<a href="?tag=${encodeURIComponent(tag)}" class="bookmark-tag">${escapeHtml(tag)}</a>`;
+                });
+                tagsHTML += '</div>';
+            }
+
+            // Actions (only if logged in)
+            let actionsHTML = '';
+            if (IS_LOGGED_IN) {
+                actionsHTML = `
+                    <div class="actions">
+                        <a href="#" onclick="editBookmark(${bookmark.id}); return false;">Edit</a>
+                        <a href="#" onclick="deleteBookmark(${bookmark.id}); return false;">Delete</a>
+                        <a href="#" onclick="regenerateScreenshot(${bookmark.id}); return false;">Regenerate Screenshot</a>
+                    </div>
+                `;
+            }
+
+            // Badges
+            let badgesHTML = '';
+            if (bookmark.private) {
+                badgesHTML += '<span class="private-badge">PRIVATE</span>';
+            }
+            if (bookmark.broken_url) {
+                badgesHTML += '<span class="broken-badge" title="This URL appears to be broken">BROKEN</span>';
+            }
+
+            // Archive link
+            let archiveHTML = '';
+            if (bookmark.archive_url) {
+                archiveHTML = `
+                    <span class="bookmark-meta-item">
+                        <a href="${escapeHtml(bookmark.archive_url)}" target="_blank" rel="noopener noreferrer" class="bookmark-archive-link">📦 Archive</a>
+                    </span>
+                `;
+            }
+
+            div.innerHTML = `
+                ${screenshotHTML}
+                <div class="bookmark-content">
+                    <div class="bookmark-header">
+                        <h2>
+                            <a href="${escapeHtml(bookmark.url)}" target="_blank" rel="noopener noreferrer">${escapeHtml(bookmark.title)}</a>
+                            ${badgesHTML}
+                        </h2>
+                        <div class="url">${escapeHtml(bookmark.url)}</div>
+                    </div>
+                    ${bookmark.description_html ? '<div class="description">' + bookmark.description_html + '</div>' : ''}
+                    ${tagsHTML}
+                    <div class="meta">
+                        <div class="bookmark-meta-left">
+                            <span class="bookmark-meta-item">
+                                ${formatDate(bookmark.created_at)}
+                            </span>
+                            ${archiveHTML}
+                        </div>
+                        ${actionsHTML}
+                    </div>
+                </div>
+            `;
+
+            return div;
+        }
+
+        function createPagination(data, query) {
+            const paginationDiv = document.createElement('div');
+            paginationDiv.className = 'pagination';
+
+            if (data.page > 1) {
+                const prevLink = document.createElement('a');
+                prevLink.href = '#';
+                prevLink.textContent = 'Previous';
+                prevLink.onclick = (e) => {
+                    e.preventDefault();
+                    performSearch(query, data.page - 1);
+                    window.scrollTo(0, 0);
+                };
+                paginationDiv.appendChild(prevLink);
+            }
+
+            // Page numbers
+            for (let i = Math.max(1, data.page - 2); i <= Math.min(data.pages, data.page + 2); i++) {
+                if (i === data.page) {
+                    const span = document.createElement('span');
+                    span.textContent = i;
+                    paginationDiv.appendChild(span);
+                } else {
+                    const link = document.createElement('a');
+                    link.href = '#';
+                    link.textContent = i;
+                    link.onclick = (e) => {
+                        e.preventDefault();
+                        performSearch(query, i);
+                        window.scrollTo(0, 0);
+                    };
+                    paginationDiv.appendChild(link);
+                }
+            }
+
+            if (data.page < data.pages) {
+                const nextLink = document.createElement('a');
+                nextLink.href = '#';
+                nextLink.textContent = 'Next';
+                nextLink.onclick = (e) => {
+                    e.preventDefault();
+                    performSearch(query, data.page + 1);
+                    window.scrollTo(0, 0);
+                };
+                paginationDiv.appendChild(nextLink);
+            }
+
+            return paginationDiv;
+        }
+
+        function formatDate(dateString) {
+            const date = new Date(dateString);
+            return date.toLocaleDateString('en-US', {
+                year: 'numeric',
+                month: 'short',
+                day: 'numeric'
+            });
+        }
+
+        // Initialize instant search on page load if there's existing content
+        window.addEventListener('DOMContentLoaded', function() {
+            // If there are bookmarks shown on the initial page load, hide them and prepare for instant search
+            const existingBookmarks = document.querySelectorAll('.bookmark');
+            const existingPagination = document.querySelector('.pagination');
+            const noResults = document.querySelector('.no-results');
+
+            if (existingBookmarks.length > 0 || noResults) {
+                // Wrap existing content in results container for consistency
+                const resultsContainer = document.createElement('div');
+                resultsContainer.className = 'search-results-container';
+
+                const searchHeader = pageContainer.querySelector('.search-header');
+                let nextElement = searchHeader.nextElementSibling;
+
+                while (nextElement) {
+                    const currentElement = nextElement;
+                    nextElement = nextElement.nextElementSibling;
+                    resultsContainer.appendChild(currentElement);
+                }
+
+                searchHeader.after(resultsContainer);
+            }
+        });
     </script>
 </body>
 

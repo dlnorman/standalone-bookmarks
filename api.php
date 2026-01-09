@@ -17,6 +17,7 @@ $config = require __DIR__ . '/config.php';
 require_once __DIR__ . '/auth.php';
 require_once __DIR__ . '/includes/csrf.php';
 require_once __DIR__ . '/includes/security.php';
+require_once __DIR__ . '/includes/markdown.php';
 
 // Set timezone
 if (isset($config['timezone'])) {
@@ -37,7 +38,7 @@ try {
 $action = $_GET['action'] ?? $_POST['action'] ?? '';
 
 // Public endpoints that don't require authentication
-$publicEndpoints = ['dashboard_stats', 'get_tags'];
+$publicEndpoints = ['dashboard_stats', 'get_tags', 'list'];
 
 // Read-only endpoints that don't require CSRF tokens
 $readOnlyEndpoints = ['get', 'list', 'fetch_meta', 'get_tags', 'dashboard_stats', 'check_status'];
@@ -181,38 +182,77 @@ switch ($action) {
 
     case 'list':
         $search = $_GET['q'] ?? '';
+        $tag = $_GET['tag'] ?? '';
+        $showBroken = isset($_GET['broken']) && $_GET['broken'] === '1';
         $page = max(1, intval($_GET['page'] ?? 1));
         $limit = intval($_GET['limit'] ?? $config['items_per_page']);
         $offset = ($page - 1) * $limit;
+        $isLoggedIn = is_logged_in();
 
-        // Build query
-        if (!empty($search)) {
-            $searchTerm = '%' . $search . '%';
-            $stmt = $db->prepare("
-                SELECT * FROM bookmarks
-                WHERE title LIKE ? OR description LIKE ? OR tags LIKE ? OR url LIKE ?
-                ORDER BY created_at DESC
-                LIMIT ? OFFSET ?
-            ");
-            $stmt->execute([$searchTerm, $searchTerm, $searchTerm, $searchTerm, $limit, $offset]);
-
-            $countStmt = $db->prepare("
-                SELECT COUNT(*) as total FROM bookmarks
-                WHERE title LIKE ? OR description LIKE ? OR tags LIKE ? OR url LIKE ?
-            ");
-            $countStmt->execute([$searchTerm, $searchTerm, $searchTerm, $searchTerm]);
-        } else {
-            $stmt = $db->prepare("
-                SELECT * FROM bookmarks
-                ORDER BY created_at DESC
-                LIMIT ? OFFSET ?
-            ");
-            $stmt->execute([$limit, $offset]);
-
-            $countStmt = $db->query("SELECT COUNT(*) as total FROM bookmarks");
+        // Check if broken_url column exists
+        $columns = $db->query("PRAGMA table_info(bookmarks)")->fetchAll(PDO::FETCH_ASSOC);
+        $hasBrokenUrl = false;
+        foreach ($columns as $column) {
+            if ($column['name'] === 'broken_url') {
+                $hasBrokenUrl = true;
+                break;
+            }
         }
 
+        // Build query based on filters
+        $whereConditions = [];
+        $params = [];
+
+        // Privacy filter
+        if (!$isLoggedIn) {
+            $whereConditions[] = "private = 0";
+        }
+
+        // Broken URL filter
+        if ($showBroken && $hasBrokenUrl) {
+            $whereConditions[] = "broken_url = 1";
+        }
+
+        // Tag filter
+        if (!empty($tag)) {
+            $tagPattern = '%,' . strtolower(trim($tag)) . ',%';
+            $whereConditions[] = "',' || REPLACE(LOWER(tags), ', ', ',') || ',' LIKE ?";
+            $params[] = $tagPattern;
+        }
+
+        // Search filter
+        if (!empty($search)) {
+            $searchTerm = '%' . $search . '%';
+            $whereConditions[] = "(title LIKE ? OR description LIKE ? OR tags LIKE ? OR url LIKE ?)";
+            $params[] = $searchTerm;
+            $params[] = $searchTerm;
+            $params[] = $searchTerm;
+            $params[] = $searchTerm;
+        }
+
+        // Build WHERE clause
+        $whereClause = !empty($whereConditions) ? 'WHERE ' . implode(' AND ', $whereConditions) : '';
+
+        // Execute query
+        $query = "SELECT * FROM bookmarks $whereClause ORDER BY created_at DESC LIMIT ? OFFSET ?";
+        $stmt = $db->prepare($query);
+        $stmt->execute(array_merge($params, [$limit, $offset]));
         $bookmarks = $stmt->fetchAll(PDO::FETCH_ASSOC);
+
+        // Parse markdown descriptions
+        foreach ($bookmarks as &$bookmark) {
+            if (!empty($bookmark['description'])) {
+                $bookmark['description_html'] = parseMarkdown($bookmark['description']);
+            } else {
+                $bookmark['description_html'] = '';
+            }
+        }
+        unset($bookmark); // Break reference
+
+        // Count total
+        $countQuery = "SELECT COUNT(*) as total FROM bookmarks $whereClause";
+        $countStmt = $db->prepare($countQuery);
+        $countStmt->execute($params);
         $total = $countStmt->fetch(PDO::FETCH_ASSOC)['total'];
 
         echo json_encode([

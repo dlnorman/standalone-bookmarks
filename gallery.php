@@ -210,36 +210,267 @@ unset($bookmark); // Break reference
     </div>
 
     <script>
-        const bookmarksData = <?= json_encode($bookmarks) ?>;
+        let bookmarksData = <?= json_encode($bookmarks) ?>;
         const basePath = <?= json_encode($config['base_path']) ?>;
+        const itemsPerPage = <?= $itemsPerPage ?>;
 
-        // Filter functionality
+        // Live search functionality
+        let searchTimeout;
+        let isSearching = false;
         const filterInput = document.getElementById('filterInput');
         const galleryGrid = document.getElementById('galleryGrid');
         const visibleCount = document.getElementById('visibleCount');
+        const statsDiv = document.querySelector('.stats');
+        const paginationDiv = document.querySelector('.pagination');
 
         filterInput.addEventListener('input', function () {
-            const query = this.value.toLowerCase().trim();
-            const items = galleryGrid.querySelectorAll('.gallery-item');
-            let visible = 0;
+            const query = this.value.trim();
 
-            items.forEach(item => {
-                const title = item.dataset.title.toLowerCase();
-                const url = item.dataset.url.toLowerCase();
-                const tags = item.dataset.tags.toLowerCase();
+            clearTimeout(searchTimeout);
+            searchTimeout = setTimeout(() => {
+                performSearch(query, 1);
+            }, 300); // 300ms debounce
+        });
 
-                const matches = title.includes(query) || url.includes(query) || tags.includes(query);
+        function performSearch(query, page = 1) {
+            if (isSearching) return;
 
-                if (matches) {
-                    item.style.display = 'block';
-                    visible++;
-                } else {
-                    item.style.display = 'none';
-                }
+            isSearching = true;
+            showLoadingState();
+
+            // Build API request
+            const params = new URLSearchParams({
+                action: 'list',
+                q: query,
+                page: page,
+                limit: itemsPerPage
             });
 
-            visibleCount.textContent = visible;
-        });
+            fetch(basePath + '/api.php?' + params.toString())
+                .then(r => r.json())
+                .then(data => {
+                    bookmarksData = data.bookmarks;
+                    renderGallery(data, query);
+                    updatePagination(data, query);
+                    isSearching = false;
+                })
+                .catch(err => {
+                    console.error('Search error:', err);
+                    isSearching = false;
+                    hideLoadingState();
+                });
+        }
+
+        function showLoadingState() {
+            filterInput.style.opacity = '0.6';
+            filterInput.disabled = true;
+            galleryGrid.style.opacity = '0.5';
+            galleryGrid.style.pointerEvents = 'none';
+        }
+
+        function hideLoadingState() {
+            filterInput.style.opacity = '1';
+            filterInput.disabled = false;
+            galleryGrid.style.opacity = '1';
+            galleryGrid.style.pointerEvents = 'auto';
+        }
+
+        function renderGallery(data, query) {
+            hideLoadingState();
+
+            // Update stats
+            const totalOnPage = data.bookmarks.length;
+            visibleCount.textContent = totalOnPage;
+
+            // Update stats text
+            const paginationInfo = statsDiv.querySelector('.pagination-info');
+            if (data.pages > 1) {
+                if (paginationInfo) {
+                    paginationInfo.textContent = `(${data.total} total across ${data.pages} pages)`;
+                } else {
+                    const span = document.createElement('span');
+                    span.className = 'pagination-info';
+                    span.textContent = `(${data.total} total across ${data.pages} pages)`;
+                    statsDiv.appendChild(span);
+                }
+            } else {
+                if (paginationInfo) {
+                    paginationInfo.remove();
+                }
+            }
+
+            // Clear grid
+            galleryGrid.innerHTML = '';
+
+            if (data.bookmarks.length === 0) {
+                const noResults = document.createElement('div');
+                noResults.className = 'no-results';
+                noResults.innerHTML = `
+                    <div class="no-results-icon">🔍</div>
+                    <p>No screenshots found${query ? ' for "' + escapeHtml(query) + '"' : ''}.</p>
+                `;
+                galleryGrid.appendChild(noResults);
+                return;
+            }
+
+            // Render bookmarks
+            data.bookmarks.forEach(bookmark => {
+                galleryGrid.appendChild(createGalleryItem(bookmark));
+            });
+        }
+
+        function createGalleryItem(bookmark) {
+            const div = document.createElement('div');
+            div.className = 'gallery-item';
+            div.dataset.id = bookmark.id;
+            div.dataset.title = bookmark.title || '';
+            div.dataset.url = bookmark.url || '';
+            div.dataset.tags = (bookmark.tags || '').toLowerCase();
+            div.onclick = () => window.open(bookmark.url, '_blank');
+
+            // Tags HTML
+            let tagsHTML = '';
+            if (bookmark.tags) {
+                const tags = bookmark.tags.split(',').map(t => t.trim());
+                tagsHTML = '<div class="gallery-item-tags">';
+                tags.slice(0, 3).forEach(tag => {
+                    tagsHTML += `<span class="gallery-tag">${escapeHtml(tag)}</span>`;
+                });
+                if (tags.length > 3) {
+                    tagsHTML += `<span class="gallery-tag">+${tags.length - 3}</span>`;
+                }
+                tagsHTML += '</div>';
+            }
+
+            div.innerHTML = `
+                <img src="${basePath}/${escapeHtml(bookmark.screenshot)}"
+                    alt="${escapeHtml(bookmark.title)}" class="gallery-item-image" loading="lazy">
+                <div class="gallery-item-info">
+                    <div class="gallery-item-header">
+                        <div class="gallery-item-title">${escapeHtml(bookmark.title)}</div>
+                        <button class="btn-details" onclick="event.stopPropagation(); openModal(${bookmark.id})"
+                            title="View Details">
+                            <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24"
+                                fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"
+                                stroke-linejoin="round">
+                                <circle cx="12" cy="12" r="10"></circle>
+                                <line x1="12" y1="16" x2="12" y2="12"></line>
+                                <line x1="12" y1="8" x2="12.01" y2="8"></line>
+                            </svg>
+                        </button>
+                    </div>
+                    <div class="gallery-item-url">${escapeHtml(getHostname(bookmark.url))}</div>
+                    ${tagsHTML}
+                    <div class="gallery-item-date">
+                        ${formatDate(bookmark.created_at)}
+                    </div>
+                </div>
+            `;
+
+            return div;
+        }
+
+        function updatePagination(data, query) {
+            if (!paginationDiv) return;
+
+            if (data.pages <= 1) {
+                paginationDiv.style.display = 'none';
+                return;
+            }
+
+            paginationDiv.style.display = 'block';
+            paginationDiv.innerHTML = '';
+
+            const page = data.page;
+            const totalPages = data.pages;
+
+            // Previous buttons
+            if (page > 1) {
+                paginationDiv.appendChild(createPageLink('« First', 1, query));
+                paginationDiv.appendChild(createPageLink('‹ Previous', page - 1, query));
+            } else {
+                paginationDiv.appendChild(createPageSpan('« First', 'disabled'));
+                paginationDiv.appendChild(createPageSpan('‹ Previous', 'disabled'));
+            }
+
+            // Page numbers
+            const range = 2;
+            const start = Math.max(1, page - range);
+            const end = Math.min(totalPages, page + range);
+
+            if (start > 1) {
+                paginationDiv.appendChild(createPageLink('1', 1, query));
+                if (start > 2) {
+                    paginationDiv.appendChild(createPageSpan('...', 'disabled'));
+                }
+            }
+
+            for (let i = start; i <= end; i++) {
+                if (i === page) {
+                    paginationDiv.appendChild(createPageSpan(i, 'current'));
+                } else {
+                    paginationDiv.appendChild(createPageLink(i, i, query));
+                }
+            }
+
+            if (end < totalPages) {
+                if (end < totalPages - 1) {
+                    paginationDiv.appendChild(createPageSpan('...', 'disabled'));
+                }
+                paginationDiv.appendChild(createPageLink(totalPages, totalPages, query));
+            }
+
+            // Next buttons
+            if (page < totalPages) {
+                paginationDiv.appendChild(createPageLink('Next ›', page + 1, query));
+                paginationDiv.appendChild(createPageLink('Last »', totalPages, query));
+            } else {
+                paginationDiv.appendChild(createPageSpan('Next ›', 'disabled'));
+                paginationDiv.appendChild(createPageSpan('Last »', 'disabled'));
+            }
+        }
+
+        function createPageLink(text, page, query) {
+            const a = document.createElement('a');
+            a.href = '#';
+            a.textContent = text;
+            a.onclick = (e) => {
+                e.preventDefault();
+                performSearch(query, page);
+                window.scrollTo(0, 0);
+            };
+            return a;
+        }
+
+        function createPageSpan(text, className) {
+            const span = document.createElement('span');
+            span.className = className;
+            span.textContent = text;
+            return span;
+        }
+
+        function getHostname(url) {
+            try {
+                return new URL(url).hostname;
+            } catch {
+                return url;
+            }
+        }
+
+        function formatDate(dateString) {
+            const date = new Date(dateString);
+            return date.toLocaleDateString('en-US', {
+                year: 'numeric',
+                month: 'short',
+                day: 'numeric'
+            });
+        }
+
+        function escapeHtml(text) {
+            const div = document.createElement('div');
+            div.textContent = text;
+            return div.innerHTML;
+        }
 
         // Modal functionality
         function openModal(bookmarkId) {
