@@ -21,10 +21,102 @@ if (isset($config['timezone'])) {
 // Require authentication
 require_auth($config);
 
+/**
+ * Strip common tracking parameters from URLs
+ */
+function strip_tracking_params($url) {
+    if (empty($url)) {
+        return $url;
+    }
+
+    // List of tracking parameters to remove
+    $trackingParams = [
+        // Google Analytics & Ads
+        'utm_source', 'utm_medium', 'utm_campaign', 'utm_term', 'utm_content', 'utm_id',
+        'gclid', 'gclsrc', '_ga', '_gl', 'gbraid', 'wbraid',
+        // Facebook
+        'fbclid', 'fb_action_ids', 'fb_action_types', 'fb_ref', 'fb_source',
+        // Microsoft/Bing
+        'msclkid', 'mc_cid', 'mc_eid',
+        // Twitter
+        'twclid', 'twsrc',
+        // Instagram
+        'igshid', 'igsh',
+        // LinkedIn
+        'li_fat_id', 'lipi',
+        // TikTok
+        'ttclid',
+        // Reddit
+        'rdt_cid',
+        // Mailchimp
+        'mc_cid', 'mc_eid',
+        // Marketo
+        'mkt_tok', 'mkt_hm', 'mkt_unsubscribe', 'aliId',
+        // HubSpot
+        '_hsenc', '_hsmi',
+        // Other common tracking
+        'ref', 'referrer', 'source', 'campaign_id',
+        'pk_campaign', 'pk_kwd', 'zanpid', 'yclid',
+    ];
+
+    try {
+        $urlParts = parse_url($url);
+
+        if (!isset($urlParts['query'])) {
+            // No query string, return as-is
+            return $url;
+        }
+
+        parse_str($urlParts['query'], $queryParams);
+
+        // Remove tracking parameters
+        foreach ($trackingParams as $param) {
+            unset($queryParams[$param]);
+        }
+
+        // Also remove any parameter starting with utm_
+        foreach (array_keys($queryParams) as $key) {
+            if (strpos($key, 'utm_') === 0) {
+                unset($queryParams[$key]);
+            }
+        }
+
+        // Rebuild URL
+        $cleanUrl = $urlParts['scheme'] . '://' . $urlParts['host'];
+
+        if (isset($urlParts['port'])) {
+            $cleanUrl .= ':' . $urlParts['port'];
+        }
+
+        if (isset($urlParts['path'])) {
+            $cleanUrl .= $urlParts['path'];
+        }
+
+        if (!empty($queryParams)) {
+            $cleanUrl .= '?' . http_build_query($queryParams);
+        }
+
+        if (isset($urlParts['fragment'])) {
+            $cleanUrl .= '#' . $urlParts['fragment'];
+        }
+
+        return $cleanUrl;
+    } catch (Exception $e) {
+        // If URL parsing fails, return original URL
+        error_log("URL parsing failed: " . $e->getMessage());
+        return $url;
+    }
+}
+
 // Get URL and title from query string
 $url = $_GET['url'] ?? '';
 $title = $_GET['title'] ?? '';
 $selectedText = $_GET['selected'] ?? '';
+
+// Strip tracking parameters from URL
+if (!empty($url)) {
+    $url = strip_tracking_params($url);
+}
 
 // Check if this URL already exists in the database
 $existingBookmark = null;
@@ -139,6 +231,11 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['submit'])) {
     $submitTags = $_POST['tags'] ?? '';
     $submitPrivate = isset($_POST['private']) ? 1 : 0;
     $submitBookmarkId = $_POST['bookmark_id'] ?? null;
+
+    // Strip tracking parameters from submitted URL
+    if (!empty($submitUrl)) {
+        $submitUrl = strip_tracking_params($submitUrl);
+    }
 
     if (!empty($submitUrl) && !empty($submitTitle)) {
         // Connect to database
@@ -306,8 +403,14 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['submit'])) {
             if (!input || !suggestionsDiv) return;
 
             let selectedIndex = -1;
+            let isInserting = false; // Flag to prevent input event during programmatic changes
 
             input.addEventListener('input', async function () {
+                // Skip processing if we're programmatically inserting a tag
+                if (isInserting) {
+                    return;
+                }
+
                 const value = this.value;
                 const cursorPos = this.selectionStart;
 
@@ -320,7 +423,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['submit'])) {
                 const currentTag = beforeCursor.substring(lastComma + 1).trim();
 
                 if (currentTag.length === 0) {
+                    suggestionsDiv.innerHTML = '';
                     suggestionsDiv.classList.remove('active');
+                    selectedIndex = -1;
                     return;
                 }
 
@@ -334,7 +439,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['submit'])) {
                 );
 
                 if (matches.length === 0) {
+                    suggestionsDiv.innerHTML = '';
                     suggestionsDiv.classList.remove('active');
+                    selectedIndex = -1;
                     return;
                 }
 
@@ -348,12 +455,19 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['submit'])) {
 
                 suggestionsDiv.classList.add('active');
 
-                // Add click handlers to suggestions
+                // Add mousedown handlers to suggestions (mousedown fires before blur)
                 suggestionsDiv.querySelectorAll('.tag-suggestion').forEach(suggestionEl => {
-                    suggestionEl.addEventListener('click', function () {
+                    suggestionEl.addEventListener('mousedown', function (e) {
+                        e.preventDefault(); // Prevent blur from firing
                         const tag = this.getAttribute('data-tag');
+                        isInserting = true; // Set flag before inserting
                         insertTag(input, tag, lastComma, cursorPos, nextComma === -1 ? value.length : cursorPos + nextComma);
+                        // Hide and clear suggestions immediately
+                        suggestionsDiv.innerHTML = '';
                         suggestionsDiv.classList.remove('active');
+                        selectedIndex = -1;
+                        // Clear flag after event loop completes
+                        setTimeout(() => { isInserting = false; }, 50);
                     });
                 });
             });
@@ -376,17 +490,34 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['submit'])) {
                 } else if (e.key === 'Enter' || e.key === 'Tab') {
                     if (selectedIndex >= 0) {
                         e.preventDefault();
-                        suggestions[selectedIndex].click();
+                        // Trigger the mousedown event to use the same logic
+                        const event = new MouseEvent('mousedown', { bubbles: true });
+                        suggestions[selectedIndex].dispatchEvent(event);
                     }
                 } else if (e.key === 'Escape') {
+                    e.preventDefault();
+                    suggestionsDiv.innerHTML = '';
                     suggestionsDiv.classList.remove('active');
+                    selectedIndex = -1;
                 }
+            });
+
+            // Close suggestions when input loses focus (but allow clicking on suggestions)
+            input.addEventListener('blur', function () {
+                // Use setTimeout to allow mousedown events on suggestions to fire first
+                setTimeout(() => {
+                    suggestionsDiv.innerHTML = '';
+                    suggestionsDiv.classList.remove('active');
+                    selectedIndex = -1;
+                }, 150);
             });
 
             // Close suggestions when clicking outside
             document.addEventListener('click', function (e) {
                 if (!input.contains(e.target) && !suggestionsDiv.contains(e.target)) {
+                    suggestionsDiv.innerHTML = '';
                     suggestionsDiv.classList.remove('active');
+                    selectedIndex = -1;
                 }
             });
 
@@ -416,6 +547,19 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['submit'])) {
         // Initialize autocomplete when the page loads
         document.addEventListener('DOMContentLoaded', function () {
             initTagAutocomplete('tags', 'tags-suggestions');
+
+            // Auto-focus the title field if it's empty, otherwise focus tags field
+            const titleInput = document.getElementById('title');
+            const tagsInput = document.getElementById('tags');
+
+            if (titleInput && titleInput.value.trim() === '') {
+                titleInput.focus();
+            } else if (tagsInput) {
+                // If title is already populated, focus on tags for quick editing
+                tagsInput.focus();
+                // Place cursor at the end
+                tagsInput.setSelectionRange(tagsInput.value.length, tagsInput.value.length);
+            }
         });
     </script>
 </body>
