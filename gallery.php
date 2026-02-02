@@ -12,6 +12,7 @@ $config = require __DIR__ . '/config.php';
 require_once __DIR__ . '/auth.php';
 require_once __DIR__ . '/includes/markdown.php';
 require_once __DIR__ . '/includes/nav.php';
+require_once __DIR__ . '/includes/tags.php';
 
 // Set timezone
 if (isset($config['timezone'])) {
@@ -128,10 +129,9 @@ unset($bookmark); // Break reference
                                     <?php
                                     $tags = array_map('trim', explode(',', $bookmark['tags']));
                                     foreach (array_slice($tags, 0, 3) as $tag):
-                                        ?>
-                                        <span class="gallery-tag"><?= htmlspecialchars($tag) ?></span>
-                                    <?php endforeach; ?>
-                                    <?php if (count($tags) > 3): ?>
+                                        echo renderTag($tag, $config['base_path'], 'gallery-tag');
+                                    endforeach;
+                                    if (count($tags) > 3): ?>
                                         <span class="gallery-tag">+<?= count($tags) - 3 ?></span>
                                     <?php endif; ?>
                                 </div>
@@ -331,10 +331,10 @@ unset($bookmark); // Break reference
             // Tags HTML
             let tagsHTML = '';
             if (bookmark.tags) {
-                const tags = bookmark.tags.split(',').map(t => t.trim());
+                const tags = bookmark.tags.split(',').map(t => t.trim()).filter(t => t);
                 tagsHTML = '<div class="gallery-item-tags">';
                 tags.slice(0, 3).forEach(tag => {
-                    tagsHTML += `<span class="gallery-tag">${escapeHtml(tag)}</span>`;
+                    tagsHTML += renderTagHtml(tag, 'gallery-tag');
                 });
                 if (tags.length > 3) {
                     tagsHTML += `<span class="gallery-tag">+${tags.length - 3}</span>`;
@@ -472,6 +472,42 @@ unset($bookmark); // Break reference
             return div.innerHTML;
         }
 
+        // Tag type parsing and rendering
+        function parseTagType(tag) {
+            tag = tag.trim();
+            if (tag.startsWith('person:')) {
+                return { type: 'person', name: tag.substring(7) };
+            } else if (tag.startsWith('via:')) {
+                return { type: 'via', name: tag.substring(4) };
+            }
+            return { type: 'tag', name: tag };
+        }
+
+        function getTagTypeClass(type) {
+            switch (type) {
+                case 'person': return 'tag-person';
+                case 'via': return 'tag-via';
+                default: return '';
+            }
+        }
+
+        function getTagTypeIcon(type) {
+            switch (type) {
+                case 'person': return '<span class="tag-icon">&#128100;</span>'; // 👤
+                case 'via': return '<span class="tag-icon">&#128228;</span>'; // 📤
+                default: return '';
+            }
+        }
+
+        function renderTagHtml(tag, className = 'gallery-tag') {
+            const parsed = parseTagType(tag);
+            const typeClass = getTagTypeClass(parsed.type);
+            const icon = getTagTypeIcon(parsed.type);
+            const classes = (className + ' ' + typeClass).trim();
+            const encodedTag = encodeURIComponent(tag);
+            return `<a href="${basePath}/?tag=${encodedTag}" class="${classes}" onclick="event.stopPropagation()">${icon}${escapeHtml(parsed.name)}</a>`;
+        }
+
         // Modal functionality
         function openModal(bookmarkId) {
             const bookmark = bookmarksData.find(b => b.id == bookmarkId);
@@ -507,10 +543,14 @@ unset($bookmark); // Break reference
                 const tags = bookmark.tags.split(',').map(t => t.trim()).filter(t => t);
                 if (tags.length > 0) {
                     tags.forEach(tag => {
-                        const span = document.createElement('span');
-                        span.className = 'modal-tag';
-                        span.textContent = tag;
-                        modalTags.appendChild(span);
+                        const parsed = parseTagType(tag);
+                        const typeClass = getTagTypeClass(parsed.type);
+                        const icon = getTagTypeIcon(parsed.type);
+                        const a = document.createElement('a');
+                        a.href = basePath + '/?tag=' + encodeURIComponent(tag);
+                        a.className = ('modal-tag ' + typeClass).trim();
+                        a.innerHTML = icon + escapeHtml(parsed.name);
+                        modalTags.appendChild(a);
                     });
                     modalTags.style.display = 'flex';
                 } else {

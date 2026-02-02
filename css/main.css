@@ -2456,3 +2456,39 @@ a.nav-btn-primary:hover,
 .tag-link.tag-via.tag-size-5 {
     color: var(--accent-amber);
 }
+
+/* Gallery and modal tag styling for typed tags */
+.gallery-tag.tag-person,
+.modal-tag.tag-person {
+    background: rgba(52, 199, 89, 0.15) !important;
+    color: var(--accent-green) !important;
+    border: 1px solid rgba(52, 199, 89, 0.3) !important;
+}
+
+.gallery-tag.tag-person:hover,
+.modal-tag.tag-person:hover {
+    background: rgba(52, 199, 89, 0.25) !important;
+}
+
+.gallery-tag.tag-via,
+.modal-tag.tag-via {
+    background: rgba(255, 149, 0, 0.15) !important;
+    color: var(--accent-amber) !important;
+    border: 1px solid rgba(255, 149, 0, 0.3) !important;
+}
+
+.gallery-tag.tag-via:hover,
+.modal-tag.tag-via:hover {
+    background: rgba(255, 149, 0, 0.25) !important;
+}
+
+/* Make modal tags work as links */
+a.modal-tag {
+    text-decoration: none;
+    cursor: pointer;
+    transition: all 0.2s;
+}
+
+a.modal-tag:hover {
+    opacity: 0.9;
+}

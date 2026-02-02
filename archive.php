@@ -13,6 +13,7 @@ $config = require __DIR__ . '/config.php';
 require_once __DIR__ . '/auth.php';
 require_once __DIR__ . '/includes/markdown.php';
 require_once __DIR__ . '/includes/nav.php';
+require_once __DIR__ . '/includes/tags.php';
 
 // Set timezone
 if (isset($config['timezone'])) {
@@ -371,7 +372,7 @@ if (!empty($export) && !empty($bookmarks)) {
                                             <?php
                                             $tagList = array_map('trim', explode(',', $bookmark['tags']));
                                             foreach ($tagList as $tagItem) {
-                                                echo '<a href="' . $config['base_path'] . '/?tag=' . urlencode($tagItem) . '" class="bookmark-tag">' . htmlspecialchars($tagItem) . '</a>';
+                                                echo renderTag($tagItem, $config['base_path']);
                                             }
                                             ?>
                                         </div>
