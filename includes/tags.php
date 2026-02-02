@@ -182,19 +182,25 @@ function renameTag($db, $oldTag, $newTag) {
         $newTags = [];
         $hasNewTag = false;
 
-        foreach ($tags as $tag) {
-            if (strtolower($tag) === strtolower($newTag)) {
-                $hasNewTag = true;
+        // Only check for existing newTag if it's different from oldTag (case-insensitive)
+        // This prevents the bug where renaming to the same tag or changing case causes deletion
+        if (strtolower($oldTag) !== strtolower($newTag)) {
+            foreach ($tags as $tag) {
+                if (strtolower($tag) === strtolower($newTag)) {
+                    $hasNewTag = true;
+                    break;
+                }
             }
         }
 
         foreach ($tags as $tag) {
             if (strtolower($tag) === strtolower($oldTag)) {
-                // Only add new tag if bookmark doesn't already have it
+                // Replace old tag with new tag (handles both rename and case normalization)
                 if (!$hasNewTag) {
                     $newTags[] = $newTag;
                     $hasNewTag = true;
                 }
+                // If hasNewTag is true (target already exists), skip to avoid duplicate
             } else {
                 $newTags[] = $tag;
             }
