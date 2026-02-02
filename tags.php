@@ -11,6 +11,7 @@ if (!file_exists(__DIR__ . '/config.php')) {
 $config = require __DIR__ . '/config.php';
 require_once __DIR__ . '/auth.php';
 require_once __DIR__ . '/includes/nav.php';
+require_once __DIR__ . '/includes/tags.php';
 
 // Set timezone
 if (isset($config['timezone'])) {
@@ -57,28 +58,41 @@ if ($lastMod) {
 }
 
 // Fetch bookmarks to extract tags (exclude private if not logged in)
-if ($isLoggedIn) {
-    $stmt = $db->query("SELECT tags FROM bookmarks WHERE tags IS NOT NULL AND tags != ''");
-} else {
-    $stmt = $db->query("SELECT tags FROM bookmarks WHERE tags IS NOT NULL AND tags != '' AND private = 0");
-}
-$allTags = [];
+$allTags = getAllTagsWithCounts($db, $isLoggedIn);
 
-while ($row = $stmt->fetch(PDO::FETCH_ASSOC)) {
-    $tags = array_map('trim', explode(',', $row['tags']));
-    foreach ($tags as $tag) {
-        if (!empty($tag)) {
-            $tag = strtolower($tag); // Normalize to lowercase for consistency
-            if (!isset($allTags[$tag])) {
-                $allTags[$tag] = 0;
-            }
-            $allTags[$tag]++;
-        }
-    }
+// Get filter parameter
+$filterType = $_GET['type'] ?? 'all';
+
+// Process tags with type info
+$processedTags = [];
+foreach ($allTags as $tagLower => $data) {
+    $parsed = parseTagType($data['display']);
+    $processedTags[$tagLower] = [
+        'full' => $data['display'],
+        'name' => $parsed['name'],
+        'type' => $parsed['type'],
+        'count' => $data['count'],
+    ];
 }
 
-// Sort tags alphabetically (size will still be based on count)
-ksort($allTags);
+// Filter by type if specified
+if ($filterType !== 'all') {
+    $processedTags = array_filter($processedTags, function($t) use ($filterType) {
+        return $t['type'] === $filterType;
+    });
+}
+
+// Sort tags alphabetically by display name
+uasort($processedTags, function($a, $b) {
+    return strcasecmp($a['name'], $b['name']);
+});
+
+// Count by type for filter tabs
+$typeCounts = ['all' => count($allTags), 'tag' => 0, 'person' => 0, 'via' => 0];
+foreach ($allTags as $tagLower => $data) {
+    $parsed = parseTagType($data['display']);
+    $typeCounts[$parsed['type']]++;
+}
 ?>
 <!DOCTYPE html>
 <html lang="en">
@@ -95,38 +109,78 @@ ksort($allTags);
     <?php render_nav($config, $isLoggedIn, 'tags', 'Tags'); ?>
 
     <div class="page-container">
+        <!-- Filter Tabs -->
+        <div class="tags-filter-tabs">
+            <a href="?type=all" class="filter-tab <?= $filterType === 'all' ? 'active' : '' ?>">
+                All <span class="tab-count"><?= $typeCounts['all'] ?></span>
+            </a>
+            <a href="?type=tag" class="filter-tab <?= $filterType === 'tag' ? 'active' : '' ?>">
+                Tags <span class="tab-count"><?= $typeCounts['tag'] ?></span>
+            </a>
+            <a href="?type=person" class="filter-tab filter-tab-person <?= $filterType === 'person' ? 'active' : '' ?>">
+                <span class="tag-icon">&#128100;</span> People <span class="tab-count"><?= $typeCounts['person'] ?></span>
+            </a>
+            <a href="?type=via" class="filter-tab filter-tab-via <?= $filterType === 'via' ? 'active' : '' ?>">
+                <span class="tag-icon">&#128228;</span> Via <span class="tab-count"><?= $typeCounts['via'] ?></span>
+            </a>
+        </div>
 
         <div class="tags-container">
-            <?php if (empty($allTags)): ?>
+            <?php if (empty($processedTags)): ?>
                 <div class="no-tags">
                     <p>No tags found. Add some tags to your bookmarks!</p>
                 </div>
             <?php else: ?>
                 <div class="tag-cloud">
                     <?php
-                    // Calculate size classes based on frequency using logarithmic scale
-                    $maxCount = max($allTags);
-                    $minCount = min($allTags);
+                    // Calculate font sizes using logarithmic scale for better distribution
+                    $counts = array_column($processedTags, 'count');
+                    $maxCount = max($counts);
+                    $minCount = min($counts);
 
-                    foreach ($allTags as $tag => $count):
-                        // Use logarithmic scale for better distribution
-                        // This gives more differentiation at lower counts
-                        if ($count == 1) {
-                            $size = 1;
-                        } elseif ($count <= 2) {
-                            $size = 2;
-                        } elseif ($count <= 4) {
-                            $size = 3;
-                        } elseif ($count <= 8) {
-                            $size = 4;
+                    // Font size range in rem
+                    $minFontSize = 0.9;
+                    $maxFontSize = 2.4;
+
+                    // Pre-calculate log bounds
+                    $logMin = log(max(1, $minCount));
+                    $logMax = log(max(1, $maxCount));
+
+                    foreach ($processedTags as $tagData):
+                        $count = $tagData['count'];
+                        // Use logarithmic scale for continuous sizing
+                        // This adapts to the actual data range and differentiates all values
+                        if ($logMax == $logMin) {
+                            // All tags have same count - use middle size
+                            $fontSize = ($minFontSize + $maxFontSize) / 2;
+                            $ratio = 0.5;
                         } else {
-                            $size = 5;
+                            $logCount = log(max(1, $count));
+                            $ratio = ($logCount - $logMin) / ($logMax - $logMin);
+                            $fontSize = $minFontSize + $ratio * ($maxFontSize - $minFontSize);
                         }
+
+                        // Determine size class for styling (opacity, color, weight)
+                        if ($ratio < 0.2) {
+                            $sizeClass = 1;
+                        } elseif ($ratio < 0.4) {
+                            $sizeClass = 2;
+                        } elseif ($ratio < 0.6) {
+                            $sizeClass = 3;
+                        } elseif ($ratio < 0.8) {
+                            $sizeClass = 4;
+                        } else {
+                            $sizeClass = 5;
+                        }
+
+                        $typeClass = getTagTypeClass($tagData['type']);
+                        $icon = getTagTypeIcon($tagData['type']);
                         ?>
                         <div class="tag-item">
-                            <a href="<?= $config['base_path'] ?>/?tag=<?= urlencode($tag) ?>"
-                                class="tag-link tag-size-<?= $size ?>">
-                                <?= htmlspecialchars($tag) ?>
+                            <a href="<?= $config['base_path'] ?>/?tag=<?= urlencode($tagData['full']) ?>"
+                                class="tag-link tag-size-<?= $sizeClass ?> <?= $typeClass ?>"
+                                style="font-size: <?= number_format($fontSize, 2) ?>rem">
+                                <?= $icon ?><?= htmlspecialchars($tagData['name']) ?>
                                 <span class="tag-count"><?= $count ?></span>
                             </a>
                         </div>

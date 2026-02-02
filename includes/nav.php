@@ -145,6 +145,8 @@ function render_nav($config, $isLoggedIn, $current_page, $page_title = null)
                                 <?php if (function_exists('is_admin') && is_admin()): ?>
                                     <a href="<?= $config['base_path'] ?>/admin.php" class="dropdown-item" role="menuitem">User
                                         Management</a>
+                                    <a href="<?= $config['base_path'] ?>/tag-admin.php" class="dropdown-item" role="menuitem">Tag
+                                        Management</a>
                                 <?php endif; ?>
                                 <a href="<?= $config['base_path'] ?>/account.php" class="dropdown-item"
                                     role="menuitem">Account</a>

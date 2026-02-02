@@ -1618,30 +1618,27 @@ body.diagnostics-page {
     color: var(--text-tertiary);
 }
 
+/* Font sizes are set inline via logarithmic calculation in PHP */
+/* These classes control opacity, weight, and color based on relative frequency */
 .tag-size-1 {
-    font-size: 0.9rem;
     opacity: 0.7;
 }
 
 .tag-size-2 {
-    font-size: 1.1rem;
     opacity: 0.85;
 }
 
 .tag-size-3 {
-    font-size: 1.4rem;
     font-weight: 500;
     color: var(--text-primary);
 }
 
 .tag-size-4 {
-    font-size: 1.8rem;
     font-weight: 600;
     color: var(--primary);
 }
 
 .tag-size-5 {
-    font-size: 2.4rem;
     font-weight: 800;
     color: var(--primary-hover);
     text-shadow: 0 4px 12px rgba(99, 102, 241, 0.2);
@@ -2333,4 +2330,129 @@ a.nav-btn-primary:hover,
     color: var(--text-tertiary);
     font-size: 13px;
     margin-left: 8px;
+}
+
+/* =================================================================
+   Tag Types (Person, Via)
+   ================================================================= */
+
+/* Tag type icons */
+.tag-icon {
+    margin-right: 4px;
+    font-style: normal;
+}
+
+/* Person tags - green/teal styling */
+.tag-person {
+    background: rgba(52, 199, 89, 0.1) !important;
+    color: var(--accent-green) !important;
+    border: 1px solid rgba(52, 199, 89, 0.2);
+}
+
+.tag-person:hover {
+    background: var(--accent-green) !important;
+    color: white !important;
+    border-color: var(--accent-green);
+}
+
+/* Via tags - orange/amber styling */
+.tag-via {
+    background: rgba(255, 149, 0, 0.1) !important;
+    color: var(--accent-amber) !important;
+    border: 1px solid rgba(255, 149, 0, 0.2);
+}
+
+.tag-via:hover {
+    background: var(--accent-amber) !important;
+    color: white !important;
+    border-color: var(--accent-amber);
+}
+
+/* Tag cloud specific styling for typed tags */
+.tag-link.tag-person {
+    color: var(--accent-green);
+}
+
+.tag-link.tag-person:hover {
+    color: var(--accent-green-hover);
+}
+
+.tag-link.tag-via {
+    color: var(--accent-amber);
+}
+
+.tag-link.tag-via:hover {
+    color: #e68a00;
+}
+
+/* Tags page filter tabs */
+.tags-filter-tabs {
+    display: flex;
+    gap: 8px;
+    margin-bottom: 24px;
+    flex-wrap: wrap;
+    justify-content: center;
+}
+
+.filter-tab {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    padding: 10px 20px;
+    background: var(--bg-secondary);
+    border: 1px solid var(--border-color);
+    border-radius: 99px;
+    color: var(--text-secondary);
+    text-decoration: none;
+    font-size: 14px;
+    font-weight: 500;
+    transition: all 0.2s;
+}
+
+.filter-tab:hover {
+    background: var(--bg-tertiary);
+    color: var(--text-primary);
+    border-color: var(--text-secondary);
+}
+
+.filter-tab.active {
+    background: var(--text-primary);
+    color: var(--bg-primary);
+    border-color: var(--text-primary);
+}
+
+.filter-tab-person.active {
+    background: var(--accent-green);
+    border-color: var(--accent-green);
+}
+
+.filter-tab-via.active {
+    background: var(--accent-amber);
+    border-color: var(--accent-amber);
+}
+
+.tab-count {
+    background: rgba(255, 255, 255, 0.2);
+    padding: 2px 8px;
+    border-radius: 99px;
+    font-size: 12px;
+    font-weight: 600;
+}
+
+.filter-tab:not(.active) .tab-count {
+    background: var(--bg-tertiary);
+    color: var(--text-tertiary);
+}
+
+/* Override for tag-size classes with tag types */
+.tag-link.tag-person.tag-size-3,
+.tag-link.tag-person.tag-size-4,
+.tag-link.tag-person.tag-size-5 {
+    color: var(--accent-green);
+}
+
+.tag-link.tag-via.tag-size-3,
+.tag-link.tag-via.tag-size-4,
+.tag-link.tag-via.tag-size-5 {
+    color: var(--accent-amber);
 }

@@ -13,6 +13,7 @@ require_once __DIR__ . '/auth.php';
 require_once __DIR__ . '/includes/markdown.php';
 require_once __DIR__ . '/includes/csrf.php';
 require_once __DIR__ . '/includes/nav.php';
+require_once __DIR__ . '/includes/tags.php';
 
 // Set timezone
 if (isset($config['timezone'])) {
@@ -268,7 +269,7 @@ $totalPages = ceil($total / $limit);
                                 <?php
                                 $tagList = array_map('trim', explode(',', $bookmark['tags']));
                                 foreach ($tagList as $tagItem) {
-                                    echo '<a href="?tag=' . urlencode($tagItem) . '" class="bookmark-tag">' . htmlspecialchars($tagItem) . '</a>';
+                                    echo renderTag($tagItem, $config['base_path']);
                                 }
                                 ?>
                             </div>
@@ -335,6 +336,33 @@ $totalPages = ceil($total / $limit);
         const DATE_FORMAT = <?= json_encode($config['date_format']) ?>;
         const CURRENT_TAG = <?= json_encode($tag) ?>;
         const CURRENT_BROKEN = <?= json_encode($showBroken) ?>;
+
+        // Tag type helper functions for JavaScript
+        function parseTagTypeJS(tag) {
+            tag = tag.trim();
+            if (tag.startsWith('person:')) {
+                return { type: 'person', name: tag.substring(7) };
+            } else if (tag.startsWith('via:')) {
+                return { type: 'via', name: tag.substring(4) };
+            }
+            return { type: 'tag', name: tag };
+        }
+
+        function getTagTypeClassJS(type) {
+            switch (type) {
+                case 'person': return 'tag-person';
+                case 'via': return 'tag-via';
+                default: return '';
+            }
+        }
+
+        function getTagTypeIconJS(type) {
+            switch (type) {
+                case 'person': return '<span class="tag-icon">&#128100;</span>';
+                case 'via': return '<span class="tag-icon">&#128228;</span>';
+                default: return '';
+            }
+        }
 
         function editBookmark(id) {
             if (!IS_LOGGED_IN) return;
@@ -819,7 +847,10 @@ $totalPages = ceil($total / $limit);
                 const tags = bookmark.tags.split(',').map(t => t.trim());
                 tagsHTML = '<div class="bookmark-tags">';
                 tags.forEach(tag => {
-                    tagsHTML += `<a href="?tag=${encodeURIComponent(tag)}" class="bookmark-tag">${escapeHtml(tag)}</a>`;
+                    const parsed = parseTagTypeJS(tag);
+                    const typeClass = getTagTypeClassJS(parsed.type);
+                    const icon = getTagTypeIconJS(parsed.type);
+                    tagsHTML += `<a href="?tag=${encodeURIComponent(tag)}" class="bookmark-tag ${typeClass}">${icon}${escapeHtml(parsed.name)}</a>`;
                 });
                 tagsHTML += '</div>';
             }
