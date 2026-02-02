@@ -307,7 +307,7 @@ $isLoggedIn = is_logged_in();
             overflow: hidden;
         }
 
-        .network-svg {
+        .network-canvas {
             width: 100%;
             height: 100%;
             display: block;
@@ -672,7 +672,7 @@ $isLoggedIn = is_logged_in();
                 <div>Loading tag network...</div>
             </div>
 
-            <svg class="network-svg" id="networkSvg"></svg>
+            <canvas class="network-canvas" id="networkCanvas"></canvas>
 
             <div class="filter-status" id="filterStatus">
                 Showing <strong id="visibleCount">0</strong> of <strong id="totalCount">0</strong> tags
@@ -694,10 +694,21 @@ $isLoggedIn = is_logged_in();
         let rawData = null;
         let filteredData = null;
         let simulation = null;
-        let svg = null;
-        let container = null;
-        let zoom = null;
+        let canvas = null;
+        let ctx = null;
+        let transform = d3.zoomIdentity;
         let selectedNode = null;
+        let hoveredNode = null;
+        let draggedNode = null;
+        let width = 0;
+        let height = 0;
+        let dpr = 1;
+        let nodes = [];
+        let links = [];
+        let clusters = [];
+        let sizeScale = null;
+        let needsRedraw = true;
+        let animationId = null;
 
         // Filter state
         const filterState = {
@@ -714,9 +725,19 @@ $isLoggedIn = is_logged_in();
         // Cluster colors
         const clusterColors = d3.schemeTableau10;
 
-        // Helper to get CSS variable value
-        function getCSSVariable(name) {
-            return getComputedStyle(document.documentElement).getPropertyValue(name).trim();
+        // Cached CSS colors
+        let cssColors = {};
+        function updateCSSColors() {
+            const style = getComputedStyle(document.documentElement);
+            cssColors = {
+                bgPrimary: style.getPropertyValue('--bg-primary').trim(),
+                bgSecondary: style.getPropertyValue('--bg-secondary').trim(),
+                textPrimary: style.getPropertyValue('--text-primary').trim(),
+                textSecondary: style.getPropertyValue('--text-secondary').trim(),
+                borderColor: style.getPropertyValue('--border-color').trim(),
+                primary: style.getPropertyValue('--primary').trim(),
+                accentAmber: style.getPropertyValue('--accent-amber').trim()
+            };
         }
 
         // Parse tag prefix
@@ -771,14 +792,14 @@ $isLoggedIn = is_logged_in();
             const tagSet = new Set(tags.map(t => t.tag.toLowerCase()));
 
             // Filter links
-            let links = rawData.cooccurrence.filter(l =>
+            let filteredLinks = rawData.cooccurrence.filter(l =>
                 l.count >= filterState.minCooccurrence &&
                 tagSet.has(l.source.toLowerCase()) &&
                 tagSet.has(l.target.toLowerCase())
             );
 
             // Prepare nodes
-            const nodes = tags.map(t => {
+            const filteredNodes = tags.map(t => {
                 const parsed = parseTagPrefix(t.tag);
                 return {
                     id: t.tag.toLowerCase(),
@@ -792,20 +813,20 @@ $isLoggedIn = is_logged_in();
             });
 
             // Detect clusters using simple community detection
-            detectClusters(nodes, links);
+            detectClusters(filteredNodes, filteredLinks);
 
-            filteredData = { nodes, links };
+            filteredData = { nodes: filteredNodes, links: filteredLinks };
 
             // Update stats
-            document.getElementById('visibleTagsStat').textContent = nodes.length;
-            document.getElementById('visibleCount').textContent = nodes.length;
-            document.getElementById('linksStat').textContent = links.length;
+            document.getElementById('visibleTagsStat').textContent = filteredNodes.length;
+            document.getElementById('visibleCount').textContent = filteredNodes.length;
+            document.getElementById('linksStat').textContent = filteredLinks.length;
 
             // Count unique clusters
-            const clusters = new Set(nodes.map(n => n.cluster));
-            document.getElementById('clustersStat').textContent = clusters.size;
+            const uniqueClusters = new Set(filteredNodes.map(n => n.cluster));
+            document.getElementById('clustersStat').textContent = uniqueClusters.size;
 
-            renderNetwork();
+            initNetwork();
         }
 
         // Simple community detection based on co-occurrence
@@ -881,150 +902,62 @@ $isLoggedIn = is_logged_in();
             });
         }
 
-        // Render the network visualization
-        function renderNetwork() {
+        // Initialize canvas and simulation
+        function initNetwork() {
             if (!filteredData) return;
 
-            const container_el = document.getElementById('networkSvg');
-            const rect = container_el.getBoundingClientRect();
-            const width = rect.width;
-            const height = rect.height;
+            // Stop existing simulation
+            if (simulation) {
+                simulation.stop();
+            }
+            if (animationId) {
+                cancelAnimationFrame(animationId);
+            }
 
-            // Clear existing
-            d3.select(container_el).selectAll('*').remove();
+            updateCSSColors();
 
-            svg = d3.select(container_el)
-                .attr('width', width)
-                .attr('height', height);
+            canvas = document.getElementById('networkCanvas');
+            const rect = canvas.getBoundingClientRect();
+            width = rect.width;
+            height = rect.height;
 
-            // Create container for zoom
-            container = svg.append('g').attr('class', 'network-container');
+            // Handle high-DPI displays
+            dpr = window.devicePixelRatio || 1;
+            canvas.width = width * dpr;
+            canvas.height = height * dpr;
+            canvas.style.width = width + 'px';
+            canvas.style.height = height + 'px';
 
-            // Add cluster hulls layer
-            const hullsLayer = container.append('g').attr('class', 'hulls-layer');
+            ctx = canvas.getContext('2d');
+            ctx.scale(dpr, dpr);
 
-            // Add links layer
-            const linksLayer = container.append('g').attr('class', 'links-layer');
+            // Reset transform
+            transform = d3.zoomIdentity;
 
-            // Add nodes layer
-            const nodesLayer = container.append('g').attr('class', 'nodes-layer');
-
-            // Setup zoom
-            zoom = d3.zoom()
-                .scaleExtent([0.1, 5])
-                .on('zoom', ({ transform }) => {
-                    container.attr('transform', transform);
-                });
-
-            svg.call(zoom);
-
-            // Prepare data
-            const nodes = filteredData.nodes.map(d => ({ ...d }));
-            const links = filteredData.links.map(d => ({
+            // Prepare data (create copies to avoid mutation issues)
+            nodes = filteredData.nodes.map(d => ({ ...d }));
+            links = filteredData.links.map(d => ({
                 source: d.source.toLowerCase(),
                 target: d.target.toLowerCase(),
                 value: d.count
             }));
 
-            // Color scales
+            // Size scale
             const countExtent = d3.extent(nodes, d => d.count);
-            const sizeScale = d3.scaleSqrt()
+            sizeScale = d3.scaleSqrt()
                 .domain(countExtent)
                 .range([6, 28]);
 
-            // Get unique clusters for coloring
-            const clusters = [...new Set(nodes.map(n => n.cluster))].sort((a, b) => a - b);
+            // Get unique clusters
+            clusters = [...new Set(nodes.map(n => n.cluster))].sort((a, b) => a - b);
 
             // Update legend
             updateLegend(clusters);
 
-            // Draw links
-            const link = linksLayer.selectAll('line')
-                .data(links)
-                .join('line')
-                .attr('class', 'network-link')
-                .attr('stroke-width', d => Math.sqrt(d.value) * 0.8);
-
-            // Draw nodes
-            const node = nodesLayer.selectAll('g')
-                .data(nodes)
-                .join('g')
-                .attr('class', 'network-node')
-                .call(d3.drag()
-                    .on('start', dragstarted)
-                    .on('drag', dragged)
-                    .on('end', dragended));
-
-            node.append('circle')
-                .attr('r', d => sizeScale(d.count))
-                .attr('fill', d => clusterColors[d.cluster % clusterColors.length]);
-
-            node.append('text')
-                .text(d => d.label)
-                .attr('x', 0)
-                .attr('y', d => sizeScale(d.count) + 12)
-                .attr('text-anchor', 'middle');
-
-            // Interaction handlers
-            const tooltip = document.getElementById('networkTooltip');
-
-            node.on('mouseenter', function(event, d) {
-                    // Show tooltip
-                    tooltip.innerHTML = `
-                        <strong>${d.label}</strong>
-                        <div class="tip-stats">
-                            Count: ${d.count} bookmarks<br>
-                            First used: ${new Date(d.first_seen).toLocaleDateString()}<br>
-                            Cluster: ${d.cluster + 1}
-                        </div>
-                        <div class="tip-hint">Click to select, double-click for bookmarks</div>
-                    `;
-                    tooltip.classList.add('visible');
-
-                    // Highlight connected links
-                    link.classed('highlighted', l =>
-                        l.source.id === d.id || l.target.id === d.id
-                    );
-
-                    // Dim unconnected nodes
-                    const connectedIds = new Set([d.id]);
-                    links.forEach(l => {
-                        if (l.source.id === d.id || l.source === d.id) connectedIds.add(l.target.id || l.target);
-                        if (l.target.id === d.id || l.target === d.id) connectedIds.add(l.source.id || l.source);
-                    });
-
-                    node.classed('dimmed', n => !connectedIds.has(n.id));
-                })
-                .on('mousemove', function(event) {
-                    const rect = container_el.getBoundingClientRect();
-                    tooltip.style.left = (event.clientX - rect.left + 15) + 'px';
-                    tooltip.style.top = (event.clientY - rect.top + 15) + 'px';
-                })
-                .on('mouseleave', function() {
-                    tooltip.classList.remove('visible');
-                    link.classed('highlighted', false);
-                    node.classed('dimmed', false);
-                })
-                .on('click', function(event, d) {
-                    event.stopPropagation();
-                    selectNode(d, node);
-                })
-                .on('dblclick', function(event, d) {
-                    event.stopPropagation();
-                    window.location.href = `${BASE_PATH}/?tag=${encodeURIComponent(d.label)}`;
-                });
-
-            // Click on background to deselect
-            svg.on('click', () => {
-                selectNode(null, node);
-            });
-
-            // Apply search highlighting
-            applySearchHighlight(node);
-
             // Calculate collision radii
             nodes.forEach(d => {
-                d.collisionRadius = sizeScale(d.count) + 20;
+                d.radius = sizeScale(d.count);
+                d.collisionRadius = d.radius + 20;
             });
 
             // Create force simulation
@@ -1034,8 +967,8 @@ $isLoggedIn = is_logged_in();
                 .force('link', d3.forceLink(links)
                     .id(d => d.id)
                     .distance(d => {
-                        const source = nodes.find(n => n.id === (d.source.id || d.source));
-                        const target = nodes.find(n => n.id === (d.target.id || d.target));
+                        const source = typeof d.source === 'object' ? d.source : nodes.find(n => n.id === d.source);
+                        const target = typeof d.target === 'object' ? d.target : nodes.find(n => n.id === d.target);
                         return (source?.collisionRadius || 30) + (target?.collisionRadius || 30) + 20;
                     })
                     .strength(0.3))
@@ -1051,42 +984,72 @@ $isLoggedIn = is_logged_in();
                 .velocityDecay(0.5)
                 .alphaDecay(0.02)
                 .on('tick', () => {
-                    link
-                        .attr('x1', d => d.source.x)
-                        .attr('y1', d => d.source.y)
-                        .attr('x2', d => d.target.x)
-                        .attr('y2', d => d.target.y);
-
-                    node.attr('transform', d => `translate(${d.x},${d.y})`);
-
-                    // Update cluster hulls if enabled
-                    if (filterState.showClusters) {
-                        updateClusterHulls(hullsLayer, nodes, clusters);
-                    }
+                    needsRedraw = true;
                 });
 
-            // Drag functions
-            function dragstarted(event, d) {
-                if (!event.active) simulation.alphaTarget(0.3).restart();
-                d.fx = d.x;
-                d.fy = d.y;
-            }
+            // D3 drag behavior for nodes
+            const drag = d3.drag()
+                .subject((event) => {
+                    const [x, y] = transform.invert([event.x, event.y]);
+                    const node = findNodeAtPoint(x, y);
+                    return node;
+                })
+                .on('start', (event) => {
+                    if (!event.active) simulation.alphaTarget(0.3).restart();
+                    event.subject.fx = event.subject.x;
+                    event.subject.fy = event.subject.y;
+                    draggedNode = event.subject;
+                    canvas.style.cursor = 'grabbing';
+                })
+                .on('drag', (event) => {
+                    const [x, y] = transform.invert([event.x, event.y]);
+                    event.subject.fx = x;
+                    event.subject.fy = y;
+                    needsRedraw = true;
+                })
+                .on('end', (event) => {
+                    if (!event.active) simulation.alphaTarget(0);
+                    event.subject.fx = null;
+                    event.subject.fy = null;
+                    draggedNode = null;
+                    canvas.style.cursor = 'grab';
+                    needsRedraw = true;
+                });
 
-            function dragged(event, d) {
-                d.fx = event.x;
-                d.fy = event.y;
-            }
+            // Setup zoom
+            const zoom = d3.zoom()
+                .scaleExtent([0.1, 5])
+                .filter((event) => {
+                    // Don't zoom if dragging a node
+                    if (event.type === 'mousedown' || event.type === 'touchstart') {
+                        const rect = canvas.getBoundingClientRect();
+                        const mouseX = (event.touches ? event.touches[0].clientX : event.clientX) - rect.left;
+                        const mouseY = (event.touches ? event.touches[0].clientY : event.clientY) - rect.top;
+                        const [x, y] = transform.invert([mouseX, mouseY]);
+                        if (findNodeAtPoint(x, y)) return false;
+                    }
+                    return !event.ctrlKey && !event.button;
+                })
+                .on('zoom', ({ transform: t }) => {
+                    transform = t;
+                    needsRedraw = true;
+                });
 
-            function dragended(event, d) {
-                if (!event.active) simulation.alphaTarget(0);
-                d.fx = null;
-                d.fy = null;
-            }
+            // Apply both behaviors - drag first, then zoom
+            d3.select(canvas).call(drag).call(zoom);
+
+            // Store zoom for external controls
+            canvas._zoom = zoom;
+
+            // Setup mouse interactions (hover, click, tooltip)
+            setupMouseHandlers();
+
+            // Start render loop
+            startRenderLoop();
         }
 
         // Cluster force function
         function clusterForceFunc(nodes, clusters, strength, width, height) {
-            // Calculate cluster centers
             const clusterCenters = new Map();
             const numClusters = clusters.length;
             const radius = Math.min(width, height) * 0.3;
@@ -1110,10 +1073,216 @@ $isLoggedIn = is_logged_in();
             };
         }
 
-        // Update cluster hulls
-        function updateClusterHulls(hullsLayer, nodes, clusters) {
-            hullsLayer.selectAll('.cluster-hull').remove();
+        // Setup mouse event handlers (hover, tooltip, click - drag is handled by D3)
+        function setupMouseHandlers() {
+            const tooltip = document.getElementById('networkTooltip');
+            let lastClickTime = 0;
 
+            canvas.addEventListener('mousemove', (event) => {
+                // Skip hover detection while dragging
+                if (draggedNode) return;
+
+                const rect = canvas.getBoundingClientRect();
+                const mouseX = event.clientX - rect.left;
+                const mouseY = event.clientY - rect.top;
+                const [x, y] = transform.invert([mouseX, mouseY]);
+
+                const node = findNodeAtPoint(x, y);
+
+                if (node !== hoveredNode) {
+                    hoveredNode = node;
+                    needsRedraw = true;
+
+                    if (node) {
+                        tooltip.innerHTML = `
+                            <strong>${node.label}</strong>
+                            <div class="tip-stats">
+                                Count: ${node.count} bookmarks<br>
+                                First used: ${new Date(node.first_seen).toLocaleDateString()}<br>
+                                Cluster: ${node.cluster + 1}
+                            </div>
+                            <div class="tip-hint">Click to select, double-click for bookmarks</div>
+                        `;
+                        tooltip.classList.add('visible');
+                    } else {
+                        tooltip.classList.remove('visible');
+                    }
+                }
+
+                if (hoveredNode) {
+                    tooltip.style.left = (mouseX + 15) + 'px';
+                    tooltip.style.top = (mouseY + 15) + 'px';
+                }
+
+                canvas.style.cursor = hoveredNode ? 'pointer' : 'grab';
+            });
+
+            canvas.addEventListener('mouseleave', () => {
+                tooltip.classList.remove('visible');
+                hoveredNode = null;
+                needsRedraw = true;
+            });
+
+            canvas.addEventListener('click', (event) => {
+                const now = Date.now();
+                const rect = canvas.getBoundingClientRect();
+                const mouseX = event.clientX - rect.left;
+                const mouseY = event.clientY - rect.top;
+                const [x, y] = transform.invert([mouseX, mouseY]);
+
+                const node = findNodeAtPoint(x, y);
+
+                // Double-click detection
+                if (now - lastClickTime < 300 && node) {
+                    window.location.href = `${BASE_PATH}/?tag=${encodeURIComponent(node.label)}`;
+                    return;
+                }
+                lastClickTime = now;
+
+                selectNode(node);
+                needsRedraw = true;
+            });
+        }
+
+        // Find node at point
+        function findNodeAtPoint(x, y) {
+            // Search in reverse order (top nodes first)
+            for (let i = nodes.length - 1; i >= 0; i--) {
+                const node = nodes[i];
+                const dx = x - node.x;
+                const dy = y - node.y;
+                if (dx * dx + dy * dy < node.radius * node.radius) {
+                    return node;
+                }
+            }
+            return null;
+        }
+
+        // Get connected node IDs
+        function getConnectedIds(node) {
+            const connected = new Set([node.id]);
+            links.forEach(l => {
+                const sourceId = typeof l.source === 'object' ? l.source.id : l.source;
+                const targetId = typeof l.target === 'object' ? l.target.id : l.target;
+                if (sourceId === node.id) connected.add(targetId);
+                if (targetId === node.id) connected.add(sourceId);
+            });
+            return connected;
+        }
+
+        // Render loop
+        function startRenderLoop() {
+            function render() {
+                if (needsRedraw) {
+                    draw();
+                    needsRedraw = false;
+                }
+                animationId = requestAnimationFrame(render);
+            }
+            render();
+        }
+
+        // Main draw function
+        function draw() {
+            ctx.save();
+            ctx.clearRect(0, 0, width, height);
+
+            // Fill background
+            ctx.fillStyle = cssColors.bgPrimary;
+            ctx.fillRect(0, 0, width, height);
+
+            // Apply zoom transform
+            ctx.translate(transform.x, transform.y);
+            ctx.scale(transform.k, transform.k);
+
+            // Get connected nodes for highlighting
+            const connectedIds = hoveredNode ? getConnectedIds(hoveredNode) : null;
+            const searchQuery = filterState.searchQuery.toLowerCase();
+
+            // Draw cluster hulls if enabled
+            if (filterState.showClusters) {
+                drawClusterHulls();
+            }
+
+            // Draw links
+            ctx.lineWidth = 1;
+            links.forEach(link => {
+                const source = typeof link.source === 'object' ? link.source : nodes.find(n => n.id === link.source);
+                const target = typeof link.target === 'object' ? link.target : nodes.find(n => n.id === link.target);
+                if (!source || !target) return;
+
+                const isHighlighted = hoveredNode && (
+                    source.id === hoveredNode.id || target.id === hoveredNode.id
+                );
+
+                ctx.beginPath();
+                ctx.moveTo(source.x, source.y);
+                ctx.lineTo(target.x, target.y);
+
+                if (isHighlighted) {
+                    ctx.strokeStyle = cssColors.primary;
+                    ctx.globalAlpha = 0.8;
+                    ctx.lineWidth = 2;
+                } else {
+                    ctx.strokeStyle = cssColors.borderColor;
+                    ctx.globalAlpha = hoveredNode ? 0.1 : 0.4;
+                    ctx.lineWidth = Math.sqrt(link.value) * 0.8;
+                }
+                ctx.stroke();
+                ctx.globalAlpha = 1;
+            });
+
+            // Draw nodes
+            nodes.forEach(node => {
+                const isDimmed = hoveredNode && !connectedIds.has(node.id);
+                const isSearched = searchQuery && node.label.toLowerCase().includes(searchQuery);
+                const isSelected = selectedNode && selectedNode.id === node.id;
+                const isHovered = hoveredNode && hoveredNode.id === node.id;
+
+                ctx.globalAlpha = isDimmed ? 0.3 : 1;
+
+                // Draw circle
+                ctx.beginPath();
+                ctx.arc(node.x, node.y, node.radius, 0, Math.PI * 2);
+                ctx.fillStyle = clusterColors[node.cluster % clusterColors.length];
+                ctx.fill();
+
+                // Draw stroke
+                if (isSelected || isSearched) {
+                    ctx.strokeStyle = isSearched ? cssColors.accentAmber : cssColors.primary;
+                    ctx.lineWidth = 4;
+                } else {
+                    ctx.strokeStyle = cssColors.bgSecondary;
+                    ctx.lineWidth = isHovered ? 4 : 2;
+                }
+                ctx.stroke();
+
+                // Draw label
+                ctx.font = `600 10px -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif`;
+                ctx.textAlign = 'center';
+                ctx.textBaseline = 'top';
+
+                // Text shadow for readability
+                ctx.fillStyle = cssColors.bgSecondary;
+                for (let ox = -1; ox <= 1; ox++) {
+                    for (let oy = -1; oy <= 1; oy++) {
+                        if (ox !== 0 || oy !== 0) {
+                            ctx.fillText(node.label, node.x + ox, node.y + node.radius + 4 + oy);
+                        }
+                    }
+                }
+
+                ctx.fillStyle = isSearched ? cssColors.accentAmber : cssColors.textPrimary;
+                ctx.fillText(node.label, node.x, node.y + node.radius + 4);
+
+                ctx.globalAlpha = 1;
+            });
+
+            ctx.restore();
+        }
+
+        // Draw cluster hulls
+        function drawClusterHulls() {
             clusters.forEach(clusterId => {
                 const clusterNodes = nodes.filter(n => n.cluster === clusterId);
                 if (clusterNodes.length < 3) return;
@@ -1122,7 +1291,7 @@ $isLoggedIn = is_logged_in();
                 const hull = d3.polygonHull(points);
 
                 if (hull) {
-                    // Expand hull slightly
+                    // Expand hull
                     const centroid = d3.polygonCentroid(hull);
                     const expandedHull = hull.map(p => {
                         const dx = p[0] - centroid[0];
@@ -1135,11 +1304,24 @@ $isLoggedIn = is_logged_in();
                         ];
                     });
 
-                    hullsLayer.append('path')
-                        .attr('class', 'cluster-hull')
-                        .attr('d', 'M' + expandedHull.join('L') + 'Z')
-                        .attr('fill', clusterColors[clusterId % clusterColors.length])
-                        .attr('stroke', clusterColors[clusterId % clusterColors.length]);
+                    const color = clusterColors[clusterId % clusterColors.length];
+
+                    ctx.beginPath();
+                    ctx.moveTo(expandedHull[0][0], expandedHull[0][1]);
+                    expandedHull.slice(1).forEach(p => ctx.lineTo(p[0], p[1]));
+                    ctx.closePath();
+
+                    ctx.fillStyle = color;
+                    ctx.globalAlpha = 0.08;
+                    ctx.fill();
+
+                    ctx.strokeStyle = color;
+                    ctx.globalAlpha = 0.3;
+                    ctx.lineWidth = 2;
+                    ctx.setLineDash([6, 3]);
+                    ctx.stroke();
+                    ctx.setLineDash([]);
+                    ctx.globalAlpha = 1;
                 }
             });
         }
@@ -1163,23 +1345,20 @@ $isLoggedIn = is_logged_in();
         }
 
         // Select a node
-        function selectNode(d, nodeSelection) {
-            selectedNode = d;
-            nodeSelection.classed('selected', false);
+        function selectNode(node) {
+            selectedNode = node;
 
             const info = document.getElementById('selectedTagInfo');
 
-            if (d) {
-                nodeSelection.filter(n => n.id === d.id).classed('selected', true);
-
-                document.getElementById('selectedTagName').textContent = d.label;
+            if (node) {
+                document.getElementById('selectedTagName').textContent = node.label;
                 document.getElementById('selectedTagStats').innerHTML = `
-                    ${d.count} bookmarks<br>
-                    First used: ${new Date(d.first_seen).toLocaleDateString()}<br>
-                    Cluster: ${d.cluster + 1}
+                    ${node.count} bookmarks<br>
+                    First used: ${new Date(node.first_seen).toLocaleDateString()}<br>
+                    Cluster: ${node.cluster + 1}
                 `;
-                document.getElementById('viewBookmarksLink').href = `${BASE_PATH}/?tag=${encodeURIComponent(d.label)}`;
-                document.getElementById('manageTagLink').href = `${BASE_PATH}/tag-admin.php?search=${encodeURIComponent(d.label)}`;
+                document.getElementById('viewBookmarksLink').href = `${BASE_PATH}/?tag=${encodeURIComponent(node.label)}`;
+                document.getElementById('manageTagLink').href = `${BASE_PATH}/tag-admin.php?search=${encodeURIComponent(node.label)}`;
 
                 info.classList.add('visible');
             } else {
@@ -1187,28 +1366,23 @@ $isLoggedIn = is_logged_in();
             }
         }
 
-        // Apply search highlighting
-        function applySearchHighlight(nodeSelection) {
-            const query = filterState.searchQuery.toLowerCase();
-
-            if (query) {
-                nodeSelection.classed('searched', d => d.label.toLowerCase().includes(query));
-            } else {
-                nodeSelection.classed('searched', false);
-            }
-        }
-
         // Zoom controls
         document.getElementById('zoomIn').addEventListener('click', () => {
-            svg.transition().duration(300).call(zoom.scaleBy, 1.5);
+            if (canvas && canvas._zoom) {
+                d3.select(canvas).transition().duration(300).call(canvas._zoom.scaleBy, 1.5);
+            }
         });
 
         document.getElementById('zoomOut').addEventListener('click', () => {
-            svg.transition().duration(300).call(zoom.scaleBy, 0.67);
+            if (canvas && canvas._zoom) {
+                d3.select(canvas).transition().duration(300).call(canvas._zoom.scaleBy, 0.67);
+            }
         });
 
         document.getElementById('zoomReset').addEventListener('click', () => {
-            svg.transition().duration(300).call(zoom.transform, d3.zoomIdentity);
+            if (canvas && canvas._zoom) {
+                d3.select(canvas).transition().duration(300).call(canvas._zoom.transform, d3.zoomIdentity);
+            }
         });
 
         // Filter controls
@@ -1240,9 +1414,7 @@ $isLoggedIn = is_logged_in();
             clearTimeout(searchDebounce);
             searchDebounce = setTimeout(() => {
                 filterState.searchQuery = this.value;
-                if (svg) {
-                    applySearchHighlight(svg.selectAll('.network-node'));
-                }
+                needsRedraw = true;
             }, 200);
         });
 
@@ -1255,22 +1427,13 @@ $isLoggedIn = is_logged_in();
 
         document.getElementById('showClusters').addEventListener('change', function() {
             filterState.showClusters = this.checked;
-            if (filteredData) {
-                const clusters = [...new Set(filteredData.nodes.map(n => n.cluster))];
-                updateLegend(clusters);
-
-                const hullsLayer = container.select('.hulls-layer');
-                if (filterState.showClusters) {
-                    updateClusterHulls(hullsLayer, filteredData.nodes, clusters);
-                } else {
-                    hullsLayer.selectAll('.cluster-hull').remove();
-                }
-            }
+            updateLegend(clusters);
+            needsRedraw = true;
         });
 
         document.getElementById('showPrefixGroups').addEventListener('change', function() {
             filterState.showPrefixGroups = this.checked;
-            // This would require more complex grouping logic - left for future enhancement
+            // Future enhancement
         });
 
         // Export functions
@@ -1278,75 +1441,123 @@ $isLoggedIn = is_logged_in();
         document.getElementById('exportSvg').addEventListener('click', exportAsSvg);
 
         function exportAsPng() {
-            const svgEl = document.getElementById('networkSvg');
-            const serializer = new XMLSerializer();
-            let source = serializer.serializeToString(svgEl);
+            // Create a temporary canvas at higher resolution
+            const exportCanvas = document.createElement('canvas');
+            const scale = 2;
+            exportCanvas.width = width * scale;
+            exportCanvas.height = height * scale;
+            const exportCtx = exportCanvas.getContext('2d');
+            exportCtx.scale(scale, scale);
 
-            // Add namespaces
-            if (!source.match(/^<svg[^>]+xmlns="http:\/\/www\.w3\.org\/2000\/svg"/)) {
-                source = source.replace(/^<svg/, '<svg xmlns="http://www.w3.org/2000/svg"');
+            // Draw background
+            exportCtx.fillStyle = cssColors.bgPrimary;
+            exportCtx.fillRect(0, 0, width, height);
+
+            // Apply current transform
+            exportCtx.translate(transform.x, transform.y);
+            exportCtx.scale(transform.k, transform.k);
+
+            // Draw cluster hulls
+            if (filterState.showClusters) {
+                clusters.forEach(clusterId => {
+                    const clusterNodes = nodes.filter(n => n.cluster === clusterId);
+                    if (clusterNodes.length < 3) return;
+
+                    const points = clusterNodes.map(n => [n.x, n.y]);
+                    const hull = d3.polygonHull(points);
+
+                    if (hull) {
+                        const centroid = d3.polygonCentroid(hull);
+                        const expandedHull = hull.map(p => {
+                            const dx = p[0] - centroid[0];
+                            const dy = p[1] - centroid[1];
+                            const dist = Math.sqrt(dx * dx + dy * dy);
+                            return [p[0] + (dx / dist) * 30, p[1] + (dy / dist) * 30];
+                        });
+
+                        const color = clusterColors[clusterId % clusterColors.length];
+                        exportCtx.beginPath();
+                        exportCtx.moveTo(expandedHull[0][0], expandedHull[0][1]);
+                        expandedHull.slice(1).forEach(p => exportCtx.lineTo(p[0], p[1]));
+                        exportCtx.closePath();
+
+                        exportCtx.fillStyle = color;
+                        exportCtx.globalAlpha = 0.08;
+                        exportCtx.fill();
+                        exportCtx.globalAlpha = 1;
+                    }
+                });
             }
 
-            // Add styles
-            const style = `
-                <style>
-                    text { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; fill: ${getCSSVariable('--text-primary')}; }
-                    .network-node text { font-weight: 600; }
-                    .network-link { stroke: ${getCSSVariable('--border-color')}; stroke-opacity: 0.4; fill: none; }
-                    .cluster-hull { fill-opacity: 0.08; stroke-width: 2; stroke-opacity: 0.3; }
-                </style>
-            `;
-            source = source.replace('</svg>', style + '</svg>');
+            // Draw links
+            links.forEach(link => {
+                const source = typeof link.source === 'object' ? link.source : nodes.find(n => n.id === link.source);
+                const target = typeof link.target === 'object' ? link.target : nodes.find(n => n.id === link.target);
+                if (!source || !target) return;
 
-            const canvas = document.createElement('canvas');
-            const rect = svgEl.getBoundingClientRect();
-            canvas.width = rect.width * 2;
-            canvas.height = rect.height * 2;
-            const ctx = canvas.getContext('2d');
-            ctx.scale(2, 2);
+                exportCtx.beginPath();
+                exportCtx.moveTo(source.x, source.y);
+                exportCtx.lineTo(target.x, target.y);
+                exportCtx.strokeStyle = cssColors.borderColor;
+                exportCtx.globalAlpha = 0.4;
+                exportCtx.lineWidth = Math.sqrt(link.value) * 0.8;
+                exportCtx.stroke();
+                exportCtx.globalAlpha = 1;
+            });
 
-            ctx.fillStyle = getCSSVariable('--bg-primary');
-            ctx.fillRect(0, 0, rect.width, rect.height);
+            // Draw nodes
+            nodes.forEach(node => {
+                exportCtx.beginPath();
+                exportCtx.arc(node.x, node.y, node.radius, 0, Math.PI * 2);
+                exportCtx.fillStyle = clusterColors[node.cluster % clusterColors.length];
+                exportCtx.fill();
+                exportCtx.strokeStyle = cssColors.bgSecondary;
+                exportCtx.lineWidth = 2;
+                exportCtx.stroke();
 
-            const img = new Image();
-            const svgBlob = new Blob([source], { type: 'image/svg+xml;charset=utf-8' });
-            const url = URL.createObjectURL(svgBlob);
+                exportCtx.font = `600 10px -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif`;
+                exportCtx.textAlign = 'center';
+                exportCtx.textBaseline = 'top';
+                exportCtx.fillStyle = cssColors.textPrimary;
+                exportCtx.fillText(node.label, node.x, node.y + node.radius + 4);
+            });
 
-            img.onload = function() {
-                ctx.drawImage(img, 0, 0);
-                URL.revokeObjectURL(url);
-
-                const a = document.createElement('a');
-                a.download = 'tag-network-' + new Date().toISOString().slice(0, 10) + '.png';
-                a.href = canvas.toDataURL('image/png');
-                a.click();
-            };
-
-            img.src = url;
+            // Download
+            const a = document.createElement('a');
+            a.download = 'tag-network-' + new Date().toISOString().slice(0, 10) + '.png';
+            a.href = exportCanvas.toDataURL('image/png');
+            a.click();
         }
 
         function exportAsSvg() {
-            const svgEl = document.getElementById('networkSvg');
-            const serializer = new XMLSerializer();
-            let source = serializer.serializeToString(svgEl);
+            // Build SVG manually
+            let svgContent = `<svg xmlns="http://www.w3.org/2000/svg" width="${width}" height="${height}">`;
+            svgContent += `<rect width="100%" height="100%" fill="${cssColors.bgPrimary}"/>`;
+            svgContent += `<g transform="translate(${transform.x},${transform.y}) scale(${transform.k})">`;
 
-            // Add namespaces
-            if (!source.match(/^<svg[^>]+xmlns="http:\/\/www\.w3\.org\/2000\/svg"/)) {
-                source = source.replace(/^<svg/, '<svg xmlns="http://www.w3.org/2000/svg"');
-            }
+            // Links
+            links.forEach(link => {
+                const source = typeof link.source === 'object' ? link.source : nodes.find(n => n.id === link.source);
+                const target = typeof link.target === 'object' ? link.target : nodes.find(n => n.id === link.target);
+                if (!source || !target) return;
 
-            // Add styles
-            const style = `
-                <style>
-                    text { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; fill: ${getCSSVariable('--text-primary')}; }
-                    .network-node text { font-weight: 600; }
-                    .network-link { stroke: ${getCSSVariable('--border-color')}; stroke-opacity: 0.4; fill: none; }
-                    .cluster-hull { fill-opacity: 0.08; stroke-width: 2; stroke-opacity: 0.3; }
-                </style>
-            `;
-            source = source.replace('</svg>', style + '</svg>');
+                svgContent += `<line x1="${source.x}" y1="${source.y}" x2="${target.x}" y2="${target.y}"
+                    stroke="${cssColors.borderColor}" stroke-opacity="0.4" stroke-width="${Math.sqrt(link.value) * 0.8}"/>`;
+            });
 
-            const blob = new Blob([source], { type: 'image/svg+xml;charset=utf-8' });
+            // Nodes
+            nodes.forEach(node => {
+                const color = clusterColors[node.cluster % clusterColors.length];
+                svgContent += `<circle cx="${node.x}" cy="${node.y}" r="${node.radius}"
+                    fill="${color}" stroke="${cssColors.bgSecondary}" stroke-width="2"/>`;
+                svgContent += `<text x="${node.x}" y="${node.y + node.radius + 14}"
+                    text-anchor="middle" font-family="-apple-system, sans-serif" font-size="10" font-weight="600"
+                    fill="${cssColors.textPrimary}">${escapeHtml(node.label)}</text>`;
+            });
+
+            svgContent += '</g></svg>';
+
+            const blob = new Blob([svgContent], { type: 'image/svg+xml;charset=utf-8' });
             const url = URL.createObjectURL(blob);
 
             const a = document.createElement('a');
@@ -1357,13 +1568,19 @@ $isLoggedIn = is_logged_in();
             URL.revokeObjectURL(url);
         }
 
+        function escapeHtml(text) {
+            const div = document.createElement('div');
+            div.textContent = text;
+            return div.innerHTML;
+        }
+
         // Handle window resize
         let resizeTimeout;
         window.addEventListener('resize', () => {
             clearTimeout(resizeTimeout);
             resizeTimeout = setTimeout(() => {
                 if (filteredData) {
-                    renderNetwork();
+                    initNetwork();
                 }
             }, 200);
         });

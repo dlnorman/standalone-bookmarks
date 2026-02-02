@@ -12,7 +12,7 @@ A powerful, self-hosted bookmark manager built for speed, privacy, and simplicit
 *   **🔒 Privacy-Focused**: Self-hosted means you own your data. Multi-user support allows you to share your instance or keep it private.
 *   **📸 Visual**: Automatically generates screenshots for your bookmarks using Google PageSpeed Insights or OpenGraph data.
 *   **💾 Forever Safe**: Automatically submits your bookmarks to the Internet Archive (Wayback Machine) so you never lose a link.
-*   **📊 Insightful**: Beautiful D3.js visualizations show you what you're reading and how your interests connect.
+*   **📊 Insightful**: Beautiful D3.js visualizations show you what you're reading and how your interests connect. The tag network uses hardware-accelerated Canvas rendering for smooth performance with large graphs.
 
 ## Key Features
 
@@ -22,7 +22,8 @@ A powerful, self-hosted bookmark manager built for speed, privacy, and simplicit
     *   **Screenshots**: Visual gallery view of your saved pages.
 *   **Organization**:
     *   **Full-Text Search**: Instantly find anything across titles, URLs, descriptions, and tags.
-    *   **Tagging**: Flexible tagging system with a co-occurrence network graph.
+    *   **Tagging**: Flexible tagging system with tag prefixes (`person:`, `via:`) and a co-occurrence network graph.
+    *   **Tag Management**: Admin tools to rename, merge, and bulk-edit tags.
     *   **Collections**: Public and private visibility settings.
 *   **Management**:
     *   **Multi-User**: Role-based access (Admin/User). Admins can manage users and system settings.
@@ -125,6 +126,9 @@ Standalone Bookmarks provides a simple API for your own scripts or static site g
 *   `index.php` - Main list view.
 *   `gallery.php` - Grid view with screenshots.
 *   `dashboard.php` - Analytics and visualizations.
+*   `tags.php` - Tag cloud with logarithmic sizing.
+*   `tag-admin.php` - Tag management (rename, merge, delete).
+*   `tag-network.php` - Interactive tag relationship graph (Canvas-based for performance).
 *   `api.php` - REST API endpoints.
 *   `process_jobs.php` - Worker script for background tasks.
 *   `bookmarks.db` - SQLite database (created after init).
