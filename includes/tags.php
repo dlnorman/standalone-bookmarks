@@ -5,6 +5,17 @@
  */
 
 /**
+ * Escape special characters for SQL LIKE patterns
+ *
+ * @param string $str The string to escape
+ * @return string The escaped string safe for LIKE patterns
+ */
+function escapeLikePattern($str) {
+    // Escape %, _, and \ which have special meaning in LIKE patterns
+    return str_replace(['\\', '%', '_'], ['\\\\', '\\%', '\\_'], $str);
+}
+
+/**
  * Parse a tag to determine its type and name
  *
  * @param string $tag The full tag string
@@ -139,9 +150,9 @@ function getAllTagsWithCounts($db, $includePrivate = false) {
  * @return array Array of bookmark IDs
  */
 function getBookmarksWithTag($db, $tag, $includePrivate = false) {
-    $tagPattern = '%,' . strtolower(trim($tag)) . ',%';
+    $tagPattern = '%,' . escapeLikePattern(strtolower(trim($tag))) . ',%';
 
-    $sql = "SELECT id FROM bookmarks WHERE ',' || REPLACE(LOWER(tags), ', ', ',') || ',' LIKE ?";
+    $sql = "SELECT id FROM bookmarks WHERE ',' || REPLACE(LOWER(tags), ', ', ',') || ',' LIKE ? ESCAPE '\\'";
     if (!$includePrivate) {
         $sql .= " AND private = 0";
     }
@@ -168,50 +179,69 @@ function renameTag($db, $oldTag, $newTag) {
         return 0;
     }
 
-    // Get all bookmarks with the old tag
-    $tagPattern = '%,' . strtolower($oldTag) . ',%';
-    $stmt = $db->prepare("SELECT id, tags FROM bookmarks WHERE ',' || REPLACE(LOWER(tags), ', ', ',') || ',' LIKE ?");
-    $stmt->execute([$tagPattern]);
-    $bookmarks = $stmt->fetchAll(PDO::FETCH_ASSOC);
-
-    $updateStmt = $db->prepare("UPDATE bookmarks SET tags = ?, updated_at = datetime('now') WHERE id = ?");
-    $count = 0;
-
-    foreach ($bookmarks as $bookmark) {
-        $tags = array_map('trim', explode(',', $bookmark['tags']));
-        $newTags = [];
-        $hasNewTag = false;
-
-        // Only check for existing newTag if it's different from oldTag (case-insensitive)
-        // This prevents the bug where renaming to the same tag or changing case causes deletion
-        if (strtolower($oldTag) !== strtolower($newTag)) {
-            foreach ($tags as $tag) {
-                if (strtolower($tag) === strtolower($newTag)) {
-                    $hasNewTag = true;
-                    break;
-                }
-            }
-        }
-
-        foreach ($tags as $tag) {
-            if (strtolower($tag) === strtolower($oldTag)) {
-                // Replace old tag with new tag (handles both rename and case normalization)
-                if (!$hasNewTag) {
-                    $newTags[] = $newTag;
-                    $hasNewTag = true;
-                }
-                // If hasNewTag is true (target already exists), skip to avoid duplicate
-            } else {
-                $newTags[] = $tag;
-            }
-        }
-
-        $newTagsStr = implode(', ', $newTags);
-        $updateStmt->execute([$newTagsStr, $bookmark['id']]);
-        $count++;
+    // Use transaction for atomicity - check if already in one (e.g., from mergeTags)
+    $ownTransaction = !$db->inTransaction();
+    if ($ownTransaction) {
+        $db->beginTransaction();
     }
 
-    return $count;
+    try {
+        // Get all bookmarks with the old tag
+        $tagPattern = '%,' . escapeLikePattern(strtolower($oldTag)) . ',%';
+        $stmt = $db->prepare("SELECT id, tags FROM bookmarks WHERE ',' || REPLACE(LOWER(tags), ', ', ',') || ',' LIKE ? ESCAPE '\\'");
+        $stmt->execute([$tagPattern]);
+        $bookmarks = $stmt->fetchAll(PDO::FETCH_ASSOC);
+
+        $updateStmt = $db->prepare("UPDATE bookmarks SET tags = ?, updated_at = datetime('now') WHERE id = ?");
+        $count = 0;
+
+        foreach ($bookmarks as $bookmark) {
+            $tags = array_map('trim', explode(',', $bookmark['tags']));
+            // Filter out empty tags to clean up any malformed data
+            $tags = array_filter($tags, function($t) { return $t !== ''; });
+            $newTags = [];
+            $hasNewTag = false;
+
+            // Only check for existing newTag if it's different from oldTag (case-insensitive)
+            // This prevents the bug where renaming to the same tag or changing case causes deletion
+            if (strtolower($oldTag) !== strtolower($newTag)) {
+                foreach ($tags as $tag) {
+                    if (strtolower($tag) === strtolower($newTag)) {
+                        $hasNewTag = true;
+                        break;
+                    }
+                }
+            }
+
+            foreach ($tags as $tag) {
+                if (strtolower($tag) === strtolower($oldTag)) {
+                    // Replace old tag with new tag (handles both rename and case normalization)
+                    if (!$hasNewTag) {
+                        $newTags[] = $newTag;
+                        $hasNewTag = true;
+                    }
+                    // If hasNewTag is true (target already exists), skip to avoid duplicate
+                } else {
+                    $newTags[] = $tag;
+                }
+            }
+
+            $newTagsStr = implode(', ', $newTags);
+            $updateStmt->execute([$newTagsStr, $bookmark['id']]);
+            $count++;
+        }
+
+        if ($ownTransaction) {
+            $db->commit();
+        }
+
+        return $count;
+    } catch (Exception $e) {
+        if ($ownTransaction) {
+            $db->rollBack();
+        }
+        throw $e;
+    }
 }
 
 /**
@@ -228,18 +258,27 @@ function mergeTags($db, $sourceTags, $targetTag) {
         return 0;
     }
 
-    $count = 0;
+    // Wrap entire merge in a transaction for atomicity
+    $db->beginTransaction();
 
-    foreach ($sourceTags as $sourceTag) {
-        $sourceTag = trim($sourceTag);
-        if (empty($sourceTag) || strtolower($sourceTag) === strtolower($targetTag)) {
-            continue;
+    try {
+        $count = 0;
+
+        foreach ($sourceTags as $sourceTag) {
+            $sourceTag = trim($sourceTag);
+            if (empty($sourceTag) || strtolower($sourceTag) === strtolower($targetTag)) {
+                continue;
+            }
+
+            $count += renameTag($db, $sourceTag, $targetTag);
         }
 
-        $count += renameTag($db, $sourceTag, $targetTag);
+        $db->commit();
+        return $count;
+    } catch (Exception $e) {
+        $db->rollBack();
+        throw $e;
     }
-
-    return $count;
 }
 
 /**
@@ -256,27 +295,37 @@ function deleteTag($db, $tag) {
         return 0;
     }
 
-    // Get all bookmarks with the tag
-    $tagPattern = '%,' . strtolower($tag) . ',%';
-    $stmt = $db->prepare("SELECT id, tags FROM bookmarks WHERE ',' || REPLACE(LOWER(tags), ', ', ',') || ',' LIKE ?");
-    $stmt->execute([$tagPattern]);
-    $bookmarks = $stmt->fetchAll(PDO::FETCH_ASSOC);
+    // Use transaction for atomicity
+    $db->beginTransaction();
 
-    $updateStmt = $db->prepare("UPDATE bookmarks SET tags = ?, updated_at = datetime('now') WHERE id = ?");
-    $count = 0;
+    try {
+        // Get all bookmarks with the tag
+        $tagPattern = '%,' . escapeLikePattern(strtolower($tag)) . ',%';
+        $stmt = $db->prepare("SELECT id, tags FROM bookmarks WHERE ',' || REPLACE(LOWER(tags), ', ', ',') || ',' LIKE ? ESCAPE '\\'");
+        $stmt->execute([$tagPattern]);
+        $bookmarks = $stmt->fetchAll(PDO::FETCH_ASSOC);
 
-    foreach ($bookmarks as $bookmark) {
-        $tags = array_map('trim', explode(',', $bookmark['tags']));
-        $newTags = array_filter($tags, function($t) use ($tag) {
-            return strtolower($t) !== strtolower($tag);
-        });
+        $updateStmt = $db->prepare("UPDATE bookmarks SET tags = ?, updated_at = datetime('now') WHERE id = ?");
+        $count = 0;
 
-        $newTagsStr = implode(', ', $newTags);
-        $updateStmt->execute([$newTagsStr, $bookmark['id']]);
-        $count++;
+        foreach ($bookmarks as $bookmark) {
+            $tags = array_map('trim', explode(',', $bookmark['tags']));
+            // Filter out empty tags and the target tag
+            $newTags = array_filter($tags, function($t) use ($tag) {
+                return $t !== '' && strtolower($t) !== strtolower($tag);
+            });
+
+            $newTagsStr = implode(', ', $newTags);
+            $updateStmt->execute([$newTagsStr, $bookmark['id']]);
+            $count++;
+        }
+
+        $db->commit();
+        return $count;
+    } catch (Exception $e) {
+        $db->rollBack();
+        throw $e;
     }
-
-    return $count;
 }
 
 /**

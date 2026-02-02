@@ -18,6 +18,7 @@ require_once __DIR__ . '/auth.php';
 require_once __DIR__ . '/includes/csrf.php';
 require_once __DIR__ . '/includes/security.php';
 require_once __DIR__ . '/includes/markdown.php';
+require_once __DIR__ . '/includes/tags.php';
 
 // Set timezone
 if (isset($config['timezone'])) {
@@ -215,8 +216,8 @@ switch ($action) {
 
         // Tag filter
         if (!empty($tag)) {
-            $tagPattern = '%,' . strtolower(trim($tag)) . ',%';
-            $whereConditions[] = "',' || REPLACE(LOWER(tags), ', ', ',') || ',' LIKE ?";
+            $tagPattern = '%,' . escapeLikePattern(strtolower(trim($tag))) . ',%';
+            $whereConditions[] = "',' || REPLACE(LOWER(tags), ', ', ',') || ',' LIKE ? ESCAPE '\\'";
             $params[] = $tagPattern;
         }
 

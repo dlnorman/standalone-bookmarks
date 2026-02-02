@@ -39,58 +39,62 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     csrf_require_valid_token();
 
     if (isset($_POST['action'])) {
-        switch ($_POST['action']) {
-            case 'rename':
-                $oldTag = $_POST['old_tag'] ?? '';
-                $newTag = $_POST['new_tag'] ?? '';
+        try {
+            switch ($_POST['action']) {
+                case 'rename':
+                    $oldTag = $_POST['old_tag'] ?? '';
+                    $newTag = $_POST['new_tag'] ?? '';
 
-                if (empty($oldTag) || empty($newTag)) {
-                    $error_msg = 'Both old and new tag names are required.';
-                } else {
-                    $count = renameTag($db, $oldTag, $newTag);
-                    $success_msg = "Renamed tag across $count bookmark(s).";
-                }
-                break;
-
-            case 'merge':
-                $sourceTags = $_POST['source_tags'] ?? [];
-                $targetTag = $_POST['target_tag'] ?? '';
-
-                if (empty($sourceTags) || empty($targetTag)) {
-                    $error_msg = 'Source tag(s) and target tag are required.';
-                } else {
-                    if (!is_array($sourceTags)) {
-                        $sourceTags = [$sourceTags];
+                    if (empty($oldTag) || empty($newTag)) {
+                        $error_msg = 'Both old and new tag names are required.';
+                    } else {
+                        $count = renameTag($db, $oldTag, $newTag);
+                        $success_msg = "Renamed tag across $count bookmark(s).";
                     }
-                    $count = mergeTags($db, $sourceTags, $targetTag);
-                    $success_msg = "Merged tags across $count bookmark(s).";
-                }
-                break;
+                    break;
 
-            case 'delete':
-                $tag = $_POST['tag'] ?? '';
+                case 'merge':
+                    $sourceTags = $_POST['source_tags'] ?? [];
+                    $targetTag = $_POST['target_tag'] ?? '';
 
-                if (empty($tag)) {
-                    $error_msg = 'Tag name is required.';
-                } else {
-                    $count = deleteTag($db, $tag);
-                    $success_msg = "Deleted tag from $count bookmark(s).";
-                }
-                break;
+                    if (empty($sourceTags) || empty($targetTag)) {
+                        $error_msg = 'Source tag(s) and target tag are required.';
+                    } else {
+                        if (!is_array($sourceTags)) {
+                            $sourceTags = [$sourceTags];
+                        }
+                        $count = mergeTags($db, $sourceTags, $targetTag);
+                        $success_msg = "Merged tags across $count bookmark(s).";
+                    }
+                    break;
 
-            case 'change_type':
-                $tag = $_POST['tag'] ?? '';
-                $newType = $_POST['new_type'] ?? '';
+                case 'delete':
+                    $tag = $_POST['tag'] ?? '';
 
-                if (empty($tag) || empty($newType)) {
-                    $error_msg = 'Tag and new type are required.';
-                } elseif (!in_array($newType, ['tag', 'person', 'via'])) {
-                    $error_msg = 'Invalid tag type.';
-                } else {
-                    $count = changeTagType($db, $tag, $newType);
-                    $success_msg = "Changed tag type across $count bookmark(s).";
-                }
-                break;
+                    if (empty($tag)) {
+                        $error_msg = 'Tag name is required.';
+                    } else {
+                        $count = deleteTag($db, $tag);
+                        $success_msg = "Deleted tag from $count bookmark(s).";
+                    }
+                    break;
+
+                case 'change_type':
+                    $tag = $_POST['tag'] ?? '';
+                    $newType = $_POST['new_type'] ?? '';
+
+                    if (empty($tag) || empty($newType)) {
+                        $error_msg = 'Tag and new type are required.';
+                    } elseif (!in_array($newType, ['tag', 'person', 'via'])) {
+                        $error_msg = 'Invalid tag type.';
+                    } else {
+                        $count = changeTagType($db, $tag, $newType);
+                        $success_msg = "Changed tag type across $count bookmark(s).";
+                    }
+                    break;
+            }
+        } catch (Exception $e) {
+            $error_msg = 'Operation failed: ' . htmlspecialchars($e->getMessage()) . '. No changes were made.';
         }
     }
 }
