@@ -1814,6 +1814,39 @@ a.nav-btn-primary:hover,
     opacity: 0.9;
 }
 
+.network-link.highlighted {
+    stroke: var(--primary);
+    stroke-opacity: 0.8;
+    stroke-width: 2px;
+}
+
+.network-node.selected circle {
+    stroke: var(--primary);
+    stroke-width: 4px;
+}
+
+.network-node.dimmed circle,
+.network-node.dimmed text {
+    opacity: 0.3;
+}
+
+.network-node.searched text {
+    fill: var(--accent-amber);
+    font-weight: 700;
+}
+
+.network-node.searched circle {
+    stroke: var(--accent-amber);
+    stroke-width: 4px;
+}
+
+.cluster-hull {
+    fill-opacity: 0.08;
+    stroke-width: 2;
+    stroke-opacity: 0.3;
+    stroke-dasharray: 6 3;
+}
+
 /* Dashboard Tooltip */
 .tooltip {
     position: absolute;

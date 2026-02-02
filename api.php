@@ -748,6 +748,140 @@ switch ($action) {
         ]);
         break;
 
+    case 'tag_network_data':
+        // Get comprehensive tag network data for visualization
+        // Requires admin authentication
+        if (!function_exists('is_admin') || !is_admin()) {
+            http_response_code(403);
+            echo json_encode(['error' => 'Admin access required']);
+            exit;
+        }
+
+        // Optional filters from query params
+        $minCount = isset($_GET['min_count']) ? max(1, intval($_GET['min_count'])) : 1;
+        $minCooccurrence = isset($_GET['min_cooccurrence']) ? max(1, intval($_GET['min_cooccurrence'])) : 1;
+
+        // Fetch all bookmarks with tags
+        $tagRows = $db->query("
+            SELECT tags, created_at
+            FROM bookmarks
+            WHERE tags IS NOT NULL AND tags != ''
+        ")->fetchAll(PDO::FETCH_ASSOC);
+
+        $tagFrequency = [];
+        $tagCooccurrence = [];
+        $tagFirstSeen = [];
+
+        foreach ($tagRows as $row) {
+            $tags = array_map('trim', explode(',', $row['tags']));
+            $normalizedTags = array_map('strtolower', $tags);
+
+            // Track tag frequency and first appearance
+            foreach ($tags as $i => $tag) {
+                $normalizedTag = $normalizedTags[$i];
+
+                if (!isset($tagFrequency[$normalizedTag])) {
+                    $tagFrequency[$normalizedTag] = ['count' => 0, 'display' => $tag];
+                    $tagFirstSeen[$normalizedTag] = $row['created_at'];
+                }
+                $tagFrequency[$normalizedTag]['count']++;
+
+                // Update first seen if this is earlier
+                if ($row['created_at'] < $tagFirstSeen[$normalizedTag]) {
+                    $tagFirstSeen[$normalizedTag] = $row['created_at'];
+                }
+            }
+
+            // Track ALL tag co-occurrences
+            if (count($tags) > 1) {
+                for ($i = 0; $i < count($normalizedTags); $i++) {
+                    for ($j = $i + 1; $j < count($normalizedTags); $j++) {
+                        $tag1 = $normalizedTags[$i];
+                        $tag2 = $normalizedTags[$j];
+
+                        // Create consistent key (alphabetically sorted)
+                        $key = ($tag1 < $tag2) ? "$tag1|$tag2" : "$tag2|$tag1";
+
+                        if (!isset($tagCooccurrence[$key])) {
+                            $tagCooccurrence[$key] = 0;
+                        }
+                        $tagCooccurrence[$key]++;
+                    }
+                }
+            }
+        }
+
+        // Prepare tags output (all tags meeting minimum count)
+        $tags = [];
+        foreach ($tagFrequency as $normalizedTag => $data) {
+            if ($data['count'] >= $minCount) {
+                // Detect tag type/prefix
+                $type = 'tag';
+                if (strpos($data['display'], 'person:') === 0) {
+                    $type = 'person';
+                } elseif (strpos($data['display'], 'via:') === 0) {
+                    $type = 'via';
+                } elseif (strpos($data['display'], '/') !== false) {
+                    $type = 'hierarchical';
+                }
+
+                $tags[] = [
+                    'tag' => $data['display'],
+                    'count' => $data['count'],
+                    'first_seen' => $tagFirstSeen[$normalizedTag],
+                    'type' => $type
+                ];
+            }
+        }
+
+        // Sort by count descending
+        usort($tags, function($a, $b) {
+            return $b['count'] - $a['count'];
+        });
+
+        // Prepare co-occurrence data (filter by minimum count)
+        $cooccurrenceData = [];
+        foreach ($tagCooccurrence as $key => $count) {
+            if ($count >= $minCooccurrence) {
+                list($tag1, $tag2) = explode('|', $key);
+                // Get display names
+                $display1 = isset($tagFrequency[$tag1]) ? $tagFrequency[$tag1]['display'] : $tag1;
+                $display2 = isset($tagFrequency[$tag2]) ? $tagFrequency[$tag2]['display'] : $tag2;
+
+                $cooccurrenceData[] = [
+                    'source' => $display1,
+                    'target' => $display2,
+                    'count' => $count
+                ];
+            }
+        }
+
+        // Sort co-occurrence by count descending
+        usort($cooccurrenceData, function($a, $b) {
+            return $b['count'] - $a['count'];
+        });
+
+        // Get unique prefixes for filtering
+        $prefixes = [];
+        foreach ($tags as $tag) {
+            if (preg_match('/^([a-z]+:)/', strtolower($tag['tag']), $matches)) {
+                $prefix = $matches[1];
+                if (!isset($prefixes[$prefix])) {
+                    $prefixes[$prefix] = 0;
+                }
+                $prefixes[$prefix]++;
+            }
+        }
+
+        echo json_encode([
+            'tags' => $tags,
+            'cooccurrence' => $cooccurrenceData,
+            'total_tags' => count($tagFrequency),
+            'total_cooccurrences' => count($tagCooccurrence),
+            'prefixes' => $prefixes
+        ]);
+        break;
+
     default:
         http_response_code(400);
         echo json_encode(['error' => 'Invalid action']);

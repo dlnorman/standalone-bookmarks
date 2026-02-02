@@ -147,6 +147,8 @@ function render_nav($config, $isLoggedIn, $current_page, $page_title = null)
                                         Management</a>
                                     <a href="<?= $config['base_path'] ?>/tag-admin.php" class="dropdown-item" role="menuitem">Tag
                                         Management</a>
+                                    <a href="<?= $config['base_path'] ?>/tag-network.php" class="dropdown-item" role="menuitem">Tag
+                                        Network</a>
                                 <?php endif; ?>
                                 <a href="<?= $config['base_path'] ?>/account.php" class="dropdown-item"
                                     role="menuitem">Account</a>
