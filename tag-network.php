@@ -516,19 +516,66 @@ $isLoggedIn = is_logged_in();
         @media (max-width: 768px) {
             .network-page {
                 flex-direction: column;
+                height: auto;
+                min-height: calc(100vh - 70px);
             }
 
             .network-controls {
                 width: 100%;
                 min-width: auto;
                 height: auto;
-                max-height: 40vh;
+                max-height: none;
                 border-right: none;
                 border-bottom: 1px solid var(--border-color);
+                overflow-y: visible;
+            }
+
+            .network-viewport {
+                min-height: 50vh;
             }
 
             .stats-panel {
                 margin-top: 0;
+            }
+
+            .control-section {
+                padding: 12px;
+            }
+
+            .zoom-controls {
+                flex-wrap: wrap;
+            }
+
+            .export-controls {
+                flex-direction: column;
+            }
+        }
+
+        @media (max-width: 480px) {
+            .network-controls {
+                padding: 12px;
+                gap: 12px;
+            }
+
+            .control-section h3 {
+                font-size: 11px;
+                margin-bottom: 10px;
+            }
+
+            .control-label {
+                font-size: 12px;
+            }
+
+            .control-select,
+            .control-input {
+                font-size: 16px; /* Prevents zoom on iOS */
+                padding: 10px 12px;
+            }
+
+            .zoom-btn,
+            .export-btn {
+                min-height: 44px;
+                font-size: 14px;
             }
         }
     </style>

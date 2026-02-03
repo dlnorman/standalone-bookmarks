@@ -893,6 +893,68 @@ tr:hover td {
 }
 
 /* =================================================================
+   Mobile Nav Styles (base styles before media queries)
+   ================================================================= */
+
+.nav-mobile-toggle {
+    display: none;
+    /* Hidden by default, shown at mobile breakpoint */
+    background: transparent;
+    border: none;
+    cursor: pointer;
+    padding: 10px;
+    width: 44px;
+    height: 44px;
+    position: relative;
+    align-items: center;
+    justify-content: center;
+}
+
+.hamburger-icon {
+    display: block;
+    width: 24px;
+    height: 2px;
+    background: var(--text-primary);
+    position: relative;
+    transition: all 0.3s;
+}
+
+.hamburger-icon::before,
+.hamburger-icon::after {
+    content: '';
+    display: block;
+    width: 24px;
+    height: 2px;
+    background: var(--text-primary);
+    position: absolute;
+    left: 0;
+    transition: all 0.3s;
+}
+
+.hamburger-icon::before {
+    top: -7px;
+}
+
+.hamburger-icon::after {
+    top: 7px;
+}
+
+/* Hamburger animation when active */
+.nav-mobile-toggle[aria-expanded="true"] .hamburger-icon {
+    background: transparent;
+}
+
+.nav-mobile-toggle[aria-expanded="true"] .hamburger-icon::before {
+    top: 0;
+    transform: rotate(45deg);
+}
+
+.nav-mobile-toggle[aria-expanded="true"] .hamburger-icon::after {
+    top: 0;
+    transform: rotate(-45deg);
+}
+
+/* =================================================================
    Responsiveness
    ================================================================= */
 
@@ -923,7 +985,7 @@ tr:hover td {
     }
 
     .nav-mobile-toggle {
-        display: block;
+        display: flex;
     }
 
     .search-form {
@@ -934,32 +996,6 @@ tr:hover td {
         width: 100%;
         padding: 12px;
     }
-}
-
-/* Mobile Nav Styles */
-.nav-mobile-toggle {
-    background: transparent;
-    border: none;
-    cursor: pointer;
-    padding: 10px;
-}
-
-.hamburger-icon,
-.hamburger-icon::before,
-.hamburger-icon::after {
-    width: 24px;
-    height: 2px;
-    background: var(--text-primary);
-    position: absolute;
-    transition: all 0.3s;
-}
-
-.hamburger-icon::before {
-    top: -6px;
-}
-
-.hamburger-icon::after {
-    top: 6px;
 }
 
 /* Keep existing utility classes below this, ensuring they map to new variables */
@@ -1933,6 +1969,10 @@ a.nav-btn-primary:hover,
         box-shadow: var(--shadow-xl);
         z-index: 999;
         animation: slideDown 0.3s ease-out;
+        /* Allow scrolling when content is tall */
+        max-height: calc(100vh - 70px);
+        overflow-y: auto;
+        -webkit-overflow-scrolling: touch;
     }
 
     @keyframes slideDown {
@@ -1960,6 +2000,31 @@ a.nav-btn-primary:hover,
         width: 100%;
         justify-content: center;
         padding: 12px;
+        font-size: 16px;
+        text-align: center;
+    }
+
+    /* Fix dropdown inside mobile nav */
+    .nav-content.mobile-active .nav-dropdown {
+        width: 100%;
+    }
+
+    .nav-content.mobile-active .nav-dropdown-content {
+        position: static;
+        width: 100%;
+        margin-top: 10px;
+        box-shadow: none;
+        border: 1px solid var(--border-color);
+        animation: none;
+    }
+
+    .nav-content.mobile-active .nav-dropdown-content.active {
+        display: block;
+    }
+
+    .nav-content.mobile-active .dropdown-item {
+        text-align: center;
+        padding: 14px 16px;
         font-size: 16px;
     }
 }
@@ -2524,4 +2589,359 @@ a.modal-tag {
 
 a.modal-tag:hover {
     opacity: 0.9;
+}
+
+/* =================================================================
+   Comprehensive Mobile Responsive Styles
+   ================================================================= */
+
+/* Smaller mobile breakpoint for phones */
+@media (max-width: 480px) {
+    .page-container {
+        padding: 12px;
+    }
+
+    h1 {
+        font-size: 24px;
+    }
+
+    .search-header {
+        padding: 20px 16px;
+        margin-bottom: 24px;
+    }
+
+    .search-form input[type="text"] {
+        padding: 14px 16px;
+        font-size: 16px;
+        /* Prevents zoom on iOS */
+    }
+
+    .bookmark {
+        padding: 20px;
+        margin-bottom: 16px;
+    }
+
+    .bookmark h2 {
+        font-size: 17px;
+    }
+
+    .bookmark .description {
+        font-size: 14px;
+    }
+
+    .bookmark-screenshot-container {
+        height: 180px;
+    }
+
+    /* Smaller tag pills on mobile */
+    .bookmark-tag {
+        padding: 4px 10px;
+        font-size: 12px;
+    }
+
+    /* Gallery adjustments */
+    .gallery-grid {
+        grid-template-columns: 1fr;
+        gap: 16px;
+    }
+
+    .gallery-item-image {
+        height: 200px;
+    }
+
+    /* Modal adjustments */
+    .modal.active {
+        padding: 10px;
+    }
+
+    .modal-content {
+        padding: 20px;
+        border-radius: 12px;
+    }
+
+    .modal-image {
+        max-height: 50vh;
+    }
+
+    .modal-info {
+        padding: 16px;
+    }
+
+    .modal-title {
+        font-size: 18px;
+    }
+
+    /* Dashboard small phone adjustments */
+    .dashboard-container {
+        padding: 12px;
+    }
+
+    .dashboard-header {
+        grid-template-columns: repeat(2, 1fr);
+        gap: 10px;
+    }
+
+    .dashboard-stat-card {
+        padding: 14px;
+    }
+
+    .dashboard-stat-card .value {
+        font-size: 22px;
+    }
+
+    .dashboard-stat-card .label {
+        font-size: 10px;
+    }
+
+    .dashboard-stat-card .subtext {
+        font-size: 9px;
+    }
+
+    .panel {
+        padding: 16px;
+        min-height: 300px;
+    }
+
+    .panel-title {
+        font-size: 14px;
+    }
+
+    /* Tag network small screen */
+    .network-controls {
+        padding: 12px;
+    }
+
+    .control-section {
+        padding: 12px;
+    }
+
+    .control-section h3 {
+        font-size: 11px;
+    }
+}
+
+/* Medium breakpoint enhancements */
+@media (max-width: 768px) {
+    /* Tables - horizontal scroll wrapper */
+    .table-responsive {
+        overflow-x: auto;
+        -webkit-overflow-scrolling: touch;
+        margin: 0 -15px;
+        padding: 0 15px;
+    }
+
+    /* Tag admin table improvements */
+    .tag-table {
+        min-width: 600px;
+    }
+
+    .tag-table th,
+    .tag-table td {
+        padding: 12px 14px;
+        font-size: 13px;
+    }
+
+    .tag-actions {
+        flex-direction: column;
+        gap: 6px;
+    }
+
+    .tag-actions .btn {
+        width: 100%;
+        text-align: center;
+    }
+
+    /* Filter controls stack on mobile */
+    .filter-controls {
+        flex-direction: column;
+        align-items: stretch;
+    }
+
+    .filter-tabs {
+        width: 100%;
+        justify-content: center;
+    }
+
+    .search-input {
+        max-width: none;
+        width: 100%;
+    }
+
+    .sort-select {
+        width: 100%;
+    }
+
+    /* Tag stats grid */
+    .tag-stats {
+        display: grid;
+        grid-template-columns: repeat(2, 1fr);
+        gap: 12px;
+    }
+
+    .tag-stat {
+        min-width: auto;
+    }
+
+    /* Form improvements */
+    .form-group input,
+    .form-group select,
+    .form-group textarea {
+        font-size: 16px;
+        /* Prevents zoom on iOS */
+    }
+
+    .buttons {
+        flex-direction: column;
+        gap: 12px;
+    }
+
+    .buttons .btn,
+    .buttons button {
+        width: 100%;
+    }
+
+    /* Dashboard responsive */
+    .dashboard-header {
+        grid-template-columns: repeat(2, 1fr);
+    }
+
+    .content-grid {
+        grid-template-columns: 1fr;
+    }
+
+    /* Login page */
+    .login-container {
+        margin: 20px auto;
+        padding: 24px;
+    }
+
+    /* Pagination */
+    .pagination {
+        flex-wrap: wrap;
+        justify-content: center;
+    }
+
+    /* Alert/notice boxes */
+    .filter-notice {
+        flex-direction: column;
+        gap: 12px;
+        text-align: center;
+    }
+
+    .filter-notice .btn {
+        width: 100%;
+    }
+
+    /* Tags cloud */
+    .tags-container {
+        padding: 24px 16px;
+    }
+
+    .tags-filter-tabs {
+        justify-content: center;
+    }
+
+    /* Ensure touch targets are at least 44px */
+    .btn,
+    button,
+    .nav-link,
+    .dropdown-item,
+    .filter-tab,
+    .pagination a,
+    input[type="checkbox"],
+    input[type="radio"] {
+        min-height: 44px;
+        min-width: 44px;
+    }
+
+    /* Checkbox styling for touch */
+    .checkbox-label {
+        display: flex;
+        align-items: center;
+        gap: 12px;
+        padding: 8px 0;
+    }
+
+    .checkbox-label input[type="checkbox"] {
+        width: 22px;
+        height: 22px;
+    }
+}
+
+/* Tablet and up */
+@media (min-width: 769px) {
+    /* Ensure dropdown is properly hidden on desktop until activated */
+    .nav-content {
+        display: flex !important;
+    }
+
+    .nav-mobile-toggle {
+        display: none !important;
+    }
+}
+
+/* Large screens */
+@media (min-width: 1200px) {
+    .page-container {
+        max-width: 1100px;
+    }
+
+    .gallery-container {
+        max-width: 1600px;
+    }
+
+    .gallery-grid {
+        grid-template-columns: repeat(auto-fill, minmax(320px, 1fr));
+    }
+}
+
+/* Print styles - hide nav */
+@media print {
+    .app-nav,
+    .nav-mobile-toggle,
+    .search-header,
+    .pagination,
+    .bookmark-actions {
+        display: none !important;
+    }
+
+    .page-container {
+        max-width: none;
+        padding: 0;
+    }
+
+    .bookmark {
+        break-inside: avoid;
+        box-shadow: none;
+        border: 1px solid #ccc;
+    }
+}
+
+/* Safe area insets for notched devices (iPhone X and later) */
+@supports (padding: max(0px)) {
+    .app-nav {
+        padding-left: max(24px, env(safe-area-inset-left));
+        padding-right: max(24px, env(safe-area-inset-right));
+    }
+
+    .page-container {
+        padding-left: max(20px, env(safe-area-inset-left));
+        padding-right: max(20px, env(safe-area-inset-right));
+    }
+
+    .nav-content.mobile-active {
+        padding-left: max(20px, env(safe-area-inset-left));
+        padding-right: max(20px, env(safe-area-inset-right));
+    }
+}
+
+/* Reduce motion for users who prefer it */
+@media (prefers-reduced-motion: reduce) {
+    *,
+    *::before,
+    *::after {
+        animation-duration: 0.01ms !important;
+        animation-iteration-count: 1 !important;
+        transition-duration: 0.01ms !important;
+    }
 }

@@ -471,6 +471,74 @@ foreach ($allTags as $tagLower => $data) {
             margin-bottom: 8px;
             color: var(--text-secondary);
         }
+
+        /* Mobile responsive styles for tag admin */
+        @media (max-width: 768px) {
+            .tag-admin-header {
+                padding: 16px;
+            }
+
+            .tag-stats {
+                display: grid;
+                grid-template-columns: repeat(2, 1fr);
+                gap: 10px;
+            }
+
+            .tag-stat {
+                padding: 10px 12px;
+                min-width: auto;
+            }
+
+            .tag-stat .value {
+                font-size: 20px;
+            }
+
+            .filter-controls {
+                flex-direction: column;
+                gap: 12px;
+            }
+
+            .filter-tabs {
+                width: 100%;
+                display: grid;
+                grid-template-columns: repeat(4, 1fr);
+            }
+
+            .filter-tabs button {
+                padding: 10px 8px;
+                font-size: 13px;
+            }
+
+            .search-input {
+                max-width: none;
+                width: 100%;
+            }
+
+            .sort-select {
+                width: 100%;
+            }
+
+            .modal-content {
+                margin: 10px;
+                padding: 20px;
+                max-height: 90vh;
+                overflow-y: auto;
+            }
+
+            .modal-actions {
+                flex-direction: column;
+            }
+
+            .modal-actions .btn {
+                width: 100%;
+            }
+        }
+
+        @media (max-width: 480px) {
+            .filter-tabs {
+                grid-template-columns: repeat(2, 1fr);
+            }
+        }
     </style>
 </head>
 
@@ -544,6 +612,7 @@ foreach ($allTags as $tagLower => $data) {
             </div>
         <?php else: ?>
             <div class="tag-table-container">
+                <div class="table-responsive">
                 <table class="tag-table">
                     <thead>
                         <tr>
@@ -582,6 +651,7 @@ foreach ($allTags as $tagLower => $data) {
                         <?php endforeach; ?>
                     </tbody>
                 </table>
+                </div>
             </div>
         <?php endif; ?>
     </div>

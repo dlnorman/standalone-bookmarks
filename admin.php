@@ -160,6 +160,7 @@ $users = $db->query("SELECT * FROM users ORDER BY created_at DESC")->fetchAll(PD
 
         <div class="card">
             <h2>Existing Users</h2>
+            <div class="table-responsive">
             <table>
                 <thead>
                     <tr>
@@ -201,6 +202,7 @@ $users = $db->query("SELECT * FROM users ORDER BY created_at DESC")->fetchAll(PD
                     <?php endforeach; ?>
                 </tbody>
             </table>
+            </div>
         </div>
     </div>
 

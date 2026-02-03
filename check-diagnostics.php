@@ -109,6 +109,7 @@ $diagnostics['sample_jobs'] = $db->query("SELECT id, bookmark_id, job_type, stat
 
     <?php if (!empty($diagnostics['sample_bookmarks'])): ?>
         <h2>Sample Bookmarks (First 5)</h2>
+        <div class="table-responsive">
         <table>
             <tr>
                 <th>ID</th>
@@ -123,10 +124,12 @@ $diagnostics['sample_jobs'] = $db->query("SELECT id, bookmark_id, job_type, stat
                 </tr>
             <?php endforeach; ?>
         </table>
+        </div>
     <?php endif; ?>
 
     <?php if (!empty($diagnostics['sample_jobs'])): ?>
         <h2>Sample Check URL Jobs (Last 5)</h2>
+        <div class="table-responsive">
         <table>
             <tr>
                 <th>Job ID</th>
@@ -143,6 +146,7 @@ $diagnostics['sample_jobs'] = $db->query("SELECT id, bookmark_id, job_type, stat
                 </tr>
             <?php endforeach; ?>
         </table>
+        </div>
     <?php endif; ?>
 
     <h2>Recommendations</h2>
