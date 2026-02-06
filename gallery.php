@@ -36,15 +36,15 @@ $page = max(1, intval($_GET['page'] ?? 1));
 $offset = ($page - 1) * $itemsPerPage;
 
 // Get total count
-$countQuery = "SELECT COUNT(*) as total FROM bookmarks WHERE screenshot IS NOT NULL AND screenshot != ''";
+$countQuery = "SELECT COUNT(*) as total FROM bookmarks";
 if (!$isLoggedIn) {
-    $countQuery .= " AND private = 0";
+    $countQuery .= " WHERE private = 0";
 }
 $totalBookmarks = $db->query($countQuery)->fetch(PDO::FETCH_ASSOC)['total'];
 $totalPages = ceil($totalBookmarks / $itemsPerPage);
 
-// Fetch bookmarks with screenshots for current page
-$query = "SELECT id, url, title, description, screenshot, created_at, tags FROM bookmarks WHERE screenshot IS NOT NULL AND screenshot != ''";
+// Fetch bookmarks for current page (including those without screenshots)
+$query = "SELECT id, url, title, description, screenshot, created_at, tags FROM bookmarks WHERE 1=1";
 
 // If not logged in, only show public bookmarks
 if (!$isLoggedIn) {
@@ -83,7 +83,7 @@ unset($bookmark); // Break reference
         </div>
 
         <div class="stats">
-            <span id="visibleCount"><?= count($bookmarks) ?></span> of <?= count($bookmarks) ?> screenshots on this page
+            <span id="visibleCount"><?= count($bookmarks) ?></span> of <?= count($bookmarks) ?> bookmarks on this page
             <?php if ($totalPages > 1): ?>
                 <span class="pagination-info">
                     (<?= $totalBookmarks ?> total across <?= $totalPages ?> pages)
@@ -94,9 +94,8 @@ unset($bookmark); // Break reference
         <?php if (empty($bookmarks)): ?>
             <div class="no-results">
                 <div class="no-results-icon">📷</div>
-                <p>No screenshots available yet.</p>
-                <p style="margin-top: 10px; font-size: 13px;">Screenshots are automatically captured when you bookmark
-                    pages.</p>
+                <p>No bookmarks yet.</p>
+                <p style="margin-top: 10px; font-size: 13px;">Add your first bookmark to see it here.</p>
             </div>
         <?php else: ?>
             <div class="gallery-grid" id="galleryGrid">
@@ -106,8 +105,14 @@ unset($bookmark); // Break reference
                         data-url="<?= htmlspecialchars($bookmark['url']) ?>"
                         data-tags="<?= htmlspecialchars(strtolower($bookmark['tags'] ?? '')) ?>"
                         onclick="window.open('<?= htmlspecialchars($bookmark['url']) ?>', '_blank')">
-                        <img src="<?= $config['base_path'] ?>/<?= htmlspecialchars($bookmark['screenshot']) ?>"
-                            alt="<?= htmlspecialchars($bookmark['title']) ?>" class="gallery-item-image" loading="lazy">
+                        <?php if (!empty($bookmark['screenshot'])): ?>
+                            <img src="<?= $config['base_path'] ?>/<?= htmlspecialchars($bookmark['screenshot']) ?>"
+                                alt="<?= htmlspecialchars($bookmark['title']) ?>" class="gallery-item-image" loading="lazy">
+                        <?php else: ?>
+                            <div class="gallery-item-placeholder">
+                                <?= strtoupper(substr($bookmark['title'], 0, 1)) ?>
+                            </div>
+                        <?php endif; ?>
                         <div class="gallery-item-info">
                             <div class="gallery-item-header">
                                 <div class="gallery-item-title"><?= htmlspecialchars($bookmark['title']) ?></div>
@@ -307,7 +312,7 @@ unset($bookmark); // Break reference
                 noResults.className = 'no-results';
                 noResults.innerHTML = `
                     <div class="no-results-icon">🔍</div>
-                    <p>No screenshots found${query ? ' for "' + escapeHtml(query) + '"' : ''}.</p>
+                    <p>No bookmarks found${query ? ' for "' + escapeHtml(query) + '"' : ''}.</p>
                 `;
                 galleryGrid.appendChild(noResults);
                 return;
@@ -342,9 +347,18 @@ unset($bookmark); // Break reference
                 tagsHTML += '</div>';
             }
 
+            // Screenshot or placeholder
+            let imageHTML = '';
+            if (bookmark.screenshot) {
+                imageHTML = `<img src="${basePath}/${escapeHtml(bookmark.screenshot)}"
+                    alt="${escapeHtml(bookmark.title)}" class="gallery-item-image" loading="lazy">`;
+            } else {
+                const firstLetter = (bookmark.title || '?').substring(0, 1).toUpperCase();
+                imageHTML = `<div class="gallery-item-placeholder">${firstLetter}</div>`;
+            }
+
             div.innerHTML = `
-                <img src="${basePath}/${escapeHtml(bookmark.screenshot)}"
-                    alt="${escapeHtml(bookmark.title)}" class="gallery-item-image" loading="lazy">
+                ${imageHTML}
                 <div class="gallery-item-info">
                     <div class="gallery-item-header">
                         <div class="gallery-item-title">${escapeHtml(bookmark.title)}</div>
@@ -520,7 +534,13 @@ unset($bookmark); // Break reference
             const modalDescription = document.getElementById('modalDescription');
             const modalTags = document.getElementById('modalTags');
 
-            modalImage.src = basePath + '/' + bookmark.screenshot;
+            if (bookmark.screenshot) {
+                modalImage.src = basePath + '/' + bookmark.screenshot;
+                modalImage.style.display = 'block';
+            } else {
+                modalImage.src = '';
+                modalImage.style.display = 'none';
+            }
             modalTitle.textContent = bookmark.title;
             modalUrl.href = bookmark.url;
             modalUrl.textContent = bookmark.url;

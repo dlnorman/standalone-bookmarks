@@ -293,6 +293,10 @@ $totalPages = ceil($total / $limit);
                                     <a href="#" onclick="deleteBookmark(<?= $bookmark['id'] ?>); return false;">Delete</a>
                                     <a href="#" onclick="regenerateScreenshot(<?= $bookmark['id'] ?>); return false;">Regenerate
                                         Screenshot</a>
+                                    <?php if (!empty($bookmark['screenshot'])): ?>
+                                        <a href="#" onclick="deleteScreenshot(<?= $bookmark['id'] ?>); return false;">Delete
+                                            Screenshot</a>
+                                    <?php endif; ?>
                                 </div>
                             <?php endif; ?>
                         </div>
@@ -545,6 +549,29 @@ $totalPages = ceil($total / $limit);
                         screenshotDiv.innerHTML = originalContent;
                     }
                 });
+        }
+
+        function deleteScreenshot(id) {
+            if (!IS_LOGGED_IN) return;
+            if (!confirm('Delete the screenshot for this bookmark? It will revert to showing a placeholder.')) return;
+
+            const formData = new FormData();
+            formData.append('bookmark_id', id);
+
+            fetch(BASE_PATH + '/delete-screenshot.php', {
+                method: 'POST',
+                body: formData
+            })
+                .then(r => r.json())
+                .then(data => {
+                    if (data.success) {
+                        // Reload the page to show the placeholder
+                        location.reload();
+                    } else {
+                        alert('Error: ' + data.error);
+                    }
+                })
+                .catch(err => alert('Error: ' + err));
         }
 
         // Tag autocomplete functionality
@@ -858,11 +885,15 @@ $totalPages = ceil($total / $limit);
             // Actions (only if logged in)
             let actionsHTML = '';
             if (IS_LOGGED_IN) {
+                const deleteScreenshotLink = bookmark.screenshot
+                    ? `<a href="#" onclick="deleteScreenshot(${bookmark.id}); return false;">Delete Screenshot</a>`
+                    : '';
                 actionsHTML = `
                     <div class="actions">
                         <a href="#" onclick="editBookmark(${bookmark.id}); return false;">Edit</a>
                         <a href="#" onclick="deleteBookmark(${bookmark.id}); return false;">Delete</a>
                         <a href="#" onclick="regenerateScreenshot(${bookmark.id}); return false;">Regenerate Screenshot</a>
+                        ${deleteScreenshotLink}
                     </div>
                 `;
             }
