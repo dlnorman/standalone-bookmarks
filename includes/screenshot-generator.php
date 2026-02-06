@@ -776,6 +776,10 @@ class ScreenshotGenerator
      */
     public function generatePlaceholder($url, $baseDir = null)
     {
+        if (!extension_loaded('gd')) {
+            return ['success' => false, 'path' => null, 'error' => 'GD extension not available for placeholder generation'];
+        }
+
         $domain = parse_url($url, PHP_URL_HOST);
         if (!$domain)
             $domain = 'Unknown';
@@ -853,6 +857,10 @@ class ScreenshotGenerator
      */
     public function generateTypeIcon($url, $label, $color, $baseDir = null)
     {
+        if (!extension_loaded('gd')) {
+            return ['success' => false, 'path' => null, 'error' => 'GD extension not available for icon generation'];
+        }
+
         $width = 256;
         $height = 256;
 

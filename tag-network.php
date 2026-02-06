@@ -482,6 +482,8 @@ $isLoggedIn = is_logged_in();
             padding: 12px;
             font-size: 11px;
             z-index: 10;
+            max-height: 300px;
+            overflow-y: auto;
         }
 
         .legend-title {
@@ -506,10 +508,15 @@ $isLoggedIn = is_logged_in();
             width: 12px;
             height: 12px;
             border-radius: 50%;
+            flex-shrink: 0;
         }
 
         .legend-label {
             color: var(--text-secondary);
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            max-width: 180px;
         }
 
         /* Responsive */
@@ -609,10 +616,10 @@ $isLoggedIn = is_logged_in();
 
                 <div class="control-group">
                     <label class="control-label">
-                        <span>Max Tags</span>
+                        <span id="maxTagsLabel">Max Tags</span>
                         <span class="control-value" id="maxTagsValue">75</span>
                     </label>
-                    <input type="range" class="control-slider" id="maxTags" min="10" max="350" value="75">
+                    <input type="range" class="control-slider" id="maxTags" min="10" max="1000" value="75">
                 </div>
 
                 <div class="control-group">
@@ -638,6 +645,7 @@ $isLoggedIn = is_logged_in();
                 <div class="zoom-controls">
                     <button class="zoom-btn" id="zoomIn" title="Zoom In">+</button>
                     <button class="zoom-btn" id="zoomOut" title="Zoom Out">-</button>
+                    <button class="zoom-btn" id="zoomFit" title="Fit All">Fit</button>
                     <button class="zoom-btn" id="zoomReset" title="Reset Zoom">Reset</button>
                 </div>
             </div>
@@ -753,9 +761,13 @@ $isLoggedIn = is_logged_in();
         let nodes = [];
         let links = [];
         let clusters = [];
+        let clusterMeta = [];  // {id, representativeTag, size}
         let sizeScale = null;
         let needsRedraw = true;
         let animationId = null;
+        let quadtree = null;
+        let userHasPanned = false;
+        let hasAutoFitted = false;
 
         // Filter state
         const filterState = {
@@ -769,8 +781,12 @@ $isLoggedIn = is_logged_in();
             showPrefixGroups: false
         };
 
-        // Cluster colors
-        const clusterColors = d3.schemeTableau10;
+        // Cluster color scale: first 10 use Tableau10, beyond that use golden-angle HSL
+        function clusterColorScale(index) {
+            if (index < 10) return d3.schemeTableau10[index];
+            const hue = (index * 137.508) % 360;
+            return d3.hsl(hue, 0.65, 0.55).formatHex();
+        }
 
         // Cached CSS colors
         let cssColors = {};
@@ -803,6 +819,11 @@ $isLoggedIn = is_logged_in();
 
                 document.getElementById('totalTagsStat').textContent = rawData.tags.length;
                 document.getElementById('totalCount').textContent = rawData.tags.length;
+
+                // Dynamic slider max: set to actual tag count
+                const slider = document.getElementById('maxTags');
+                slider.max = rawData.tags.length;
+                document.getElementById('maxTagsLabel').textContent = `Max Tags (of ${rawData.tags.length})`;
 
                 applyFilters();
                 document.getElementById('networkLoading').style.display = 'none';
@@ -859,7 +880,7 @@ $isLoggedIn = is_logged_in();
                 };
             });
 
-            // Detect clusters using simple community detection
+            // Detect clusters using label propagation
             detectClusters(filteredNodes, filteredLinks);
 
             filteredData = { nodes: filteredNodes, links: filteredLinks };
@@ -876,77 +897,106 @@ $isLoggedIn = is_logged_in();
             initNetwork();
         }
 
-        // Simple community detection based on co-occurrence
+        // Label Propagation community detection
         function detectClusters(nodes, links) {
-            // Build adjacency list
+            if (nodes.length === 0) return;
+
+            // Build adjacency list with weights
             const adjacency = new Map();
-            nodes.forEach(n => adjacency.set(n.id, new Set()));
+            nodes.forEach(n => adjacency.set(n.id, []));
 
             links.forEach(l => {
                 const source = l.source.toLowerCase();
                 const target = l.target.toLowerCase();
                 if (adjacency.has(source) && adjacency.has(target)) {
-                    adjacency.get(source).add(target);
-                    adjacency.get(target).add(source);
+                    adjacency.get(source).push({ neighbor: target, weight: l.count });
+                    adjacency.get(target).push({ neighbor: source, weight: l.count });
                 }
             });
 
-            // Simple greedy clustering
-            const visited = new Set();
-            let clusterId = 0;
-            const nodeMap = new Map(nodes.map(n => [n.id, n]));
+            // Initialize: each node is its own community
+            const labels = new Map();
+            nodes.forEach((n, i) => labels.set(n.id, i));
 
-            // Start with highest-degree nodes
-            const nodesByDegree = [...adjacency.entries()]
-                .sort((a, b) => b[1].size - a[1].size)
-                .map(([id]) => id);
+            // Iterate until convergence or max iterations
+            const maxIter = 15;
+            const nodeIds = nodes.map(n => n.id);
 
-            for (const startId of nodesByDegree) {
-                if (visited.has(startId)) continue;
+            for (let iter = 0; iter < maxIter; iter++) {
+                let changed = false;
 
-                // BFS to find connected component with high connectivity
-                const queue = [startId];
-                const cluster = [];
+                // Shuffle node order each iteration for better convergence
+                const shuffled = [...nodeIds];
+                for (let i = shuffled.length - 1; i > 0; i--) {
+                    const j = Math.floor(Math.random() * (i + 1));
+                    [shuffled[i], shuffled[j]] = [shuffled[j], shuffled[i]];
+                }
 
-                while (queue.length > 0 && cluster.length < nodes.length / 3) {
-                    const nodeId = queue.shift();
-                    if (visited.has(nodeId)) continue;
+                for (const nodeId of shuffled) {
+                    const neighbors = adjacency.get(nodeId);
+                    if (neighbors.length === 0) continue;
 
-                    visited.add(nodeId);
-                    cluster.push(nodeId);
+                    // Sum weights for each neighbor label
+                    const labelWeights = new Map();
+                    for (const { neighbor, weight } of neighbors) {
+                        const nLabel = labels.get(neighbor);
+                        labelWeights.set(nLabel, (labelWeights.get(nLabel) || 0) + weight);
+                    }
 
-                    // Sort neighbors by connection strength to current cluster
-                    const neighbors = [...adjacency.get(nodeId)]
-                        .filter(n => !visited.has(n))
-                        .map(n => {
-                            const connections = cluster.filter(c => adjacency.get(n).has(c)).length;
-                            return { id: n, connections };
-                        })
-                        .sort((a, b) => b.connections - a.connections);
-
-                    // Add strongly connected neighbors
-                    for (const neighbor of neighbors) {
-                        if (neighbor.connections >= Math.min(2, cluster.length / 2)) {
-                            queue.push(neighbor.id);
+                    // Find label with maximum weight
+                    let bestLabel = labels.get(nodeId);
+                    let bestWeight = 0;
+                    for (const [label, weight] of labelWeights) {
+                        if (weight > bestWeight) {
+                            bestWeight = weight;
+                            bestLabel = label;
                         }
+                    }
+
+                    if (bestLabel !== labels.get(nodeId)) {
+                        labels.set(nodeId, bestLabel);
+                        changed = true;
                     }
                 }
 
-                // Assign cluster ID
-                cluster.forEach(nodeId => {
-                    const node = nodeMap.get(nodeId);
-                    if (node) node.cluster = clusterId;
-                });
-
-                if (cluster.length > 0) clusterId++;
+                if (!changed) break;
             }
 
-            // Assign remaining unvisited nodes
+            // Remap labels to sequential IDs sorted by cluster size (largest first)
+            const clusterSizes = new Map();
+            for (const label of labels.values()) {
+                clusterSizes.set(label, (clusterSizes.get(label) || 0) + 1);
+            }
+            const sortedLabels = [...clusterSizes.entries()]
+                .sort((a, b) => b[1] - a[1])
+                .map(e => e[0]);
+            const labelRemap = new Map();
+            sortedLabels.forEach((label, idx) => labelRemap.set(label, idx));
+
+            // Assign remapped cluster IDs
+            const nodeMap = new Map(nodes.map(n => [n.id, n]));
+            for (const [nodeId, label] of labels) {
+                const node = nodeMap.get(nodeId);
+                if (node) node.cluster = labelRemap.get(label);
+            }
+
+            // Build cluster metadata (representative tag = highest count node in cluster)
+            const clusterNodesMap = new Map();
             nodes.forEach(n => {
-                if (!visited.has(n.id)) {
-                    n.cluster = clusterId++;
-                }
+                if (!clusterNodesMap.has(n.cluster)) clusterNodesMap.set(n.cluster, []);
+                clusterNodesMap.get(n.cluster).push(n);
             });
+
+            clusterMeta = [];
+            for (const [id, members] of clusterNodesMap) {
+                members.sort((a, b) => b.count - a.count);
+                clusterMeta.push({
+                    id,
+                    representativeTag: members[0].label,
+                    size: members.length
+                });
+            }
+            clusterMeta.sort((a, b) => a.id - b.id);
         }
 
         // Initialize canvas and simulation
@@ -978,8 +1028,10 @@ $isLoggedIn = is_logged_in();
             ctx = canvas.getContext('2d');
             ctx.scale(dpr, dpr);
 
-            // Reset transform
+            // Reset transform and panning state
             transform = d3.zoomIdentity;
+            userHasPanned = false;
+            hasAutoFitted = false;
 
             // Prepare data (create copies to avoid mutation issues)
             nodes = filteredData.nodes.map(d => ({ ...d }));
@@ -999,13 +1051,22 @@ $isLoggedIn = is_logged_in();
             clusters = [...new Set(nodes.map(n => n.cluster))].sort((a, b) => a - b);
 
             // Update legend
-            updateLegend(clusters);
+            updateLegend();
 
             // Calculate collision radii
             nodes.forEach(d => {
                 d.radius = sizeScale(d.count);
                 d.collisionRadius = d.radius + 20;
             });
+
+            // Adaptive force parameters for large graphs
+            const n = nodes.length;
+            const isLarge = n >= 300;
+            const linkStrength = isLarge ? 0.15 : 0.3;
+            const chargeMax = isLarge ? 250 : 400;
+            const collisionIter = isLarge ? 1 : 3;
+            const velDecay = isLarge ? 0.6 : 0.5;
+            const alphaDecay = isLarge ? 0.035 : 0.02;
 
             // Create force simulation
             const clusterForce = filterState.clusterStrength;
@@ -1018,20 +1079,32 @@ $isLoggedIn = is_logged_in();
                         const target = typeof d.target === 'object' ? d.target : nodes.find(n => n.id === d.target);
                         return (source?.collisionRadius || 30) + (target?.collisionRadius || 30) + 20;
                     })
-                    .strength(0.3))
+                    .strength(linkStrength))
                 .force('charge', d3.forceManyBody()
                     .strength(d => -Math.pow(d.collisionRadius, 2) * 0.5)
-                    .distanceMax(400))
+                    .distanceMax(chargeMax))
                 .force('collision', d3.forceCollide()
                     .radius(d => d.collisionRadius)
                     .strength(0.9)
-                    .iterations(3))
+                    .iterations(collisionIter))
                 .force('center', d3.forceCenter(width / 2, height / 2).strength(0.05))
                 .force('cluster', clusterForceFunc(nodes, clusters, clusterForce, width, height))
-                .velocityDecay(0.5)
-                .alphaDecay(0.02)
+                .velocityDecay(velDecay)
+                .alphaDecay(alphaDecay)
                 .on('tick', () => {
+                    // Update quadtree each tick
+                    quadtree = d3.quadtree()
+                        .x(d => d.x)
+                        .y(d => d.y)
+                        .addAll(nodes);
                     needsRedraw = true;
+                })
+                .on('end', () => {
+                    // Auto-fit on first stabilization if user hasn't panned
+                    if (!userHasPanned && !hasAutoFitted) {
+                        hasAutoFitted = true;
+                        zoomToFit(600);
+                    }
                 });
 
             // D3 drag behavior for nodes
@@ -1079,6 +1152,7 @@ $isLoggedIn = is_logged_in();
                 })
                 .on('zoom', ({ transform: t }) => {
                     transform = t;
+                    userHasPanned = true;
                     needsRedraw = true;
                 });
 
@@ -1095,6 +1169,39 @@ $isLoggedIn = is_logged_in();
             startRenderLoop();
         }
 
+        // Zoom to fit all nodes in viewport
+        function zoomToFit(duration) {
+            if (!nodes.length || !canvas || !canvas._zoom) return;
+
+            const padding = 60;
+            let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
+            nodes.forEach(n => {
+                minX = Math.min(minX, n.x - n.radius);
+                minY = Math.min(minY, n.y - n.radius);
+                maxX = Math.max(maxX, n.x + n.radius);
+                maxY = Math.max(maxY, n.y + n.radius);
+            });
+
+            const bw = maxX - minX;
+            const bh = maxY - minY;
+            if (bw <= 0 || bh <= 0) return;
+
+            const scale = Math.min((width - padding * 2) / bw, (height - padding * 2) / bh, 2);
+            const cx = (minX + maxX) / 2;
+            const cy = (minY + maxY) / 2;
+
+            const t = d3.zoomIdentity
+                .translate(width / 2, height / 2)
+                .scale(scale)
+                .translate(-cx, -cy);
+
+            if (duration > 0) {
+                d3.select(canvas).transition().duration(duration).call(canvas._zoom.transform, t);
+            } else {
+                d3.select(canvas).call(canvas._zoom.transform, t);
+            }
+        }
+
         // Cluster force function
         function clusterForceFunc(nodes, clusters, strength, width, height) {
             const clusterCenters = new Map();
@@ -1109,15 +1216,26 @@ $isLoggedIn = is_logged_in();
                 });
             });
 
-            return () => {
+            const force = () => {
                 nodes.forEach(node => {
                     const center = clusterCenters.get(node.cluster);
                     if (center) {
-                        node.vx += (center.x - node.x) * strength * 0.05;
-                        node.vy += (center.y - node.y) * strength * 0.05;
+                        node.vx += (center.x - node.x) * force._strength * 0.05;
+                        node.vy += (center.y - node.y) * force._strength * 0.05;
                     }
                 });
             };
+
+            force._strength = strength;
+
+            // Allow live strength updates
+            force.strength = function(s) {
+                if (s === undefined) return force._strength;
+                force._strength = s;
+                return force;
+            };
+
+            return force;
         }
 
         // Setup mouse event handlers (hover, tooltip, click - drag is handled by D3)
@@ -1141,12 +1259,14 @@ $isLoggedIn = is_logged_in();
                     needsRedraw = true;
 
                     if (node) {
+                        const cm = clusterMeta.find(c => c.id === node.cluster);
+                        const clusterLabel = cm ? `${cm.representativeTag} (${cm.size})` : `Cluster ${node.cluster + 1}`;
                         tooltip.innerHTML = `
                             <strong>${node.label}</strong>
                             <div class="tip-stats">
                                 Count: ${node.count} bookmarks<br>
                                 First used: ${new Date(node.first_seen).toLocaleDateString()}<br>
-                                Cluster: ${node.cluster + 1}
+                                Cluster: ${clusterLabel}
                             </div>
                             <div class="tip-hint">Click to select, double-click for bookmarks</div>
                         `;
@@ -1191,16 +1311,20 @@ $isLoggedIn = is_logged_in();
             });
         }
 
-        // Find node at point
+        // Find node at point using quadtree (O(log n))
         function findNodeAtPoint(x, y) {
-            // Search in reverse order (top nodes first)
-            for (let i = nodes.length - 1; i >= 0; i--) {
-                const node = nodes[i];
-                const dx = x - node.x;
-                const dy = y - node.y;
-                if (dx * dx + dy * dy < node.radius * node.radius) {
-                    return node;
-                }
+            if (!quadtree || nodes.length === 0) return null;
+
+            // Find nearest node within max radius
+            const maxRadius = 28; // max node radius
+            const nearest = quadtree.find(x, y, maxRadius + 5);
+            if (!nearest) return null;
+
+            // Check if point is actually inside the node circle
+            const dx = x - nearest.x;
+            const dy = y - nearest.y;
+            if (dx * dx + dy * dy <= nearest.radius * nearest.radius) {
+                return nearest;
             }
             return null;
         }
@@ -1229,6 +1353,36 @@ $isLoggedIn = is_logged_in();
             render();
         }
 
+        // Catmull-Rom smooth closed curve through points, rendered to canvas context
+        function drawSmoothHull(ctx, points) {
+            if (points.length < 3) return;
+
+            const n = points.length;
+            const tension = 0.5;
+
+            ctx.beginPath();
+
+            for (let i = 0; i < n; i++) {
+                const p0 = points[(i - 1 + n) % n];
+                const p1 = points[i];
+                const p2 = points[(i + 1) % n];
+                const p3 = points[(i + 2) % n];
+
+                if (i === 0) {
+                    ctx.moveTo(p1[0], p1[1]);
+                }
+
+                const cp1x = p1[0] + (p2[0] - p0[0]) / 6 * tension * 3;
+                const cp1y = p1[1] + (p2[1] - p0[1]) / 6 * tension * 3;
+                const cp2x = p2[0] - (p3[0] - p1[0]) / 6 * tension * 3;
+                const cp2y = p2[1] - (p3[1] - p1[1]) / 6 * tension * 3;
+
+                ctx.bezierCurveTo(cp1x, cp1y, cp2x, cp2y, p2[0], p2[1]);
+            }
+
+            ctx.closePath();
+        }
+
         // Main draw function
         function draw() {
             ctx.save();
@@ -1248,11 +1402,12 @@ $isLoggedIn = is_logged_in();
 
             // Draw cluster hulls if enabled
             if (filterState.showClusters) {
-                drawClusterHulls();
+                drawClusterHulls(ctx);
             }
 
-            // Draw links
-            ctx.lineWidth = 1;
+            // Draw links - batch non-highlighted links into a single path
+            const highlightedLinks = [];
+            ctx.beginPath();
             links.forEach(link => {
                 const source = typeof link.source === 'object' ? link.source : nodes.find(n => n.id === link.source);
                 const target = typeof link.target === 'object' ? link.target : nodes.find(n => n.id === link.target);
@@ -1262,24 +1417,41 @@ $isLoggedIn = is_logged_in();
                     source.id === hoveredNode.id || target.id === hoveredNode.id
                 );
 
+                if (isHighlighted) {
+                    highlightedLinks.push({ source, target, value: link.value });
+                } else {
+                    ctx.moveTo(source.x, source.y);
+                    ctx.lineTo(target.x, target.y);
+                }
+            });
+            // Stroke all non-highlighted links in one call
+            ctx.strokeStyle = cssColors.borderColor;
+            ctx.globalAlpha = hoveredNode ? 0.1 : 0.4;
+            ctx.lineWidth = 1;
+            ctx.stroke();
+            ctx.globalAlpha = 1;
+
+            // Draw highlighted links individually
+            highlightedLinks.forEach(({ source, target }) => {
                 ctx.beginPath();
                 ctx.moveTo(source.x, source.y);
                 ctx.lineTo(target.x, target.y);
-
-                if (isHighlighted) {
-                    ctx.strokeStyle = cssColors.primary;
-                    ctx.globalAlpha = 0.8;
-                    ctx.lineWidth = 2;
-                } else {
-                    ctx.strokeStyle = cssColors.borderColor;
-                    ctx.globalAlpha = hoveredNode ? 0.1 : 0.4;
-                    ctx.lineWidth = Math.sqrt(link.value) * 0.8;
-                }
+                ctx.strokeStyle = cssColors.primary;
+                ctx.globalAlpha = 0.8;
+                ctx.lineWidth = 2;
                 ctx.stroke();
-                ctx.globalAlpha = 1;
             });
+            ctx.globalAlpha = 1;
+
+            // Label culling: compute radius threshold based on zoom and node count
+            const labelRadiusThreshold = computeLabelThreshold(transform.k, nodes.length);
 
             // Draw nodes
+            const fontStr = `600 10px -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif`;
+            ctx.font = fontStr;
+            ctx.textAlign = 'center';
+            ctx.textBaseline = 'top';
+
             nodes.forEach(node => {
                 const isDimmed = hoveredNode && !connectedIds.has(node.id);
                 const isSearched = searchQuery && node.label.toLowerCase().includes(searchQuery);
@@ -1291,7 +1463,7 @@ $isLoggedIn = is_logged_in();
                 // Draw circle
                 ctx.beginPath();
                 ctx.arc(node.x, node.y, node.radius, 0, Math.PI * 2);
-                ctx.fillStyle = clusterColors[node.cluster % clusterColors.length];
+                ctx.fillStyle = clusterColorScale(node.cluster);
                 ctx.fill();
 
                 // Draw stroke
@@ -1304,23 +1476,20 @@ $isLoggedIn = is_logged_in();
                 }
                 ctx.stroke();
 
-                // Draw label
-                ctx.font = `600 10px -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif`;
-                ctx.textAlign = 'center';
-                ctx.textBaseline = 'top';
+                // Draw label - use culling
+                const showLabel = node.radius >= labelRadiusThreshold ||
+                    isHovered || isSelected || isSearched;
 
-                // Text shadow for readability
-                ctx.fillStyle = cssColors.bgSecondary;
-                for (let ox = -1; ox <= 1; ox++) {
-                    for (let oy = -1; oy <= 1; oy++) {
-                        if (ox !== 0 || oy !== 0) {
-                            ctx.fillText(node.label, node.x + ox, node.y + node.radius + 4 + oy);
-                        }
-                    }
+                if (showLabel) {
+                    // strokeText halo (replaces 8-pass shadow)
+                    ctx.lineWidth = 3;
+                    ctx.lineJoin = 'round';
+                    ctx.strokeStyle = cssColors.bgSecondary;
+                    ctx.strokeText(node.label, node.x, node.y + node.radius + 4);
+
+                    ctx.fillStyle = isSearched ? cssColors.accentAmber : cssColors.textPrimary;
+                    ctx.fillText(node.label, node.x, node.y + node.radius + 4);
                 }
-
-                ctx.fillStyle = isSearched ? cssColors.accentAmber : cssColors.textPrimary;
-                ctx.fillText(node.label, node.x, node.y + node.radius + 4);
 
                 ctx.globalAlpha = 1;
             });
@@ -1328,8 +1497,19 @@ $isLoggedIn = is_logged_in();
             ctx.restore();
         }
 
-        // Draw cluster hulls
-        function drawClusterHulls() {
+        // Compute label visibility threshold
+        function computeLabelThreshold(zoomLevel, nodeCount) {
+            // At high zoom, show more labels; at low zoom or many nodes, show fewer
+            if (nodeCount <= 50) return 0; // show all labels for small graphs
+            const base = Math.max(4, 12 - zoomLevel * 6);
+            // For very large graphs, raise the threshold
+            if (nodeCount > 300) return base + 4;
+            if (nodeCount > 150) return base + 2;
+            return base;
+        }
+
+        // Draw cluster hulls with smooth curves and labels
+        function drawClusterHulls(renderCtx) {
             clusters.forEach(clusterId => {
                 const clusterNodes = nodes.filter(n => n.cluster === clusterId);
                 if (clusterNodes.length < 3) return;
@@ -1351,39 +1531,55 @@ $isLoggedIn = is_logged_in();
                         ];
                     });
 
-                    const color = clusterColors[clusterId % clusterColors.length];
+                    const color = clusterColorScale(clusterId);
 
-                    ctx.beginPath();
-                    ctx.moveTo(expandedHull[0][0], expandedHull[0][1]);
-                    expandedHull.slice(1).forEach(p => ctx.lineTo(p[0], p[1]));
-                    ctx.closePath();
+                    // Draw smooth hull
+                    drawSmoothHull(renderCtx, expandedHull);
 
-                    ctx.fillStyle = color;
-                    ctx.globalAlpha = 0.08;
-                    ctx.fill();
+                    renderCtx.fillStyle = color;
+                    renderCtx.globalAlpha = 0.08;
+                    renderCtx.fill();
 
-                    ctx.strokeStyle = color;
-                    ctx.globalAlpha = 0.3;
-                    ctx.lineWidth = 2;
-                    ctx.setLineDash([6, 3]);
-                    ctx.stroke();
-                    ctx.setLineDash([]);
-                    ctx.globalAlpha = 1;
+                    renderCtx.strokeStyle = color;
+                    renderCtx.globalAlpha = 0.3;
+                    renderCtx.lineWidth = 2;
+                    renderCtx.setLineDash([6, 3]);
+                    renderCtx.stroke();
+                    renderCtx.setLineDash([]);
+                    renderCtx.globalAlpha = 1;
+
+                    // Draw cluster label at centroid
+                    const meta = clusterMeta.find(c => c.id === clusterId);
+                    if (meta) {
+                        const labelText = `${meta.representativeTag} (${meta.size})`;
+                        renderCtx.font = '600 12px -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif';
+                        renderCtx.textAlign = 'center';
+                        renderCtx.textBaseline = 'middle';
+                        renderCtx.lineWidth = 3;
+                        renderCtx.lineJoin = 'round';
+                        renderCtx.strokeStyle = cssColors.bgPrimary;
+                        renderCtx.globalAlpha = 0.8;
+                        renderCtx.strokeText(labelText, centroid[0], centroid[1]);
+                        renderCtx.fillStyle = color;
+                        renderCtx.globalAlpha = 0.7;
+                        renderCtx.fillText(labelText, centroid[0], centroid[1]);
+                        renderCtx.globalAlpha = 1;
+                    }
                 }
             });
         }
 
-        // Update legend
-        function updateLegend(clusters) {
+        // Update legend with representative tag names
+        function updateLegend() {
             const legend = document.getElementById('networkLegend');
             const items = document.getElementById('legendItems');
 
-            if (filterState.showClusters && clusters.length > 1) {
+            if (filterState.showClusters && clusterMeta.length > 1) {
                 legend.style.display = 'block';
-                items.innerHTML = clusters.slice(0, 10).map(c => `
+                items.innerHTML = clusterMeta.map(cm => `
                     <div class="legend-item">
-                        <div class="legend-color" style="background: ${clusterColors[c % clusterColors.length]}"></div>
-                        <span class="legend-label">Cluster ${c + 1}</span>
+                        <div class="legend-color" style="background: ${clusterColorScale(cm.id)}"></div>
+                        <span class="legend-label">${escapeHtml(cm.representativeTag)} (${cm.size})</span>
                     </div>
                 `).join('');
             } else {
@@ -1399,10 +1595,12 @@ $isLoggedIn = is_logged_in();
 
             if (node) {
                 document.getElementById('selectedTagName').textContent = node.label;
+                const cm = clusterMeta.find(c => c.id === node.cluster);
+                const clusterLabel = cm ? `${cm.representativeTag} (${cm.size})` : `Cluster ${node.cluster + 1}`;
                 document.getElementById('selectedTagStats').innerHTML = `
                     ${node.count} bookmarks<br>
                     First used: ${new Date(node.first_seen).toLocaleDateString()}<br>
-                    Cluster: ${node.cluster + 1}
+                    Cluster: ${clusterLabel}
                 `;
                 document.getElementById('viewBookmarksLink').href = `${BASE_PATH}/?tag=${encodeURIComponent(node.label)}`;
                 document.getElementById('manageTagLink').href = `${BASE_PATH}/tag-admin.php?search=${encodeURIComponent(node.label)}`;
@@ -1426,28 +1624,38 @@ $isLoggedIn = is_logged_in();
             }
         });
 
+        document.getElementById('zoomFit').addEventListener('click', () => {
+            zoomToFit(300);
+        });
+
         document.getElementById('zoomReset').addEventListener('click', () => {
             if (canvas && canvas._zoom) {
                 d3.select(canvas).transition().duration(300).call(canvas._zoom.transform, d3.zoomIdentity);
             }
         });
 
-        // Filter controls
+        // Filter controls - heavy sliders use 'change' for applyFilters, 'input' for display only
         document.getElementById('minCount').addEventListener('input', function() {
-            filterState.minCount = parseInt(this.value);
             document.getElementById('minCountValue').textContent = this.value;
+        });
+        document.getElementById('minCount').addEventListener('change', function() {
+            filterState.minCount = parseInt(this.value);
             applyFilters();
         });
 
         document.getElementById('minCooccurrence').addEventListener('input', function() {
-            filterState.minCooccurrence = parseInt(this.value);
             document.getElementById('minCooccurrenceValue').textContent = this.value;
+        });
+        document.getElementById('minCooccurrence').addEventListener('change', function() {
+            filterState.minCooccurrence = parseInt(this.value);
             applyFilters();
         });
 
         document.getElementById('maxTags').addEventListener('input', function() {
-            filterState.maxTags = parseInt(this.value);
             document.getElementById('maxTagsValue').textContent = this.value;
+        });
+        document.getElementById('maxTags').addEventListener('change', function() {
+            filterState.maxTags = parseInt(this.value);
             applyFilters();
         });
 
@@ -1465,16 +1673,24 @@ $isLoggedIn = is_logged_in();
             }, 200);
         });
 
-        // Clustering controls
+        // Clustering controls - live update strength without rebuilding
         document.getElementById('clusterStrength').addEventListener('input', function() {
             filterState.clusterStrength = parseFloat(this.value);
             document.getElementById('clusterStrengthValue').textContent = this.value;
-            applyFilters();
+
+            // Update force in-place and restart alpha
+            if (simulation) {
+                const force = simulation.force('cluster');
+                if (force && force.strength) {
+                    force.strength(filterState.clusterStrength);
+                    simulation.alpha(0.3).restart();
+                }
+            }
         });
 
         document.getElementById('showClusters').addEventListener('change', function() {
             filterState.showClusters = this.checked;
-            updateLegend(clusters);
+            updateLegend();
             needsRedraw = true;
         });
 
@@ -1506,65 +1722,44 @@ $isLoggedIn = is_logged_in();
 
             // Draw cluster hulls
             if (filterState.showClusters) {
-                clusters.forEach(clusterId => {
-                    const clusterNodes = nodes.filter(n => n.cluster === clusterId);
-                    if (clusterNodes.length < 3) return;
-
-                    const points = clusterNodes.map(n => [n.x, n.y]);
-                    const hull = d3.polygonHull(points);
-
-                    if (hull) {
-                        const centroid = d3.polygonCentroid(hull);
-                        const expandedHull = hull.map(p => {
-                            const dx = p[0] - centroid[0];
-                            const dy = p[1] - centroid[1];
-                            const dist = Math.sqrt(dx * dx + dy * dy);
-                            return [p[0] + (dx / dist) * 30, p[1] + (dy / dist) * 30];
-                        });
-
-                        const color = clusterColors[clusterId % clusterColors.length];
-                        exportCtx.beginPath();
-                        exportCtx.moveTo(expandedHull[0][0], expandedHull[0][1]);
-                        expandedHull.slice(1).forEach(p => exportCtx.lineTo(p[0], p[1]));
-                        exportCtx.closePath();
-
-                        exportCtx.fillStyle = color;
-                        exportCtx.globalAlpha = 0.08;
-                        exportCtx.fill();
-                        exportCtx.globalAlpha = 1;
-                    }
-                });
+                drawClusterHulls(exportCtx);
             }
 
             // Draw links
+            exportCtx.beginPath();
             links.forEach(link => {
                 const source = typeof link.source === 'object' ? link.source : nodes.find(n => n.id === link.source);
                 const target = typeof link.target === 'object' ? link.target : nodes.find(n => n.id === link.target);
                 if (!source || !target) return;
-
-                exportCtx.beginPath();
                 exportCtx.moveTo(source.x, source.y);
                 exportCtx.lineTo(target.x, target.y);
-                exportCtx.strokeStyle = cssColors.borderColor;
-                exportCtx.globalAlpha = 0.4;
-                exportCtx.lineWidth = Math.sqrt(link.value) * 0.8;
-                exportCtx.stroke();
-                exportCtx.globalAlpha = 1;
             });
+            exportCtx.strokeStyle = cssColors.borderColor;
+            exportCtx.globalAlpha = 0.4;
+            exportCtx.lineWidth = 1;
+            exportCtx.stroke();
+            exportCtx.globalAlpha = 1;
 
             // Draw nodes
+            const fontStr = '600 10px -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif';
+            exportCtx.font = fontStr;
+            exportCtx.textAlign = 'center';
+            exportCtx.textBaseline = 'top';
+
             nodes.forEach(node => {
                 exportCtx.beginPath();
                 exportCtx.arc(node.x, node.y, node.radius, 0, Math.PI * 2);
-                exportCtx.fillStyle = clusterColors[node.cluster % clusterColors.length];
+                exportCtx.fillStyle = clusterColorScale(node.cluster);
                 exportCtx.fill();
                 exportCtx.strokeStyle = cssColors.bgSecondary;
                 exportCtx.lineWidth = 2;
                 exportCtx.stroke();
 
-                exportCtx.font = `600 10px -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif`;
-                exportCtx.textAlign = 'center';
-                exportCtx.textBaseline = 'top';
+                // Label with strokeText halo
+                exportCtx.lineWidth = 3;
+                exportCtx.lineJoin = 'round';
+                exportCtx.strokeStyle = cssColors.bgSecondary;
+                exportCtx.strokeText(node.label, node.x, node.y + node.radius + 4);
                 exportCtx.fillStyle = cssColors.textPrimary;
                 exportCtx.fillText(node.label, node.x, node.y + node.radius + 4);
             });
@@ -1582,6 +1777,44 @@ $isLoggedIn = is_logged_in();
             svgContent += `<rect width="100%" height="100%" fill="${cssColors.bgPrimary}"/>`;
             svgContent += `<g transform="translate(${transform.x},${transform.y}) scale(${transform.k})">`;
 
+            // Cluster hulls
+            if (filterState.showClusters) {
+                clusters.forEach(clusterId => {
+                    const clusterNodes = nodes.filter(n => n.cluster === clusterId);
+                    if (clusterNodes.length < 3) return;
+
+                    const points = clusterNodes.map(n => [n.x, n.y]);
+                    const hull = d3.polygonHull(points);
+                    if (!hull) return;
+
+                    const centroid = d3.polygonCentroid(hull);
+                    const expandedHull = hull.map(p => {
+                        const dx = p[0] - centroid[0];
+                        const dy = p[1] - centroid[1];
+                        const dist = Math.sqrt(dx * dx + dy * dy);
+                        return [p[0] + (dx / dist) * 30, p[1] + (dy / dist) * 30];
+                    });
+
+                    const color = clusterColorScale(clusterId);
+
+                    // Generate smooth SVG path using cubic bezier (Catmull-Rom)
+                    const pathD = catmullRomSvgPath(expandedHull);
+                    svgContent += `<path d="${pathD}" fill="${color}" fill-opacity="0.08"
+                        stroke="${color}" stroke-opacity="0.3" stroke-width="2" stroke-dasharray="6 3"/>`;
+
+                    // Cluster label
+                    const meta = clusterMeta.find(c => c.id === clusterId);
+                    if (meta) {
+                        svgContent += `<text x="${centroid[0]}" y="${centroid[1]}"
+                            text-anchor="middle" dominant-baseline="central"
+                            font-family="-apple-system, sans-serif" font-size="12" font-weight="600"
+                            fill="${color}" fill-opacity="0.7"
+                            stroke="${cssColors.bgPrimary}" stroke-width="3" stroke-linejoin="round" stroke-opacity="0.8"
+                            paint-order="stroke fill">${escapeHtml(meta.representativeTag)} (${meta.size})</text>`;
+                    }
+                });
+            }
+
             // Links
             links.forEach(link => {
                 const source = typeof link.source === 'object' ? link.source : nodes.find(n => n.id === link.source);
@@ -1594,12 +1827,14 @@ $isLoggedIn = is_logged_in();
 
             // Nodes
             nodes.forEach(node => {
-                const color = clusterColors[node.cluster % clusterColors.length];
+                const color = clusterColorScale(node.cluster);
                 svgContent += `<circle cx="${node.x}" cy="${node.y}" r="${node.radius}"
                     fill="${color}" stroke="${cssColors.bgSecondary}" stroke-width="2"/>`;
                 svgContent += `<text x="${node.x}" y="${node.y + node.radius + 14}"
                     text-anchor="middle" font-family="-apple-system, sans-serif" font-size="10" font-weight="600"
-                    fill="${cssColors.textPrimary}">${escapeHtml(node.label)}</text>`;
+                    fill="${cssColors.textPrimary}"
+                    stroke="${cssColors.bgSecondary}" stroke-width="3" stroke-linejoin="round"
+                    paint-order="stroke fill">${escapeHtml(node.label)}</text>`;
             });
 
             svgContent += '</g></svg>';
@@ -1613,6 +1848,31 @@ $isLoggedIn = is_logged_in();
             a.click();
 
             URL.revokeObjectURL(url);
+        }
+
+        // Generate SVG Catmull-Rom closed path
+        function catmullRomSvgPath(points) {
+            const n = points.length;
+            if (n < 3) return '';
+            const tension = 0.5;
+            let d = `M ${points[0][0]},${points[0][1]} `;
+
+            for (let i = 0; i < n; i++) {
+                const p0 = points[(i - 1 + n) % n];
+                const p1 = points[i];
+                const p2 = points[(i + 1) % n];
+                const p3 = points[(i + 2) % n];
+
+                const cp1x = p1[0] + (p2[0] - p0[0]) / 6 * tension * 3;
+                const cp1y = p1[1] + (p2[1] - p0[1]) / 6 * tension * 3;
+                const cp2x = p2[0] - (p3[0] - p1[0]) / 6 * tension * 3;
+                const cp2y = p2[1] - (p3[1] - p1[1]) / 6 * tension * 3;
+
+                d += `C ${cp1x},${cp1y} ${cp2x},${cp2y} ${p2[0]},${p2[1]} `;
+            }
+
+            d += 'Z';
+            return d;
         }
 
         function escapeHtml(text) {
