@@ -38,7 +38,7 @@ $nav_items = [
             'id' => 'tags',
             'label' => 'Tags',
             'url' => $config['base_path'] . '/tags.php',
-            'auth_required' => true
+            'show_always' => true
         ]
     ],
     'secondary' => [
