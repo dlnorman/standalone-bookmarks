@@ -23,10 +23,18 @@ $nav_items = [
             'show_always' => true
         ],
         [
+            'id' => 'tags',
+            'label' => 'Tags',
+            'url' => $config['base_path'] . '/tags.php',
+            'show_always' => true
+        ]
+    ],
+    'secondary' => [
+        [
             'id' => 'archive',
             'label' => 'Archive',
             'url' => $config['base_path'] . '/archive.php',
-            'show_always' => true
+            'auth_required' => true
         ],
         [
             'id' => 'dashboard',
@@ -35,13 +43,8 @@ $nav_items = [
             'auth_required' => true
         ],
         [
-            'id' => 'tags',
-            'label' => 'Tags',
-            'url' => $config['base_path'] . '/tags.php',
-            'show_always' => true
-        ]
-    ],
-    'secondary' => [
+            'type' => 'divider'
+        ],
         [
             'label' => 'Bookmarklet',
             'url' => $config['base_path'] . '/bookmarklet-setup.php',

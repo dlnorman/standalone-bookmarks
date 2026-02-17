@@ -280,7 +280,7 @@ $totalPages = ceil($total / $limit);
                                 <span class="bookmark-meta-item">
                                     <?= date($config['date_format'], strtotime($bookmark['created_at'])) ?>
                                 </span>
-                                <?php if (!empty($bookmark['archive_url'])): ?>
+                                <?php if (!empty($bookmark['archive_url']) && !$isLoggedIn): ?>
                                     <span class="bookmark-meta-item">
                                         <a href="<?= htmlspecialchars($bookmark['archive_url']) ?>" target="_blank"
                                             rel="noopener noreferrer" class="bookmark-archive-link">📦 Archive</a>
@@ -288,15 +288,21 @@ $totalPages = ceil($total / $limit);
                                 <?php endif; ?>
                             </div>
                             <?php if ($isLoggedIn): ?>
-                                <div class="actions">
-                                    <a href="#" onclick="editBookmark(<?= $bookmark['id'] ?>); return false;">Edit</a>
-                                    <a href="#" onclick="deleteBookmark(<?= $bookmark['id'] ?>); return false;">Delete</a>
-                                    <a href="#" onclick="regenerateScreenshot(<?= $bookmark['id'] ?>); return false;">Regenerate
-                                        Screenshot</a>
-                                    <?php if (!empty($bookmark['screenshot'])): ?>
-                                        <a href="#" onclick="deleteScreenshot(<?= $bookmark['id'] ?>); return false;">Delete
-                                            Screenshot</a>
-                                    <?php endif; ?>
+                                <div class="bookmark-actions-menu">
+                                    <button class="bookmark-actions-trigger" onclick="toggleBookmarkMenu(event)" aria-haspopup="true" aria-expanded="false">⋯</button>
+                                    <div class="bookmark-actions-dropdown">
+                                        <a href="#" class="dropdown-item bookmark-action-danger" onclick="deleteBookmark(<?= $bookmark['id'] ?>); return false;">Delete</a>
+                                        <div class="dropdown-divider"></div>
+                                        <?php if (!empty($bookmark['screenshot'])): ?>
+                                            <a href="#" class="dropdown-item" onclick="deleteScreenshot(<?= $bookmark['id'] ?>); return false;">Delete Screenshot</a>
+                                        <?php endif; ?>
+                                        <a href="#" class="dropdown-item" onclick="regenerateScreenshot(<?= $bookmark['id'] ?>); return false;">Regenerate Screenshot</a>
+                                        <div class="dropdown-divider"></div>
+                                        <?php if (!empty($bookmark['archive_url'])): ?>
+                                            <a href="<?= htmlspecialchars($bookmark['archive_url']) ?>" target="_blank" rel="noopener noreferrer" class="dropdown-item">📦 Archive</a>
+                                        <?php endif; ?>
+                                        <a href="#" class="dropdown-item" onclick="editBookmark(<?= $bookmark['id'] ?>); return false;">Edit</a>
+                                    </div>
                                 </div>
                             <?php endif; ?>
                         </div>
@@ -367,6 +373,35 @@ $totalPages = ceil($total / $limit);
                 default: return '';
             }
         }
+
+        function toggleBookmarkMenu(event) {
+            event.stopPropagation();
+            const menu = event.currentTarget.closest('.bookmark-actions-menu');
+            const dropdown = menu.querySelector('.bookmark-actions-dropdown');
+            const trigger = menu.querySelector('.bookmark-actions-trigger');
+            const isOpen = dropdown.classList.contains('active');
+
+            // Close all other open menus
+            document.querySelectorAll('.bookmark-actions-dropdown.active').forEach(d => {
+                d.classList.remove('active');
+                d.closest('.bookmark-actions-menu').querySelector('.bookmark-actions-trigger').setAttribute('aria-expanded', 'false');
+            });
+
+            if (!isOpen) {
+                dropdown.classList.add('active');
+                trigger.setAttribute('aria-expanded', 'true');
+            }
+        }
+
+        // Close bookmark action menus when clicking outside
+        document.addEventListener('click', function(event) {
+            if (!event.target.closest('.bookmark-actions-menu')) {
+                document.querySelectorAll('.bookmark-actions-dropdown.active').forEach(d => {
+                    d.classList.remove('active');
+                    d.closest('.bookmark-actions-menu').querySelector('.bookmark-actions-trigger').setAttribute('aria-expanded', 'false');
+                });
+            }
+        });
 
         function editBookmark(id) {
             if (!IS_LOGGED_IN) return;
@@ -885,15 +920,24 @@ $totalPages = ceil($total / $limit);
             // Actions (only if logged in)
             let actionsHTML = '';
             if (IS_LOGGED_IN) {
-                const deleteScreenshotLink = bookmark.screenshot
-                    ? `<a href="#" onclick="deleteScreenshot(${bookmark.id}); return false;">Delete Screenshot</a>`
+                const archiveItem = bookmark.archive_url
+                    ? `<a href="${escapeHtml(bookmark.archive_url)}" target="_blank" rel="noopener noreferrer" class="dropdown-item">📦 Archive</a>`
+                    : '';
+                const deleteScreenshotItem = bookmark.screenshot
+                    ? `<a href="#" class="dropdown-item" onclick="deleteScreenshot(${bookmark.id}); return false;">Delete Screenshot</a>`
                     : '';
                 actionsHTML = `
-                    <div class="actions">
-                        <a href="#" onclick="editBookmark(${bookmark.id}); return false;">Edit</a>
-                        <a href="#" onclick="deleteBookmark(${bookmark.id}); return false;">Delete</a>
-                        <a href="#" onclick="regenerateScreenshot(${bookmark.id}); return false;">Regenerate Screenshot</a>
-                        ${deleteScreenshotLink}
+                    <div class="bookmark-actions-menu">
+                        <button class="bookmark-actions-trigger" onclick="toggleBookmarkMenu(event)" aria-haspopup="true" aria-expanded="false">⋯</button>
+                        <div class="bookmark-actions-dropdown">
+                            <a href="#" class="dropdown-item bookmark-action-danger" onclick="deleteBookmark(${bookmark.id}); return false;">Delete</a>
+                            <div class="dropdown-divider"></div>
+                            ${deleteScreenshotItem}
+                            <a href="#" class="dropdown-item" onclick="regenerateScreenshot(${bookmark.id}); return false;">Regenerate Screenshot</a>
+                            <div class="dropdown-divider"></div>
+                            ${archiveItem}
+                            <a href="#" class="dropdown-item" onclick="editBookmark(${bookmark.id}); return false;">Edit</a>
+                        </div>
                     </div>
                 `;
             }
@@ -907,9 +951,9 @@ $totalPages = ceil($total / $limit);
                 badgesHTML += '<span class="broken-badge" title="This URL appears to be broken">BROKEN</span>';
             }
 
-            // Archive link
+            // Archive link (only shown in meta for logged-out users)
             let archiveHTML = '';
-            if (bookmark.archive_url) {
+            if (bookmark.archive_url && !IS_LOGGED_IN) {
                 archiveHTML = `
                     <span class="bookmark-meta-item">
                         <a href="${escapeHtml(bookmark.archive_url)}" target="_blank" rel="noopener noreferrer" class="bookmark-archive-link">📦 Archive</a>

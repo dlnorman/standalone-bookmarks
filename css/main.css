@@ -525,8 +525,8 @@ a {
     display: flex;
     justify-content: space-between;
     align-items: center;
-    padding-top: 20px;
-    margin-top: 5px;
+    margin-top: 16px;
+    padding-top: 16px;
     border-top: 1px solid var(--border-color);
     font-size: 13px;
     color: var(--text-tertiary);
@@ -561,27 +561,69 @@ a {
     background: rgba(16, 185, 129, 0.2);
 }
 
-/* Actions */
-.bookmark .actions {
-    display: flex;
-    gap: 8px;
+/* Bookmark Actions Dropdown */
+.bookmark-actions-menu {
+    position: relative;
+    margin-left: auto;
 }
 
-.bookmark .actions a {
-    margin-left: 0;
-    padding: 6px 12px;
+.bookmark-actions-trigger {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 32px;
+    height: 32px;
+    padding: 0;
+    border: 1px solid var(--border-color);
     border-radius: 8px;
     background: transparent;
     color: var(--text-secondary);
-    font-weight: 500;
-    border: 1px solid transparent;
+    font-size: 18px;
+    font-weight: 700;
+    cursor: pointer;
+    transition: all 0.2s;
+    letter-spacing: 1px;
 }
 
-.bookmark .actions a:hover {
+.bookmark-actions-trigger:hover {
     background: var(--bg-tertiary);
     color: var(--text-primary);
-    transform: none;
-    border-color: var(--border-color);
+    border-color: var(--text-secondary);
+}
+
+.bookmark-actions-trigger[aria-expanded="true"] {
+    background: var(--bg-tertiary);
+    color: var(--text-primary);
+}
+
+.bookmark-actions-dropdown {
+    display: none;
+    position: absolute;
+    right: 0;
+    bottom: calc(100% + 8px);
+    min-width: 200px;
+    background: var(--bg-secondary);
+    backdrop-filter: blur(12px);
+    -webkit-backdrop-filter: blur(12px);
+    border: 1px solid var(--border-subtle);
+    border-radius: 12px;
+    box-shadow: var(--shadow-lg);
+    padding: 8px;
+    z-index: 1000;
+    animation: dropdownFadeIn 0.2s ease-out;
+}
+
+.bookmark-actions-dropdown.active {
+    display: block;
+}
+
+.bookmark-action-danger {
+    color: var(--danger, #ef4444) !important;
+}
+
+.bookmark-action-danger:hover {
+    background: rgba(239, 68, 68, 0.1) !important;
+    color: var(--danger, #ef4444) !important;
 }
 
 /* Badges (Private/Broken) */
@@ -723,35 +765,7 @@ textarea:focus {
    Gallery / Grid Views
    ================================================================= */
 
-.gallery-grid {
-    gap: 30px;
-}
-
-.gallery-item {
-    border-radius: 16px;
-    border: none;
-    box-shadow: var(--shadow-md);
-    transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
-}
-
-.gallery-item:hover {
-    transform: translateY(-8px) scale(1.02);
-    box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.1), 0 10px 10px -5px rgba(0, 0, 0, 0.04);
-}
-
-.gallery-item-image {
-    height: 220px;
-}
-
-.gallery-item-info {
-    padding: 20px;
-}
-
-.gallery-tag {
-    background: var(--base-200);
-    color: var(--text-secondary);
-    border: none;
-}
+/* Gallery base overrides are consolidated below (~line 2187) */
 
 /* =================================================================
    Admin & Dashboard
@@ -1019,31 +1033,7 @@ tr:hover td {
     display: block;
 }
 
-/* Dropdown */
-.nav-dropdown-content {
-    background: var(--bg-secondary);
-    backdrop-filter: blur(12px);
-    border: 1px solid var(--border-subtle);
-    border-radius: 12px;
-    box-shadow: var(--shadow-lg);
-    padding: 8px;
-}
-
-.dropdown-item {
-    border-radius: 6px;
-    padding: 10px 16px;
-    color: var(--text-primary);
-}
-
-.dropdown-item:hover {
-    background: var(--primary-light);
-    color: var(--primary);
-}
-
-.dropdown-divider {
-    background: var(--border-color);
-    margin: 8px 0;
-}
+/* Dropdown styles are consolidated below (~line 2091) */
 
 /* Modals */
 .modal-content {
