@@ -462,6 +462,9 @@ a {
     font-family: 'JetBrains Mono', monospace;
     font-size: 13px;
     opacity: 0.8;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
 }
 
 /* Description Prose */
@@ -2004,28 +2007,37 @@ a.nav-btn-primary:hover,
         text-align: center;
     }
 
-    /* Fix dropdown inside mobile nav */
+    /* Flatten dropdown into mobile nav - hide the trigger button and always show items */
     .nav-content.mobile-active .nav-dropdown {
         width: 100%;
     }
 
-    .nav-content.mobile-active .nav-dropdown-content {
-        position: static;
-        width: 100%;
-        margin-top: 10px;
-        box-shadow: none;
-        border: 1px solid var(--border-color);
-        animation: none;
+    .nav-content.mobile-active .nav-dropdown-trigger {
+        display: none;
     }
 
-    .nav-content.mobile-active .nav-dropdown-content.active {
+    .nav-content.mobile-active .nav-dropdown-content {
         display: block;
+        position: static;
+        width: 100%;
+        margin-top: 0;
+        box-shadow: none;
+        border: none;
+        border-top: 1px solid var(--border-color);
+        padding-top: 10px;
+        background: transparent;
+        animation: none;
     }
 
     .nav-content.mobile-active .dropdown-item {
         text-align: center;
         padding: 14px 16px;
         font-size: 16px;
+        border-radius: 8px;
+    }
+
+    .nav-content.mobile-active .dropdown-item:hover {
+        background: var(--bg-tertiary);
     }
 }
 
