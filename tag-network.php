@@ -675,6 +675,13 @@ $isLoggedIn = is_logged_in();
                         Group by Prefix
                     </label>
                 </div>
+
+                <div class="control-group">
+                    <label class="control-checkbox">
+                        <input type="checkbox" id="showExplicitConnections" checked>
+                        Show Explicit Connections
+                    </label>
+                </div>
             </div>
 
             <!-- Export Controls -->
@@ -705,6 +712,10 @@ $isLoggedIn = is_logged_in();
                     <div class="stat-item">
                         <div class="stat-value" id="clustersStat">-</div>
                         <div class="stat-label">Clusters</div>
+                    </div>
+                    <div class="stat-item" style="grid-column: 1 / -1;">
+                        <div class="stat-value" id="explicitLinksStat" style="color: var(--accent-amber);">-</div>
+                        <div class="stat-label">Explicit Links</div>
                     </div>
                 </div>
 
@@ -747,6 +758,8 @@ $isLoggedIn = is_logged_in();
 
         // Global state
         let rawData = null;
+        let rawExplicitConnections = null; // [{from, to}] — all explicit connections
+        let explicitLinks = []; // filtered to visible nodes [{source, target}]
         let filteredData = null;
         let simulation = null;
         let canvas = null;
@@ -778,7 +791,8 @@ $isLoggedIn = is_logged_in();
             searchQuery: '',
             clusterStrength: 0.5,
             showClusters: false,
-            showPrefixGroups: false
+            showPrefixGroups: false,
+            showExplicitConnections: true
         };
 
         // Cluster color scale: first 10 use Tableau10, beyond that use golden-angle HSL
@@ -813,12 +827,23 @@ $isLoggedIn = is_logged_in();
         // Fetch network data from API
         async function fetchNetworkData() {
             try {
-                const response = await fetch(`${BASE_PATH}/api.php?action=tag_network_data`);
-                if (!response.ok) throw new Error('Failed to fetch data');
-                rawData = await response.json();
+                const [networkResponse, connectionsResponse] = await Promise.all([
+                    fetch(`${BASE_PATH}/api.php?action=tag_network_data`),
+                    fetch(`${BASE_PATH}/api.php?action=get_tag_connections`)
+                ]);
+                if (!networkResponse.ok) throw new Error('Failed to fetch network data');
+                rawData = await networkResponse.json();
+
+                if (connectionsResponse.ok) {
+                    const connData = await connectionsResponse.json();
+                    rawExplicitConnections = connData.connections || [];
+                } else {
+                    rawExplicitConnections = [];
+                }
 
                 document.getElementById('totalTagsStat').textContent = rawData.tags.length;
                 document.getElementById('totalCount').textContent = rawData.tags.length;
+                document.getElementById('explicitLinksStat').textContent = rawExplicitConnections.length;
 
                 // Dynamic slider max: set to actual tag count
                 const slider = document.getElementById('maxTags');
@@ -884,6 +909,13 @@ $isLoggedIn = is_logged_in();
             detectClusters(filteredNodes, filteredLinks);
 
             filteredData = { nodes: filteredNodes, links: filteredLinks };
+
+            // Compute explicit links that are between visible nodes
+            if (rawExplicitConnections) {
+                explicitLinks = rawExplicitConnections
+                    .filter(c => tagSet.has(c.from) && tagSet.has(c.to))
+                    .map(c => ({ source: c.from, target: c.to }));
+            }
 
             // Update stats
             document.getElementById('visibleTagsStat').textContent = filteredNodes.length;
@@ -1443,6 +1475,28 @@ $isLoggedIn = is_logged_in();
             });
             ctx.globalAlpha = 1;
 
+            // Draw explicit connection edges as distinct amber/orange lines
+            if (filterState.showExplicitConnections && explicitLinks.length > 0) {
+                const nodeMap = new Map(nodes.map(n => [n.id, n]));
+                ctx.setLineDash([]);
+                explicitLinks.forEach(link => {
+                    const source = nodeMap.get(link.source);
+                    const target = nodeMap.get(link.target);
+                    if (!source || !target) return;
+                    const isHighlighted = hoveredNode && (
+                        source.id === hoveredNode.id || target.id === hoveredNode.id
+                    );
+                    ctx.beginPath();
+                    ctx.moveTo(source.x, source.y);
+                    ctx.lineTo(target.x, target.y);
+                    ctx.strokeStyle = cssColors.accentAmber;
+                    ctx.globalAlpha = isHighlighted ? 0.95 : (hoveredNode ? 0.25 : 0.7);
+                    ctx.lineWidth = isHighlighted ? 3 : 2;
+                    ctx.stroke();
+                });
+                ctx.globalAlpha = 1;
+            }
+
             // Label culling: compute radius threshold based on zoom and node count
             const labelRadiusThreshold = computeLabelThreshold(transform.k, nodes.length);
 
@@ -1697,6 +1751,11 @@ $isLoggedIn = is_logged_in();
         document.getElementById('showPrefixGroups').addEventListener('change', function() {
             filterState.showPrefixGroups = this.checked;
             // Future enhancement
+        });
+
+        document.getElementById('showExplicitConnections').addEventListener('change', function() {
+            filterState.showExplicitConnections = this.checked;
+            needsRedraw = true;
         });
 
         // Export functions

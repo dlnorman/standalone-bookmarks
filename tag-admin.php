@@ -34,6 +34,17 @@ try {
     die('Database connection failed: ' . $e->getMessage());
 }
 
+// Ensure tag_connections table exists (for existing installs that haven't re-run db_setup)
+$db->exec("CREATE TABLE IF NOT EXISTS tag_connections (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    tag_from TEXT NOT NULL,
+    tag_to TEXT NOT NULL,
+    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+    UNIQUE(tag_from, tag_to)
+)");
+$db->exec("CREATE INDEX IF NOT EXISTS idx_tag_connections_from ON tag_connections(tag_from)");
+$db->exec("CREATE INDEX IF NOT EXISTS idx_tag_connections_to ON tag_connections(tag_to)");
+
 // Handle form submissions
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     csrf_require_valid_token();
@@ -92,11 +103,46 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                         $success_msg = "Changed tag type across $count bookmark(s).";
                     }
                     break;
+
+                case 'add_connection':
+                    $tagA = trim($_POST['tag_a'] ?? '');
+                    $tagB = trim($_POST['tag_b'] ?? '');
+                    if (empty($tagA) || empty($tagB)) {
+                        $error_msg = 'Both tags are required to create a connection.';
+                    } elseif (strtolower($tagA) === strtolower($tagB)) {
+                        $error_msg = 'Cannot connect a tag to itself.';
+                    } else {
+                        $added = addTagConnection($db, $tagA, $tagB);
+                        header('Location: tag-admin.php?tab=connections&msg=' . urlencode($added ? "Connection added: $tagA ↔ $tagB" : "Connection already exists."));
+                        exit;
+                    }
+                    break;
+
+                case 'remove_connection':
+                    $tagA = trim($_POST['tag_a'] ?? '');
+                    $tagB = trim($_POST['tag_b'] ?? '');
+                    if (empty($tagA) || empty($tagB)) {
+                        $error_msg = 'Both tags are required.';
+                    } else {
+                        $removed = removeTagConnection($db, $tagA, $tagB);
+                        header('Location: tag-admin.php?tab=connections&msg=' . urlencode($removed ? "Connection removed: $tagA ↔ $tagB" : "Connection not found."));
+                        exit;
+                    }
+                    break;
             }
         } catch (Exception $e) {
             $error_msg = 'Operation failed: ' . htmlspecialchars($e->getMessage()) . '. No changes were made.';
         }
     }
+}
+
+// Determine active tab
+$activeTab = $_GET['tab'] ?? 'tags';
+if (!in_array($activeTab, ['tags', 'connections'])) $activeTab = 'tags';
+
+// Pick up redirect messages
+if (!empty($_GET['msg']) && empty($success_msg)) {
+    $success_msg = $_GET['msg']; // Will be escaped in template via htmlspecialchars
 }
 
 // Get filter parameters
@@ -154,6 +200,48 @@ $typeCounts = ['tag' => 0, 'person' => 0, 'via' => 0];
 foreach ($allTags as $tagLower => $data) {
     $parsed = parseTagType($data['display']);
     $typeCounts[$parsed['type']]++;
+}
+
+// Fetch explicit connections for the Connections tab
+$allConnections = getAllTagConnections($db);
+
+// Build display name map for connections (lowercase → display)
+$tagDisplayMap = [];
+foreach ($allTags as $tagLower => $data) {
+    $tagDisplayMap[$tagLower] = $data['display'];
+}
+
+// Compute co-occurrence suggestions (top pairs not yet explicitly connected)
+$coSuggestions = [];
+$tagRows = $db->query("SELECT tags FROM bookmarks WHERE tags IS NOT NULL AND tags != ''")->fetchAll(PDO::FETCH_COLUMN);
+$tagCooccurrence = [];
+foreach ($tagRows as $tagStr) {
+    $tags = array_unique(array_map('strtolower', array_map('trim', explode(',', $tagStr))));
+    $tags = array_values(array_filter($tags));
+    for ($i = 0; $i < count($tags); $i++) {
+        for ($j = $i + 1; $j < count($tags); $j++) {
+            $a = $tags[$i]; $b = $tags[$j];
+            $key = $a < $b ? "$a|$b" : "$b|$a";
+            $tagCooccurrence[$key] = ($tagCooccurrence[$key] ?? 0) + 1;
+        }
+    }
+}
+// Build set of already-connected pairs
+$connectedPairs = [];
+foreach ($allConnections as $conn) {
+    $a = $conn['from']; $b = $conn['to'];
+    $key = $a < $b ? "$a|$b" : "$b|$a";
+    $connectedPairs[$key] = true;
+}
+// Filter to unconnected pairs and sort by co-occurrence count
+arsort($tagCooccurrence);
+foreach ($tagCooccurrence as $key => $count) {
+    if (isset($connectedPairs[$key])) continue;
+    [$tagA, $tagB] = explode('|', $key);
+    // Only suggest if both tags actually exist
+    if (!isset($tagDisplayMap[$tagA]) || !isset($tagDisplayMap[$tagB])) continue;
+    $coSuggestions[] = ['tag_a' => $tagA, 'tag_b' => $tagB, 'count' => $count];
+    if (count($coSuggestions) >= 15) break;
 }
 
 ?>
@@ -472,6 +560,222 @@ foreach ($allTags as $tagLower => $data) {
             color: var(--text-secondary);
         }
 
+        /* Page tab navigation */
+        .page-tabs {
+            display: flex;
+            gap: 4px;
+            margin-bottom: 24px;
+            border-bottom: 2px solid var(--border-color);
+            padding-bottom: 0;
+        }
+
+        .page-tab {
+            background: none;
+            border: none;
+            border-bottom: 2px solid transparent;
+            margin-bottom: -2px;
+            padding: 10px 20px;
+            font-size: 14px;
+            font-weight: 500;
+            color: var(--text-secondary);
+            cursor: pointer;
+            transition: all 0.2s;
+            text-decoration: none;
+        }
+
+        .page-tab:hover {
+            color: var(--text-primary);
+        }
+
+        .page-tab.active {
+            color: var(--primary);
+            border-bottom-color: var(--primary);
+        }
+
+        /* Connections tab styles */
+        .connections-layout {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 24px;
+            align-items: start;
+        }
+
+        @media (max-width: 900px) {
+            .connections-layout {
+                grid-template-columns: 1fr;
+            }
+        }
+
+        .connections-panel {
+            background: var(--bg-secondary);
+            border-radius: 16px;
+            border: 1px solid var(--border-color);
+            overflow: hidden;
+        }
+
+        .connections-panel-header {
+            padding: 16px 20px;
+            background: var(--bg-tertiary);
+            border-bottom: 1px solid var(--border-color);
+            font-size: 13px;
+            font-weight: 600;
+            color: var(--text-secondary);
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+        }
+
+        .connections-panel-body {
+            padding: 20px;
+        }
+
+        .connection-item {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            padding: 10px 14px;
+            border-radius: 8px;
+            margin-bottom: 6px;
+            background: var(--bg-tertiary);
+            gap: 12px;
+        }
+
+        .connection-item:last-child {
+            margin-bottom: 0;
+        }
+
+        .connection-tags {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            flex-wrap: wrap;
+            min-width: 0;
+        }
+
+        .connection-tag {
+            display: inline-block;
+            padding: 3px 10px;
+            border-radius: 99px;
+            font-size: 12px;
+            font-weight: 500;
+            background: rgba(0, 122, 255, 0.1);
+            color: var(--primary);
+            white-space: nowrap;
+        }
+
+        .connection-arrow {
+            color: var(--text-tertiary);
+            font-size: 13px;
+            flex-shrink: 0;
+        }
+
+        .btn-remove-connection {
+            background: none;
+            border: 1px solid var(--border-color);
+            color: var(--accent-red);
+            padding: 4px 10px;
+            border-radius: 6px;
+            font-size: 12px;
+            cursor: pointer;
+            flex-shrink: 0;
+            transition: all 0.15s;
+        }
+
+        .btn-remove-connection:hover {
+            background: var(--accent-red);
+            color: white;
+            border-color: var(--accent-red);
+        }
+
+        .connections-empty {
+            padding: 30px 20px;
+            text-align: center;
+            color: var(--text-tertiary);
+            font-size: 14px;
+        }
+
+        .add-connection-form .form-row {
+            display: flex;
+            gap: 8px;
+            align-items: flex-end;
+            margin-bottom: 12px;
+            flex-wrap: wrap;
+        }
+
+        .add-connection-form .form-row .form-group {
+            flex: 1;
+            min-width: 120px;
+            margin-bottom: 0;
+        }
+
+        .add-connection-form .form-row .form-group label {
+            font-size: 12px;
+        }
+
+        .add-connection-form .form-row .form-group input {
+            padding: 10px 12px;
+            font-size: 13px;
+        }
+
+        .suggestion-item {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            padding: 10px 14px;
+            border-radius: 8px;
+            margin-bottom: 6px;
+            background: var(--bg-tertiary);
+            gap: 12px;
+        }
+
+        .suggestion-item:last-child {
+            margin-bottom: 0;
+        }
+
+        .suggestion-info {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            flex: 1;
+            min-width: 0;
+            flex-wrap: wrap;
+        }
+
+        .suggestion-count {
+            font-size: 11px;
+            color: var(--text-tertiary);
+            white-space: nowrap;
+        }
+
+        .btn-connect {
+            background: var(--accent-green);
+            color: white;
+            border: none;
+            padding: 5px 12px;
+            border-radius: 6px;
+            font-size: 12px;
+            cursor: pointer;
+            flex-shrink: 0;
+            transition: opacity 0.15s;
+        }
+
+        .btn-connect:hover {
+            opacity: 0.85;
+        }
+
+        .connection-filter {
+            margin-bottom: 16px;
+        }
+
+        .connection-filter input {
+            width: 100%;
+            padding: 10px 14px;
+            border: 1px solid var(--border-color);
+            border-radius: 8px;
+            background: var(--input-bg);
+            color: var(--text-primary);
+            font-size: 13px;
+        }
+
         /* Mobile responsive styles for tag admin */
         @media (max-width: 768px) {
             .tag-admin-header {
@@ -555,6 +859,133 @@ foreach ($allTags as $tagLower => $data) {
         <?php if ($error_msg): ?>
             <div class="alert alert-error"><?= htmlspecialchars($error_msg) ?></div>
         <?php endif; ?>
+
+        <nav class="page-tabs">
+            <a href="?tab=tags" class="page-tab <?= $activeTab === 'tags' ? 'active' : '' ?>">Tags</a>
+            <a href="?tab=connections" class="page-tab <?= $activeTab === 'connections' ? 'active' : '' ?>">Connections
+                <?php if (!empty($allConnections)): ?>
+                    <span style="font-size:11px; color:var(--text-tertiary);">(<?= count($allConnections) ?>)</span>
+                <?php endif; ?>
+            </a>
+        </nav>
+
+        <?php if ($activeTab === 'connections'): ?>
+
+        <!-- Connections Tab -->
+        <div class="connections-layout">
+
+            <!-- Left: Existing Connections -->
+            <div>
+                <div class="connections-panel">
+                    <div class="connections-panel-header">Explicit Connections (<?= count($allConnections) ?>)</div>
+                    <div class="connections-panel-body">
+                        <?php if (!empty($allConnections)): ?>
+                        <div class="connection-filter">
+                            <input type="text" id="connectionFilter" placeholder="Filter connections..." oninput="filterConnections(this.value)">
+                        </div>
+                        <div id="connectionList">
+                            <?php foreach ($allConnections as $conn): ?>
+                            <?php
+                                $dispA = $tagDisplayMap[$conn['from']] ?? $conn['from'];
+                                $dispB = $tagDisplayMap[$conn['to']] ?? $conn['to'];
+                            ?>
+                            <div class="connection-item" data-tags="<?= htmlspecialchars(strtolower($dispA . ' ' . $dispB)) ?>">
+                                <div class="connection-tags">
+                                    <span class="connection-tag"><?= htmlspecialchars($dispA) ?></span>
+                                    <span class="connection-arrow">↔</span>
+                                    <span class="connection-tag"><?= htmlspecialchars($dispB) ?></span>
+                                </div>
+                                <form method="post" style="display:inline;">
+                                    <?php csrf_field(); ?>
+                                    <input type="hidden" name="action" value="remove_connection">
+                                    <input type="hidden" name="tag_a" value="<?= htmlspecialchars($conn['from']) ?>">
+                                    <input type="hidden" name="tag_b" value="<?= htmlspecialchars($conn['to']) ?>">
+                                    <input type="hidden" name="tab" value="connections">
+                                    <button type="submit" class="btn-remove-connection" onclick="return confirm('Remove connection: <?= htmlspecialchars(addslashes($dispA)) ?> ↔ <?= htmlspecialchars(addslashes($dispB)) ?>?')">Remove</button>
+                                </form>
+                            </div>
+                            <?php endforeach; ?>
+                        </div>
+                        <?php else: ?>
+                        <div class="connections-empty">No connections yet.<br>Add some using the form.</div>
+                        <?php endif; ?>
+                    </div>
+                </div>
+
+                <!-- Add Connection Form -->
+                <div class="connections-panel" style="margin-top: 16px;">
+                    <div class="connections-panel-header">Add Connection</div>
+                    <div class="connections-panel-body">
+                        <form method="post" class="add-connection-form">
+                            <?php csrf_field(); ?>
+                            <input type="hidden" name="action" value="add_connection">
+                            <input type="hidden" name="tab" value="connections">
+                            <div class="form-row">
+                                <div class="form-group">
+                                    <label for="connTagA">Tag A</label>
+                                    <input type="text" name="tag_a" id="connTagA" list="tagListA" placeholder="First tag..." required autocomplete="off">
+                                    <datalist id="tagListA">
+                                        <?php foreach ($allTagsList as $t): ?>
+                                        <option value="<?= htmlspecialchars($t) ?>">
+                                        <?php endforeach; ?>
+                                    </datalist>
+                                </div>
+                                <div style="display:flex; align-items:center; padding-bottom:2px; color:var(--text-tertiary);">↔</div>
+                                <div class="form-group">
+                                    <label for="connTagB">Tag B</label>
+                                    <input type="text" name="tag_b" id="connTagB" list="tagListB" placeholder="Second tag..." required autocomplete="off">
+                                    <datalist id="tagListB">
+                                        <?php foreach ($allTagsList as $t): ?>
+                                        <option value="<?= htmlspecialchars($t) ?>">
+                                        <?php endforeach; ?>
+                                    </datalist>
+                                </div>
+                            </div>
+                            <button type="submit" class="btn" style="background:var(--primary); color:white;">Connect</button>
+                        </form>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Right: Co-occurrence Suggestions -->
+            <div>
+                <div class="connections-panel">
+                    <div class="connections-panel-header">Suggestions from Co-occurrence</div>
+                    <div class="connections-panel-body">
+                        <?php if (!empty($coSuggestions)): ?>
+                        <?php foreach ($coSuggestions as $sug): ?>
+                        <?php
+                            $dispA = $tagDisplayMap[$sug['tag_a']] ?? $sug['tag_a'];
+                            $dispB = $tagDisplayMap[$sug['tag_b']] ?? $sug['tag_b'];
+                        ?>
+                        <div class="suggestion-item">
+                            <div class="suggestion-info">
+                                <span class="connection-tag"><?= htmlspecialchars($dispA) ?></span>
+                                <span class="connection-arrow">↔</span>
+                                <span class="connection-tag"><?= htmlspecialchars($dispB) ?></span>
+                                <span class="suggestion-count"><?= $sug['count'] ?> co-occurrence<?= $sug['count'] !== 1 ? 's' : '' ?></span>
+                            </div>
+                            <form method="post" style="display:inline;">
+                                <?php csrf_field(); ?>
+                                <input type="hidden" name="action" value="add_connection">
+                                <input type="hidden" name="tag_a" value="<?= htmlspecialchars($sug['tag_a']) ?>">
+                                <input type="hidden" name="tag_b" value="<?= htmlspecialchars($sug['tag_b']) ?>">
+                                <input type="hidden" name="tab" value="connections">
+                                <button type="submit" class="btn-connect">Connect</button>
+                            </form>
+                        </div>
+                        <?php endforeach; ?>
+                        <?php else: ?>
+                        <div class="connections-empty">No suggestions available.<br>Suggestions are based on tags that frequently appear together.</div>
+                        <?php endif; ?>
+                    </div>
+                </div>
+            </div>
+
+        </div>
+
+        <?php else: ?>
+        <!-- Tags Tab -->
 
         <div class="tag-admin-header">
             <div class="tag-stats">
@@ -654,6 +1085,8 @@ foreach ($allTags as $tagLower => $data) {
                 </div>
             </div>
         <?php endif; ?>
+
+        <?php endif; // end $activeTab === 'tags' ?>
     </div>
 
     <!-- Rename Modal -->
@@ -872,6 +1305,15 @@ foreach ($allTags as $tagLower => $data) {
                 });
             }
         });
+
+        // Filter connections list
+        function filterConnections(query) {
+            const q = query.toLowerCase();
+            document.querySelectorAll('#connectionList .connection-item').forEach(item => {
+                const tags = item.dataset.tags || '';
+                item.style.display = tags.includes(q) ? '' : 'none';
+            });
+        }
     </script>
 </body>
 

@@ -166,6 +166,12 @@ $bookmarks = $stmt->fetchAll(PDO::FETCH_ASSOC);
 $total = $countStmt->fetch(PDO::FETCH_ASSOC)['total'];
 $totalPages = ceil($total / $limit);
 
+// Fetch related tags for the active tag filter
+$relatedTags = [];
+if (!empty($tag)) {
+    $relatedTags = getTagConnections($db, $tag);
+}
+
 ?>
 <!DOCTYPE html>
 <html lang="en">
@@ -200,6 +206,14 @@ $totalPages = ceil($total / $limit);
                     Showing bookmarks tagged with: <strong><?= htmlspecialchars($tag) ?></strong>
                     <a href="<?= $config['base_path'] ?>" class="btn">Clear</a>
                 </div>
+                <?php if (!empty($relatedTags)): ?>
+                <div class="related-tags-bar">
+                    <span class="related-tags-label">Related:</span>
+                    <?php foreach ($relatedTags as $relatedTag): ?>
+                        <a href="<?= $config['base_path'] ?>/?tag=<?= urlencode($relatedTag) ?>" class="related-tag-chip"><?= htmlspecialchars($relatedTag) ?></a>
+                    <?php endforeach; ?>
+                </div>
+                <?php endif; ?>
             <?php endif; ?>
 
             <?php if ($showBroken): ?>

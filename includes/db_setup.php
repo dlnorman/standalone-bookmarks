@@ -90,6 +90,17 @@ class DatabaseSetup
                 FOREIGN KEY (bookmark_id) REFERENCES bookmarks(id) ON DELETE CASCADE
             )
         ");
+
+        // Tag Connections Table (explicit, manually-curated bidirectional links)
+        $this->db->exec("
+            CREATE TABLE IF NOT EXISTS tag_connections (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                tag_from TEXT NOT NULL,
+                tag_to TEXT NOT NULL,
+                created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+                UNIQUE(tag_from, tag_to)
+            )
+        ");
     }
 
     private function updateSchema()
@@ -120,7 +131,9 @@ class DatabaseSetup
             'idx_jobs_status' => 'CREATE INDEX IF NOT EXISTS idx_jobs_status ON jobs(status)',
             'idx_jobs_type' => 'CREATE INDEX IF NOT EXISTS idx_jobs_type ON jobs(job_type)',
             'idx_jobs_status_created' => 'CREATE INDEX IF NOT EXISTS idx_jobs_status_created ON jobs(status, created_at)',
-            'idx_jobs_bookmark_id' => 'CREATE INDEX IF NOT EXISTS idx_jobs_bookmark_id ON jobs(bookmark_id)'
+            'idx_jobs_bookmark_id' => 'CREATE INDEX IF NOT EXISTS idx_jobs_bookmark_id ON jobs(bookmark_id)',
+            'idx_tag_connections_from' => 'CREATE INDEX IF NOT EXISTS idx_tag_connections_from ON tag_connections(tag_from)',
+            'idx_tag_connections_to' => 'CREATE INDEX IF NOT EXISTS idx_tag_connections_to ON tag_connections(tag_to)'
         ];
 
         foreach ($indexes as $sql) {

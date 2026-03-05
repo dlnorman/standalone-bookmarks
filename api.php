@@ -39,10 +39,10 @@ try {
 $action = $_GET['action'] ?? $_POST['action'] ?? '';
 
 // Public endpoints that don't require authentication
-$publicEndpoints = ['dashboard_stats', 'get_tags', 'list'];
+$publicEndpoints = ['dashboard_stats', 'get_tags', 'list', 'get_tag_connections', 'get_related_tags'];
 
 // Read-only endpoints that don't require CSRF tokens
-$readOnlyEndpoints = ['get', 'list', 'fetch_meta', 'get_tags', 'dashboard_stats', 'check_status'];
+$readOnlyEndpoints = ['get', 'list', 'fetch_meta', 'get_tags', 'dashboard_stats', 'check_status', 'get_tag_connections', 'get_related_tags'];
 
 // Require authentication for all operations except public endpoints
 if (!in_array($action, $publicEndpoints) && !is_logged_in()) {
@@ -880,6 +880,65 @@ switch ($action) {
             'total_cooccurrences' => count($tagCooccurrence),
             'prefixes' => $prefixes
         ]);
+        break;
+
+    case 'get_tag_connections':
+        // Get all explicit tag connections (public, for viz overlay)
+        $connections = getAllTagConnections($db);
+        echo json_encode(['connections' => $connections]);
+        break;
+
+    case 'get_related_tags':
+        // Get related tags for a single tag
+        $tag = trim($_GET['tag'] ?? '');
+        if (empty($tag)) {
+            http_response_code(400);
+            echo json_encode(['error' => 'tag parameter required']);
+            exit;
+        }
+        $related = getTagConnections($db, $tag);
+        echo json_encode(['related' => $related]);
+        break;
+
+    case 'add_tag_connection':
+        // Add explicit connection between two tags (admin only)
+        if (!function_exists('is_admin') || !is_admin()) {
+            http_response_code(403);
+            echo json_encode(['error' => 'Admin access required']);
+            exit;
+        }
+        $tagA = trim($_POST['tag_a'] ?? '');
+        $tagB = trim($_POST['tag_b'] ?? '');
+        if (empty($tagA) || empty($tagB)) {
+            http_response_code(400);
+            echo json_encode(['error' => 'tag_a and tag_b are required']);
+            exit;
+        }
+        if (strtolower($tagA) === strtolower($tagB)) {
+            http_response_code(400);
+            echo json_encode(['error' => 'Cannot connect a tag to itself']);
+            exit;
+        }
+        $added = addTagConnection($db, $tagA, $tagB);
+        echo json_encode(['success' => true, 'added' => $added]);
+        break;
+
+    case 'remove_tag_connection':
+        // Remove explicit connection between two tags (admin only)
+        if (!function_exists('is_admin') || !is_admin()) {
+            http_response_code(403);
+            echo json_encode(['error' => 'Admin access required']);
+            exit;
+        }
+        $tagA = trim($_POST['tag_a'] ?? '');
+        $tagB = trim($_POST['tag_b'] ?? '');
+        if (empty($tagA) || empty($tagB)) {
+            http_response_code(400);
+            echo json_encode(['error' => 'tag_a and tag_b are required']);
+            exit;
+        }
+        $removed = removeTagConnection($db, $tagA, $tagB);
+        echo json_encode(['success' => true, 'removed' => $removed]);
         break;
 
     default:

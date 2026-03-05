@@ -231,6 +231,23 @@ function renameTag($db, $oldTag, $newTag) {
             $count++;
         }
 
+        // Update tag_connections to use the new tag name
+        $tableExists = $db->query("SELECT name FROM sqlite_master WHERE type='table' AND name='tag_connections'")->fetch();
+        if ($tableExists) {
+            $oldLower = strtolower($oldTag);
+            $newLower = strtolower($newTag);
+            if ($oldLower !== $newLower) {
+                $updateFrom = $db->prepare("UPDATE tag_connections SET tag_from = ? WHERE tag_from = ?");
+                $updateFrom->execute([$newLower, $oldLower]);
+                $updateTo = $db->prepare("UPDATE tag_connections SET tag_to = ? WHERE tag_to = ?");
+                $updateTo->execute([$newLower, $oldLower]);
+                // Remove self-connections that may have formed during merge
+                $db->exec("DELETE FROM tag_connections WHERE tag_from = tag_to");
+                // Remove duplicate pairs
+                $db->exec("DELETE FROM tag_connections WHERE rowid NOT IN (SELECT MIN(rowid) FROM tag_connections GROUP BY tag_from, tag_to)");
+            }
+        }
+
         if ($ownTransaction) {
             $db->commit();
         }
@@ -320,6 +337,14 @@ function deleteTag($db, $tag) {
             $count++;
         }
 
+        // Remove connections for the deleted tag
+        $tableExists = $db->query("SELECT name FROM sqlite_master WHERE type='table' AND name='tag_connections'")->fetch();
+        if ($tableExists) {
+            $tagLower = strtolower($tag);
+            $deleteConn = $db->prepare("DELETE FROM tag_connections WHERE tag_from = ? OR tag_to = ?");
+            $deleteConn->execute([$tagLower, $tagLower]);
+        }
+
         $db->commit();
         return $count;
     } catch (Exception $e) {
@@ -345,4 +370,118 @@ function changeTagType($db, $tag, $newType) {
     }
 
     return renameTag($db, $tag, $newTag);
+}
+
+/**
+ * Get related tags (explicit connections) for a given tag
+ *
+ * @param PDO $db Database connection
+ * @param string $tag The tag to find connections for
+ * @return array Array of related tag names
+ */
+function getTagConnections($db, $tag) {
+    $tagLower = strtolower(trim($tag));
+
+    // Check if table exists
+    $tableExists = $db->query("SELECT name FROM sqlite_master WHERE type='table' AND name='tag_connections'")->fetch();
+    if (!$tableExists) return [];
+
+    $stmt = $db->prepare("
+        SELECT tag_to as related FROM tag_connections WHERE tag_from = ?
+        UNION
+        SELECT tag_from as related FROM tag_connections WHERE tag_to = ?
+    ");
+    $stmt->execute([$tagLower, $tagLower]);
+    return $stmt->fetchAll(PDO::FETCH_COLUMN);
+}
+
+/**
+ * Get all explicit tag connection pairs
+ *
+ * @param PDO $db Database connection
+ * @return array Array of ['from' => string, 'to' => string] pairs (each pair listed once)
+ */
+function getAllTagConnections($db) {
+    // Check if table exists
+    $tableExists = $db->query("SELECT name FROM sqlite_master WHERE type='table' AND name='tag_connections'")->fetch();
+    if (!$tableExists) return [];
+
+    $stmt = $db->query("
+        SELECT tag_from as `from`, tag_to as `to`
+        FROM tag_connections
+        WHERE tag_from < tag_to
+        ORDER BY tag_from, tag_to
+    ");
+    return $stmt->fetchAll(PDO::FETCH_ASSOC);
+}
+
+/**
+ * Check if an explicit connection exists between two tags
+ *
+ * @param PDO $db Database connection
+ * @param string $tagA First tag
+ * @param string $tagB Second tag
+ * @return bool
+ */
+function tagConnectionExists($db, $tagA, $tagB) {
+    $a = strtolower(trim($tagA));
+    $b = strtolower(trim($tagB));
+
+    // Check if table exists
+    $tableExists = $db->query("SELECT name FROM sqlite_master WHERE type='table' AND name='tag_connections'")->fetch();
+    if (!$tableExists) return false;
+
+    $stmt = $db->prepare("SELECT COUNT(*) FROM tag_connections WHERE (tag_from = ? AND tag_to = ?) OR (tag_from = ? AND tag_to = ?)");
+    $stmt->execute([$a, $b, $b, $a]);
+    return $stmt->fetchColumn() > 0;
+}
+
+/**
+ * Add a bidirectional explicit connection between two tags
+ *
+ * @param PDO $db Database connection
+ * @param string $tagA First tag
+ * @param string $tagB Second tag
+ * @return bool True if added, false if already exists
+ */
+function addTagConnection($db, $tagA, $tagB) {
+    $a = strtolower(trim($tagA));
+    $b = strtolower(trim($tagB));
+
+    if (empty($a) || empty($b) || $a === $b) return false;
+
+    if (tagConnectionExists($db, $a, $b)) return false;
+
+    $db->beginTransaction();
+    try {
+        $stmt = $db->prepare("INSERT OR IGNORE INTO tag_connections (tag_from, tag_to) VALUES (?, ?)");
+        $stmt->execute([$a, $b]);
+        $stmt->execute([$b, $a]);
+        $db->commit();
+        return true;
+    } catch (Exception $e) {
+        $db->rollBack();
+        throw $e;
+    }
+}
+
+/**
+ * Remove a bidirectional explicit connection between two tags
+ *
+ * @param PDO $db Database connection
+ * @param string $tagA First tag
+ * @param string $tagB Second tag
+ * @return bool True if removed
+ */
+function removeTagConnection($db, $tagA, $tagB) {
+    $a = strtolower(trim($tagA));
+    $b = strtolower(trim($tagB));
+
+    // Check if table exists
+    $tableExists = $db->query("SELECT name FROM sqlite_master WHERE type='table' AND name='tag_connections'")->fetch();
+    if (!$tableExists) return false;
+
+    $stmt = $db->prepare("DELETE FROM tag_connections WHERE (tag_from = ? AND tag_to = ?) OR (tag_from = ? AND tag_to = ?)");
+    $stmt->execute([$a, $b, $b, $a]);
+    return $stmt->rowCount() > 0;
 }
