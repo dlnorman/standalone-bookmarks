@@ -308,8 +308,17 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['submit'])) {
             if (!input || !suggestionsDiv) return;
 
             let selectedIndex = -1;
+            let isInserting = false;
+
+            function closeSuggestions() {
+                suggestionsDiv.innerHTML = '';
+                suggestionsDiv.classList.remove('active');
+                selectedIndex = -1;
+            }
 
             input.addEventListener('input', async function () {
+                if (isInserting) return;
+
                 const value = this.value;
                 const cursorPos = this.selectionStart;
 
@@ -322,7 +331,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['submit'])) {
                 const currentTag = beforeCursor.substring(lastComma + 1).trim();
 
                 if (currentTag.length === 0) {
-                    suggestionsDiv.classList.remove('active');
+                    closeSuggestions();
                     return;
                 }
 
@@ -336,7 +345,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['submit'])) {
                 );
 
                 if (matches.length === 0) {
-                    suggestionsDiv.classList.remove('active');
+                    closeSuggestions();
                     return;
                 }
 
@@ -350,22 +359,24 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['submit'])) {
 
                 suggestionsDiv.classList.add('active');
 
-                // Add click handlers to suggestions
+                // Use mousedown (fires before blur) so clicking a suggestion doesn't dismiss it
                 suggestionsDiv.querySelectorAll('.tag-suggestion').forEach(suggestionEl => {
-                    suggestionEl.addEventListener('click', function () {
+                    suggestionEl.addEventListener('mousedown', function (e) {
+                        e.preventDefault();
                         const tag = this.getAttribute('data-tag');
+                        isInserting = true;
                         insertTag(input, tag, lastComma, cursorPos, nextComma === -1 ? value.length : cursorPos + nextComma);
-                        suggestionsDiv.classList.remove('active');
+                        closeSuggestions();
+                        setTimeout(() => { isInserting = false; }, 50);
                     });
                 });
             });
 
             input.addEventListener('keydown', function (e) {
                 const suggestions = suggestionsDiv.querySelectorAll('.tag-suggestion');
+                const isActive = suggestionsDiv.classList.contains('active') && suggestions.length > 0;
 
-                if (!suggestionsDiv.classList.contains('active') || suggestions.length === 0) {
-                    return;
-                }
+                if (!isActive) return;
 
                 if (e.key === 'ArrowDown') {
                     e.preventDefault();
@@ -375,21 +386,26 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['submit'])) {
                     e.preventDefault();
                     selectedIndex = Math.max(selectedIndex - 1, -1);
                     updateSelectedSuggestion(suggestions);
-                } else if (e.key === 'Enter' || e.key === 'Tab') {
+                } else if (e.key === 'Enter') {
+                    // Always prevent form submission when dropdown is open
+                    e.preventDefault();
+                    const target = selectedIndex >= 0 ? suggestions[selectedIndex] : suggestions[0];
+                    target.dispatchEvent(new MouseEvent('mousedown', { bubbles: true }));
+                } else if (e.key === 'Tab') {
                     if (selectedIndex >= 0) {
                         e.preventDefault();
-                        suggestions[selectedIndex].click();
+                        suggestions[selectedIndex].dispatchEvent(new MouseEvent('mousedown', { bubbles: true }));
+                    } else {
+                        closeSuggestions();
                     }
                 } else if (e.key === 'Escape') {
-                    suggestionsDiv.classList.remove('active');
+                    e.preventDefault();
+                    closeSuggestions();
                 }
             });
 
-            // Close suggestions when clicking outside
-            document.addEventListener('click', function (e) {
-                if (!input.contains(e.target) && !suggestionsDiv.contains(e.target)) {
-                    suggestionsDiv.classList.remove('active');
-                }
+            input.addEventListener('blur', function () {
+                setTimeout(() => closeSuggestions(), 150);
             });
 
             function updateSelectedSuggestion(suggestions) {

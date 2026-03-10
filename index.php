@@ -35,6 +35,7 @@ try {
 // Get parameters
 $search = $_GET['q'] ?? '';
 $tag = $_GET['tag'] ?? '';
+$activeTags = !empty($tag) ? array_values(array_filter(array_map('trim', explode(',', $tag)))) : [];
 $showBroken = isset($_GET['broken']) && $_GET['broken'] === '1';
 $page = max(1, intval($_GET['page'] ?? 1));
 $limit = $config['items_per_page'];
@@ -74,38 +75,38 @@ if ($showBroken && $hasBrokenUrl) {
 
         $countStmt = $db->query("SELECT COUNT(*) as total FROM bookmarks WHERE broken_url = 1 AND private = 0");
     }
-} elseif (!empty($tag)) {
-    // Filter by tag (case-insensitive, exact match in comma-separated list)
-    $tagPattern = '%,' . escapeLikePattern(strtolower(trim($tag))) . ',%';
+} elseif (!empty($activeTags)) {
+    // Filter by tags (comma-separated = AND logic, case-insensitive)
+    $tagConditions = [];
+    $tagParams = [];
+    foreach ($activeTags as $activeTag) {
+        $tagConditions[] = "',' || REPLACE(LOWER(tags), ', ', ',') || ',' LIKE ? ESCAPE '\\'";
+        $tagParams[] = '%,' . escapeLikePattern(strtolower($activeTag)) . ',%';
+    }
+    $tagWhere = implode(' AND ', $tagConditions);
 
     if ($isLoggedIn) {
         $stmt = $db->prepare("
             SELECT * FROM bookmarks
-            WHERE ',' || REPLACE(LOWER(tags), ', ', ',') || ',' LIKE ? ESCAPE '\\'
+            WHERE $tagWhere
             ORDER BY created_at DESC
             LIMIT ? OFFSET ?
         ");
-        $stmt->execute([$tagPattern, $limit, $offset]);
+        $stmt->execute(array_merge($tagParams, [$limit, $offset]));
 
-        $countStmt = $db->prepare("
-            SELECT COUNT(*) as total FROM bookmarks
-            WHERE ',' || REPLACE(LOWER(tags), ', ', ',') || ',' LIKE ? ESCAPE '\\'
-        ");
-        $countStmt->execute([$tagPattern]);
+        $countStmt = $db->prepare("SELECT COUNT(*) as total FROM bookmarks WHERE $tagWhere");
+        $countStmt->execute($tagParams);
     } else {
         $stmt = $db->prepare("
             SELECT * FROM bookmarks
-            WHERE (',' || REPLACE(LOWER(tags), ', ', ',') || ',') LIKE ? ESCAPE '\\' AND private = 0
+            WHERE $tagWhere AND private = 0
             ORDER BY created_at DESC
             LIMIT ? OFFSET ?
         ");
-        $stmt->execute([$tagPattern, $limit, $offset]);
+        $stmt->execute(array_merge($tagParams, [$limit, $offset]));
 
-        $countStmt = $db->prepare("
-            SELECT COUNT(*) as total FROM bookmarks
-            WHERE (',' || REPLACE(LOWER(tags), ', ', ',') || ',') LIKE ? ESCAPE '\\' AND private = 0
-        ");
-        $countStmt->execute([$tagPattern]);
+        $countStmt = $db->prepare("SELECT COUNT(*) as total FROM bookmarks WHERE $tagWhere AND private = 0");
+        $countStmt->execute($tagParams);
     }
 } elseif (!empty($search)) {
     $searchTerm = '%' . $search . '%';
@@ -166,10 +167,18 @@ $bookmarks = $stmt->fetchAll(PDO::FETCH_ASSOC);
 $total = $countStmt->fetch(PDO::FETCH_ASSOC)['total'];
 $totalPages = ceil($total / $limit);
 
-// Fetch related tags for the active tag filter
+// Fetch related tags for the active tag filter (union connections across all active tags)
 $relatedTags = [];
-if (!empty($tag)) {
-    $relatedTags = getTagConnections($db, $tag);
+if (!empty($activeTags)) {
+    $lowerActive = array_map('strtolower', $activeTags);
+    foreach ($activeTags as $activeTag) {
+        foreach (getTagConnections($db, $activeTag) as $related) {
+            $lowerRelated = strtolower($related);
+            if (!in_array($lowerRelated, $lowerActive) && !in_array($related, $relatedTags)) {
+                $relatedTags[] = $related;
+            }
+        }
+    }
 }
 
 ?>
@@ -201,16 +210,26 @@ if (!empty($tag)) {
                 </div>
             <?php endif; ?>
 
-            <?php if (!empty($tag)): ?>
+            <?php if (!empty($activeTags)): ?>
                 <div class="filter-notice">
-                    Showing bookmarks tagged with: <strong><?= htmlspecialchars($tag) ?></strong>
-                    <a href="<?= $config['base_path'] ?>" class="btn">Clear</a>
+                    Showing bookmarks tagged:
+                    <?php foreach ($activeTags as $activeTag):
+                        $removeUrl = count($activeTags) === 1
+                            ? $config['base_path'] . '/'
+                            : $config['base_path'] . '/?tag=' . urlencode(implode(',', array_filter($activeTags, fn($t) => strtolower(trim($t)) !== strtolower(trim($activeTag)))));
+                    ?>
+                        <span class="filter-tag-chip">
+                            <?= htmlspecialchars($activeTag) ?>
+                            <a href="<?= $removeUrl ?>" class="filter-tag-remove" title="Remove tag">×</a>
+                        </span>
+                    <?php endforeach; ?>
+                    <a href="<?= $config['base_path'] ?>" class="btn">Clear all</a>
                 </div>
                 <?php if (!empty($relatedTags)): ?>
                 <div class="related-tags-bar">
                     <span class="related-tags-label">Related:</span>
                     <?php foreach ($relatedTags as $relatedTag): ?>
-                        <a href="<?= $config['base_path'] ?>/?tag=<?= urlencode($relatedTag) ?>" class="related-tag-chip"><?= htmlspecialchars($relatedTag) ?></a>
+                        <a href="<?= $config['base_path'] ?>/?tag=<?= urlencode(implode(',', array_merge($activeTags, [$relatedTag]))) ?>" class="related-tag-chip"><?= htmlspecialchars($relatedTag) ?></a>
                     <?php endforeach; ?>
                 </div>
                 <?php endif; ?>
@@ -230,8 +249,8 @@ if (!empty($tag)) {
                     <p>No bookmarks found for "<?= htmlspecialchars($search) ?>"</p>
                 <?php elseif ($showBroken): ?>
                     <p>🎉 No broken links found! All your bookmarks are working.</p>
-                <?php elseif (!empty($tag)): ?>
-                    <p>No bookmarks found with tag "<?= htmlspecialchars($tag) ?>"</p>
+                <?php elseif (!empty($activeTags)): ?>
+                    <p>No bookmarks found tagged with <?= implode(' + ', array_map(fn($t) => '"' . htmlspecialchars($t) . '"', $activeTags)) ?></p>
                 <?php else: ?>
                     <p>No bookmarks yet. Add your first bookmark!</p>
                 <?php endif; ?>
@@ -283,7 +302,7 @@ if (!empty($tag)) {
                                 <?php
                                 $tagList = array_map('trim', explode(',', $bookmark['tags']));
                                 foreach ($tagList as $tagItem) {
-                                    echo renderTag($tagItem, $config['base_path']);
+                                    echo renderTag($tagItem, $config['base_path'], 'bookmark-tag', $activeTags);
                                 }
                                 ?>
                             </div>
@@ -327,7 +346,7 @@ if (!empty($tag)) {
             <?php if ($totalPages > 1): ?>
                 <div class="pagination">
                     <?php
-                    $paginationParams = ['q' => $search, 'tag' => $tag];
+                    $paginationParams = ['q' => $search, 'tag' => implode(',', $activeTags)];
                     if ($showBroken) {
                         $paginationParams['broken'] = '1';
                     }
@@ -358,7 +377,7 @@ if (!empty($tag)) {
         const IS_LOGGED_IN = <?= json_encode($isLoggedIn) ?>;
         const CSRF_TOKEN = <?= $isLoggedIn ? json_encode(csrf_get_token()) : 'null' ?>;
         const DATE_FORMAT = <?= json_encode($config['date_format']) ?>;
-        const CURRENT_TAG = <?= json_encode($tag) ?>;
+        const CURRENT_TAGS = <?= json_encode($activeTags) ?>;
         const CURRENT_BROKEN = <?= json_encode($showBroken) ?>;
 
         // Tag type helper functions for JavaScript
@@ -386,6 +405,20 @@ if (!empty($tag)) {
                 case 'via': return '<span class="tag-icon">&#128228;</span>';
                 default: return '';
             }
+        }
+
+        // Build a URL that toggles a tag in/out of the current active tag set
+        function buildTagUrl(tag) {
+            const lowerTag = tag.trim().toLowerCase();
+            const lowerActive = CURRENT_TAGS.map(t => t.toLowerCase());
+            let newTags;
+            if (lowerActive.includes(lowerTag)) {
+                newTags = CURRENT_TAGS.filter(t => t.toLowerCase() !== lowerTag);
+            } else {
+                newTags = [...CURRENT_TAGS, tag.trim()];
+            }
+            if (newTags.length === 0) return BASE_PATH + '/';
+            return BASE_PATH + '/?tag=' + encodeURIComponent(newTags.join(','));
         }
 
         function toggleBookmarkMenu(event) {
@@ -795,8 +828,8 @@ if (!empty($tag)) {
                 limit: <?= $limit ?>
             });
 
-            if (CURRENT_TAG) {
-                params.set('tag', CURRENT_TAG);
+            if (CURRENT_TAGS.length > 0) {
+                params.set('tag', CURRENT_TAGS.join(','));
             }
 
             if (CURRENT_BROKEN) {
@@ -926,7 +959,9 @@ if (!empty($tag)) {
                     const parsed = parseTagTypeJS(tag);
                     const typeClass = getTagTypeClassJS(parsed.type);
                     const icon = getTagTypeIconJS(parsed.type);
-                    tagsHTML += `<a href="?tag=${encodeURIComponent(tag)}" class="bookmark-tag ${typeClass}">${icon}${escapeHtml(parsed.name)}</a>`;
+                    const isActive = CURRENT_TAGS.map(t => t.toLowerCase()).includes(tag.toLowerCase());
+                    const activeClass = isActive ? ' active-filter' : '';
+                    tagsHTML += `<a href="${buildTagUrl(tag)}" class="bookmark-tag ${typeClass}${activeClass}">${icon}${escapeHtml(parsed.name)}</a>`;
                 });
                 tagsHTML += '</div>';
             }

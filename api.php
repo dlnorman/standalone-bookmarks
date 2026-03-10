@@ -214,11 +214,11 @@ switch ($action) {
             $whereConditions[] = "broken_url = 1";
         }
 
-        // Tag filter
-        if (!empty($tag)) {
-            $tagPattern = '%,' . escapeLikePattern(strtolower(trim($tag))) . ',%';
+        // Tag filter (comma-separated = AND logic)
+        $activeTags = !empty($tag) ? array_values(array_filter(array_map('trim', explode(',', $tag)))) : [];
+        foreach ($activeTags as $activeTag) {
             $whereConditions[] = "',' || REPLACE(LOWER(tags), ', ', ',') || ',' LIKE ? ESCAPE '\\'";
-            $params[] = $tagPattern;
+            $params[] = '%,' . escapeLikePattern(strtolower($activeTag)) . ',%';
         }
 
         // Search filter

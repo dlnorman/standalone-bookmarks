@@ -65,6 +65,10 @@
     --shadow-md: 0 4px 12px 0 rgba(0, 0, 0, 0.12);
     --shadow-lg: 0 10px 24px 0 rgba(0, 0, 0, 0.15);
     --shadow-xl: 0 20px 40px 0 rgba(0, 0, 0, 0.18);
+
+    /* Solid background for popups/dropdowns — no transparency bleed-through */
+    --bg-popup: rgba(255, 255, 255, 0.98);
+    --bg-popup-border: rgba(0, 0, 0, 0.12);
 }
 
 @media (prefers-color-scheme: dark) {
@@ -94,6 +98,13 @@
         --shadow-md: 0 4px 16px rgba(0, 0, 0, 0.5);
         --shadow-lg: 0 10px 32px rgba(0, 0, 0, 0.6);
         --shadow-xl: 0 20px 48px rgba(0, 0, 0, 0.7);
+
+        /* Dark mode popup background */
+        --bg-popup: rgba(36, 36, 38, 0.98);
+        --bg-popup-border: rgba(255, 255, 255, 0.12);
+
+        /* Dark mode primary-light: use translucent blue instead of #E5F2FF */
+        --primary-light: rgba(0, 122, 255, 0.18);
     }
 }
 
@@ -149,7 +160,21 @@ body {
 }
 
 a {
-    transition: all 0.2s ease;
+    transition: color 0.2s ease, background-color 0.2s ease, opacity 0.2s ease, transform 0.2s ease, box-shadow 0.2s ease;
+}
+
+/* Keyboard focus — visible ring for all interactive elements */
+:focus-visible {
+    outline: 2px solid var(--primary);
+    outline-offset: 2px;
+    border-radius: 4px;
+}
+
+/* Inputs use box-shadow focus styling instead */
+input:focus-visible,
+textarea:focus-visible,
+select:focus-visible {
+    outline: none;
 }
 
 /* =================================================================
@@ -346,6 +371,30 @@ a {
 
 .filter-notice .btn:hover {
     background: var(--primary);
+    color: white;
+}
+
+.filter-tag-chip {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    background: var(--primary);
+    color: white;
+    padding: 3px 10px;
+    border-radius: 20px;
+    font-size: 13px;
+    font-weight: 500;
+}
+
+.filter-tag-remove {
+    color: rgba(255, 255, 255, 0.8);
+    text-decoration: none;
+    font-size: 16px;
+    line-height: 1;
+    margin-left: 2px;
+}
+
+.filter-tag-remove:hover {
     color: white;
 }
 
@@ -557,6 +606,17 @@ a {
     box-shadow: 0 4px 6px rgba(0, 122, 255, 0.25);
 }
 
+.bookmark-tag.active-filter {
+    background: var(--primary);
+    color: white;
+    border-color: var(--primary);
+}
+
+.bookmark-tag.active-filter:hover {
+    background: color-mix(in srgb, var(--primary) 80%, black);
+    box-shadow: none;
+}
+
 /* Metadata Bar */
 .bookmark .meta {
     display: flex;
@@ -608,8 +668,8 @@ a {
     display: inline-flex;
     align-items: center;
     justify-content: center;
-    width: 32px;
-    height: 32px;
+    width: 36px;
+    height: 36px;
     padding: 0;
     border: 1px solid var(--border-color);
     border-radius: 8px;
@@ -639,10 +699,8 @@ a {
     right: 0;
     bottom: calc(100% + 8px);
     min-width: 200px;
-    background: var(--bg-secondary);
-    backdrop-filter: blur(12px);
-    -webkit-backdrop-filter: blur(12px);
-    border: 1px solid var(--border-subtle);
+    background: var(--bg-popup);
+    border: 1px solid var(--bg-popup-border);
     border-radius: 12px;
     box-shadow: var(--shadow-lg);
     padding: 8px;
@@ -676,8 +734,8 @@ a {
     color: var(--accent-amber);
     box-shadow: none;
     border: 1px solid rgba(245, 158, 11, 0.3);
-    padding: 2px 8px;
-    font-size: 10px;
+    padding: 3px 8px;
+    font-size: 11px;
     vertical-align: middle;
 }
 
@@ -686,8 +744,8 @@ a {
     color: var(--accent-red);
     box-shadow: none;
     border: 1px solid rgba(239, 68, 68, 0.3);
-    padding: 2px 8px;
-    font-size: 10px;
+    padding: 3px 8px;
+    font-size: 11px;
 }
 
 /* =================================================================
@@ -1091,10 +1149,20 @@ tr:hover td {
 }
 
 /* Tag Autocomplete */
+.tag-autocomplete {
+    position: relative;
+}
+
 .tag-suggestions {
-    background: var(--bg-secondary);
-    backdrop-filter: blur(10px);
-    border: 1px solid var(--border-color);
+    position: absolute;
+    top: 100%;
+    left: 0;
+    right: 0;
+    z-index: 200;
+    max-height: 220px;
+    overflow-y: auto;
+    background: var(--bg-popup);
+    border: 1px solid var(--bg-popup-border);
     border-radius: 8px;
     box-shadow: var(--shadow-lg);
     margin-top: 4px;
@@ -1674,12 +1742,12 @@ body.diagnostics-page {
 }
 
 .tag-count {
-    font-size: 0.5em;
+    font-size: 11px;
     padding: 2px 6px;
     background: var(--bg-tertiary);
     border-radius: 99px;
     margin-left: 6px;
-    vertical-align: super;
+    vertical-align: middle;
     font-weight: 600;
     color: var(--text-tertiary);
 }
@@ -2109,10 +2177,8 @@ a.nav-btn-primary:hover,
     right: 0;
     top: calc(100% + 8px);
     min-width: 200px;
-    background: var(--bg-secondary);
-    backdrop-filter: blur(12px);
-    -webkit-backdrop-filter: blur(12px);
-    border: 1px solid var(--border-subtle);
+    background: var(--bg-popup);
+    border: 1px solid var(--bg-popup-border);
     border-radius: 12px;
     box-shadow: var(--shadow-lg);
     padding: 8px;
@@ -2153,7 +2219,8 @@ a.nav-btn-primary:hover,
 
 @media (prefers-color-scheme: dark) {
     .dropdown-item:hover {
-        background: rgba(99, 102, 241, 0.15);
+        background: var(--primary-light);
+        color: var(--primary);
     }
 }
 

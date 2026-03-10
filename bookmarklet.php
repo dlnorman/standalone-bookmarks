@@ -487,12 +487,20 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['submit'])) {
                     e.preventDefault();
                     selectedIndex = Math.max(selectedIndex - 1, -1);
                     updateSelectedSuggestion(suggestions);
-                } else if (e.key === 'Enter' || e.key === 'Tab') {
+                } else if (e.key === 'Enter') {
+                    // Always prevent form submission when dropdown is open
+                    e.preventDefault();
+                    const target = selectedIndex >= 0 ? suggestions[selectedIndex] : suggestions[0];
+                    target.dispatchEvent(new MouseEvent('mousedown', { bubbles: true }));
+                } else if (e.key === 'Tab') {
                     if (selectedIndex >= 0) {
                         e.preventDefault();
-                        // Trigger the mousedown event to use the same logic
-                        const event = new MouseEvent('mousedown', { bubbles: true });
-                        suggestions[selectedIndex].dispatchEvent(event);
+                        suggestions[selectedIndex].dispatchEvent(new MouseEvent('mousedown', { bubbles: true }));
+                    } else {
+                        // Close dropdown and let Tab move to next field naturally
+                        suggestionsDiv.innerHTML = '';
+                        suggestionsDiv.classList.remove('active');
+                        selectedIndex = -1;
                     }
                 } else if (e.key === 'Escape') {
                     e.preventDefault();

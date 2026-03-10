@@ -95,17 +95,33 @@ function getTagTypeIcon($type) {
  * @param string $additionalClasses Additional CSS classes
  * @return string HTML for the tag
  */
-function renderTag($tag, $basePath = '', $additionalClasses = 'bookmark-tag') {
+function renderTag($tag, $basePath = '', $additionalClasses = 'bookmark-tag', $activeTags = []) {
     $parsed = parseTagType($tag);
     $typeClass = getTagTypeClass($parsed['type']);
     $icon = getTagTypeIcon($parsed['type']);
 
-    $classes = trim($additionalClasses . ' ' . $typeClass);
+    $lowerTag = strtolower(trim($tag));
+    $lowerActive = array_map(function($t) { return strtolower(trim($t)); }, $activeTags);
+    $isActive = !empty($activeTags) && in_array($lowerTag, $lowerActive);
+    $activeClass = $isActive ? ' active-filter' : '';
+    $classes = trim($additionalClasses . ' ' . $typeClass . $activeClass);
     $displayName = htmlspecialchars($parsed['name']);
-    $fullTag = htmlspecialchars($tag);
 
-    return '<a href="' . $basePath . '/?tag=' . urlencode($tag) . '" class="' . $classes . '">'
-         . $icon . $displayName . '</a>';
+    // Compute href: if activeTags provided, toggle this tag in/out of the set
+    if (!empty($activeTags)) {
+        if (in_array($lowerTag, $lowerActive)) {
+            $newTags = array_values(array_filter($activeTags, function($t) use ($lowerTag) {
+                return strtolower(trim($t)) !== $lowerTag;
+            }));
+            $href = empty($newTags) ? $basePath . '/' : $basePath . '/?tag=' . urlencode(implode(',', $newTags));
+        } else {
+            $href = $basePath . '/?tag=' . urlencode(implode(',', array_merge($activeTags, [$tag])));
+        }
+    } else {
+        $href = $basePath . '/?tag=' . urlencode($tag);
+    }
+
+    return '<a href="' . $href . '" class="' . $classes . '">' . $icon . $displayName . '</a>';
 }
 
 /**
