@@ -359,16 +359,20 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['submit'])) {
 
                 suggestionsDiv.classList.add('active');
 
-                // Use mousedown (fires before blur) so clicking a suggestion doesn't dismiss it
+                // Use mousedown (fires before blur) so clicking a suggestion doesn't dismiss it.
+                // touchend handles iOS where mousedown may not fire reliably.
+                const nextCommaPos = nextComma === -1 ? value.length : cursorPos + nextComma;
                 suggestionsDiv.querySelectorAll('.tag-suggestion').forEach(suggestionEl => {
-                    suggestionEl.addEventListener('mousedown', function (e) {
+                    function selectSuggestion(e) {
                         e.preventDefault();
                         const tag = this.getAttribute('data-tag');
                         isInserting = true;
-                        insertTag(input, tag, lastComma, cursorPos, nextComma === -1 ? value.length : cursorPos + nextComma);
+                        insertTag(input, tag, lastComma, cursorPos, nextCommaPos);
                         closeSuggestions();
                         setTimeout(() => { isInserting = false; }, 50);
-                    });
+                    }
+                    suggestionEl.addEventListener('mousedown', selectSuggestion);
+                    suggestionEl.addEventListener('touchend', selectSuggestion);
                 });
             });
 
@@ -422,10 +426,13 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['submit'])) {
             function insertTag(input, tag, lastCommaPos, cursorPos, nextCommaPos) {
                 const value = input.value;
                 const beforeTag = value.substring(0, lastCommaPos + 1) + (lastCommaPos >= 0 ? ' ' : '');
-                const afterTag = value.substring(nextCommaPos);
+                // Skip past the comma at nextCommaPos (if any) to avoid doubling the separator
+                const afterTag = nextCommaPos < value.length
+                    ? value.substring(nextCommaPos + 1).trimStart()
+                    : '';
 
-                input.value = beforeTag + tag + (afterTag.trim().length > 0 ? ', ' : '') + afterTag.trim();
-                const newCursorPos = beforeTag.length + tag.length + (afterTag.trim().length > 0 ? 2 : 0);
+                input.value = beforeTag + tag + (afterTag.length > 0 ? ', ' : '') + afterTag;
+                const newCursorPos = beforeTag.length + tag.length + (afterTag.length > 0 ? 2 : 0);
                 input.setSelectionRange(newCursorPos, newCursorPos);
                 input.focus();
             }
