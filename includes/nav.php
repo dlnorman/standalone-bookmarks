@@ -46,34 +46,8 @@ $nav_items = [
             'type' => 'divider'
         ],
         [
-            'label' => 'Bookmarklet',
-            'url' => $config['base_path'] . '/bookmarklet-setup.php',
-            'auth_required' => true
-        ],
-        [
             'label' => 'RSS Feed',
             'url' => $config['base_path'] . '/rss.php'
-        ],
-        [
-            'type' => 'divider'
-        ],
-        [
-            'label' => 'Check Bookmarks',
-            'url' => $config['base_path'] . '/check-bookmarks.php',
-            'auth_required' => true
-        ],
-        [
-            'type' => 'divider'
-        ],
-        [
-            'label' => 'Import',
-            'url' => $config['base_path'] . '/import.php',
-            'auth_required' => true
-        ],
-        [
-            'label' => 'Export',
-            'url' => $config['base_path'] . '/export.php',
-            'auth_required' => true
         ]
     ]
 ];
@@ -152,6 +126,7 @@ function render_nav($config, $isLoggedIn, $current_page, $page_title = null)
                                         Management</a>
                                     <a href="<?= $config['base_path'] ?>/tag-network.php" class="dropdown-item" role="menuitem">Tag
                                         Network</a>
+                                    <a href="<?= $config['base_path'] ?>/utilities.php" class="dropdown-item" role="menuitem">Utilities</a>
                                 <?php endif; ?>
                                 <a href="<?= $config['base_path'] ?>/account.php" class="dropdown-item"
                                     role="menuitem">Account</a>
