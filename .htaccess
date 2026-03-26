@@ -44,9 +44,14 @@
     </DirectoryMatch>
 </IfModule>
 
-# Optional: Pretty URLs
-# Optional: Pretty URLs
+# Block aggressive bots and AI crawlers by user-agent (hard block, ignores robots.txt)
 RewriteEngine On
+RewriteCond %{HTTP_USER_AGENT} (GPTBot|ChatGPT-User|anthropic-ai|Claude-Web|ClaudeBot|CCBot|Bytespider|Amazonbot|Diffbot|ImagesiftBot|omgili|AhrefsBot|SemrushBot|DotBot|MJ12bot|DataForSeoBot|PetalBot|BLEXBot|magpie-crawler) [NC]
+RewriteRule ^ - [F,L]
+
+# Block requests with no user-agent (many bots/scripts omit it)
+RewriteCond %{HTTP_USER_AGENT} ^$
+RewriteRule ^ - [F,L]
 
 # Force HTTPS (Uncomment to enable)
 # RewriteCond %{HTTPS} off

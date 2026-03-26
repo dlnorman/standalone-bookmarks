@@ -29,6 +29,8 @@ if (isset($config['timezone'])) {
 try {
     $db = new PDO('sqlite:' . $config['db_path']);
     $db->setAttribute(PDO::ATTR_ERRMODE, PDO::ERRMODE_EXCEPTION);
+    $db->exec("PRAGMA cache_size = -8000"); // 8MB page cache
+    $db->exec("PRAGMA temp_store = MEMORY");
 } catch (PDOException $e) {
     http_response_code(500);
     echo json_encode(['error' => 'Database connection failed']);
@@ -186,19 +188,12 @@ switch ($action) {
         $tag = $_GET['tag'] ?? '';
         $showBroken = isset($_GET['broken']) && $_GET['broken'] === '1';
         $page = max(1, intval($_GET['page'] ?? 1));
-        $limit = intval($_GET['limit'] ?? $config['items_per_page']);
+        $limit = min(intval($_GET['limit'] ?? $config['items_per_page']), 100);
         $offset = ($page - 1) * $limit;
         $isLoggedIn = is_logged_in();
 
-        // Check if broken_url column exists
-        $columns = $db->query("PRAGMA table_info(bookmarks)")->fetchAll(PDO::FETCH_ASSOC);
-        $hasBrokenUrl = false;
-        foreach ($columns as $column) {
-            if ($column['name'] === 'broken_url') {
-                $hasBrokenUrl = true;
-                break;
-            }
-        }
+        // broken_url column is part of the schema (added in db_setup.php)
+        $hasBrokenUrl = true;
 
         // Build query based on filters
         $whereConditions = [];
@@ -233,6 +228,24 @@ switch ($action) {
 
         // Build WHERE clause
         $whereClause = !empty($whereConditions) ? 'WHERE ' . implode(' AND ', $whereConditions) : '';
+
+        // HTTP caching for public unauthenticated list requests
+        if (!$isLoggedIn && !$showBroken) {
+            $lastModRow = $db->query("SELECT MAX(updated_at) as last_mod FROM bookmarks WHERE private = 0")->fetch(PDO::FETCH_ASSOC);
+            $lastMod = $lastModRow['last_mod'] ?? null;
+            if ($lastMod) {
+                $etag = md5($lastMod . $search . $tag . $page . $limit);
+                header('Cache-Control: public, max-age=120, stale-while-revalidate=600');
+                header('Last-Modified: ' . gmdate('D, d M Y H:i:s', strtotime($lastMod)) . ' GMT');
+                header('ETag: "' . $etag . '"');
+                $ifNoneMatch = isset($_SERVER['HTTP_IF_NONE_MATCH']) ? trim($_SERVER['HTTP_IF_NONE_MATCH'], '"') : '';
+                $ifModifiedSince = isset($_SERVER['HTTP_IF_MODIFIED_SINCE']) ? strtotime($_SERVER['HTTP_IF_MODIFIED_SINCE']) : 0;
+                if ($ifNoneMatch === $etag || $ifModifiedSince >= strtotime($lastMod)) {
+                    header('HTTP/1.1 304 Not Modified');
+                    exit;
+                }
+            }
+        }
 
         // Execute query
         $query = "SELECT * FROM bookmarks $whereClause ORDER BY created_at DESC LIMIT ? OFFSET ?";

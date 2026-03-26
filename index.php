@@ -28,6 +28,8 @@ $isLoggedIn = is_logged_in();
 try {
     $db = new PDO('sqlite:' . $config['db_path']);
     $db->setAttribute(PDO::ATTR_ERRMODE, PDO::ERRMODE_EXCEPTION);
+    $db->exec("PRAGMA cache_size = -8000"); // 8MB page cache
+    $db->exec("PRAGMA temp_store = MEMORY");
 } catch (PDOException $e) {
     die('Database connection failed. Run init_db.php first.');
 }
@@ -41,15 +43,8 @@ $page = max(1, intval($_GET['page'] ?? 1));
 $limit = $config['items_per_page'];
 $offset = ($page - 1) * $limit;
 
-// Check if broken_url column exists
-$columns = $db->query("PRAGMA table_info(bookmarks)")->fetchAll(PDO::FETCH_ASSOC);
-$hasBrokenUrl = false;
-foreach ($columns as $column) {
-    if ($column['name'] === 'broken_url') {
-        $hasBrokenUrl = true;
-        break;
-    }
-}
+// broken_url column is part of the schema (added in db_setup.php)
+$hasBrokenUrl = true;
 
 // Fetch bookmarks
 if ($showBroken && $hasBrokenUrl) {
