@@ -213,6 +213,25 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['submit'])) {
     <title>Add Bookmark - <?= htmlspecialchars($config['site_title']) ?></title>
     <?php render_nav_styles(); ?>
     <link rel="stylesheet" href="css/main.css">
+    <style>
+        .tag-alias-hint {
+            font-size: 0.82em;
+            color: var(--text-secondary, #888);
+            margin-top: 0.3em;
+            padding: 0.3em 0.5em;
+            background: var(--bg-popup, #f5f5f5);
+            border-radius: 4px;
+            border-left: 3px solid var(--accent-amber, #f0a500);
+        }
+        .tag-alias-hint a {
+            color: var(--accent-amber, #f0a500);
+            text-decoration: underline;
+            cursor: pointer;
+        }
+        .tag-alias-hint a:hover {
+            opacity: 0.8;
+        }
+    </style>
 </head>
 
 <body>
@@ -254,6 +273,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['submit'])) {
                     <label for="tags">Tags</label>
                     <input type="text" id="tags" name="tags" value="<?= htmlspecialchars($tags) ?>" autocomplete="off">
                     <div class="tag-suggestions" id="tags-suggestions"></div>
+                    <div class="tag-alias-hint" id="tagAliasHint" hidden></div>
                     <div class="help-text">Comma-separated tags</div>
                 </div>
 
@@ -278,6 +298,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['submit'])) {
 
         // Tag autocomplete functionality
         let allTagsCache = null;
+        let allAliasesCache = null;
 
         async function fetchAllTags() {
             if (allTagsCache) {
@@ -287,12 +308,21 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['submit'])) {
             try {
                 const response = await fetch(BASE_PATH + '/api.php?action=get_tags');
                 const data = await response.json();
-                allTagsCache = data.tags || [];
+                allTagsCache = data.tags ?? data;
+                allAliasesCache = data.aliases ?? {};
                 return allTagsCache;
             } catch (err) {
                 console.error('Error fetching tags:', err);
-                return [];
+                allTagsCache = [];
+                allAliasesCache = {};
+                return allTagsCache;
             }
+        }
+
+        async function fetchAliases() {
+            if (allAliasesCache !== null) return allAliasesCache;
+            await fetchAllTags();
+            return allAliasesCache;
         }
 
         function escapeHtml(text) {
@@ -301,9 +331,10 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['submit'])) {
             return div.innerHTML;
         }
 
-        function initTagAutocomplete(inputId, suggestionsId) {
+        function initTagAutocomplete(inputId, suggestionsId, aliasHintId) {
             const input = document.getElementById(inputId);
             const suggestionsDiv = document.getElementById(suggestionsId);
+            const aliasHint = aliasHintId ? document.getElementById(aliasHintId) : null;
 
             if (!input || !suggestionsDiv) return;
 
@@ -314,6 +345,34 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['submit'])) {
                 suggestionsDiv.innerHTML = '';
                 suggestionsDiv.classList.remove('active');
                 selectedIndex = -1;
+            }
+
+            function dismissAliasHint() {
+                if (aliasHint) {
+                    aliasHint.hidden = true;
+                    aliasHint.innerHTML = '';
+                }
+            }
+
+            async function checkAliasHint(committedTag) {
+                if (!aliasHint) return;
+                const aliases = await fetchAliases();
+                const key = committedTag.toLowerCase();
+                if (!aliases[key]) { dismissAliasHint(); return; }
+                const canonical = aliases[key];
+                aliasHint.innerHTML =
+                    `\u201c<em>${escapeHtml(committedTag)}</em>\u201d is an alias for \u201c<strong>${escapeHtml(canonical)}</strong>\u201d \u2014 ` +
+                    `<a href="#" class="tag-alias-accept">use canonical instead</a>`;
+                aliasHint.hidden = false;
+                aliasHint.querySelector('.tag-alias-accept').addEventListener('click', function(e) {
+                    e.preventDefault();
+                    // Replace the alias with the canonical form in the input value
+                    const parts = input.value.split(',').map(t => t.trim());
+                    const replaced = parts.map(t => t.toLowerCase() === key ? canonical : t);
+                    input.value = replaced.join(', ');
+                    dismissAliasHint();
+                    input.focus();
+                });
             }
 
             input.addEventListener('input', async function () {
@@ -329,6 +388,17 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['submit'])) {
                 const nextComma = afterCursor.indexOf(',');
 
                 const currentTag = beforeCursor.substring(lastComma + 1).trim();
+
+                // If the user just typed a comma, check the token they just finished
+                if (currentTag.length === 0 && lastComma >= 0) {
+                    const finishedToken = value.substring(0, lastComma).split(',').pop().trim();
+                    if (finishedToken) checkAliasHint(finishedToken);
+                    closeSuggestions();
+                    return;
+                }
+
+                // Dismiss hint while user is actively typing a new token
+                dismissAliasHint();
 
                 if (currentTag.length === 0) {
                     closeSuggestions();
@@ -435,12 +505,14 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['submit'])) {
                 const newCursorPos = beforeTag.length + tag.length + (afterTag.length > 0 ? 2 : 0);
                 input.setSelectionRange(newCursorPos, newCursorPos);
                 input.focus();
+                // Check if the inserted tag is a known alias
+                checkAliasHint(tag);
             }
         }
 
         // Initialize autocomplete when the page loads
         document.addEventListener('DOMContentLoaded', function () {
-            initTagAutocomplete('tags', 'tags-suggestions');
+            initTagAutocomplete('tags', 'tags-suggestions', 'tagAliasHint');
         });
     </script>
 </body>

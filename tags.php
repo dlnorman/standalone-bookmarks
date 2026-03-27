@@ -60,6 +60,31 @@ if ($lastMod) {
 // Fetch bookmarks to extract tags (exclude private if not logged in)
 $allTags = getAllTagsWithCounts($db, $isLoggedIn);
 
+// Load alias mappings for tag cloud grouping
+try {
+    $aliasRows = $db->query("SELECT alias, canonical FROM tag_aliases")->fetchAll(PDO::FETCH_ASSOC);
+} catch (Exception $e) {
+    $aliasRows = [];
+}
+$aliasToCanonical = [];   // alias => canonical
+$canonicalToAliases = []; // canonical => [alias, ...]
+foreach ($aliasRows as $row) {
+    $aliasToCanonical[$row['alias']] = $row['canonical'];
+    $canonicalToAliases[$row['canonical']][] = $row['alias'];
+}
+
+// Merge alias counts into canonicals; remove alias entries from display list
+foreach ($canonicalToAliases as $canonical => $aliases) {
+    foreach ($aliases as $alias) {
+        if (isset($allTags[$alias]) && isset($allTags[$canonical])) {
+            $allTags[$canonical]['count'] += $allTags[$alias]['count'];
+            unset($allTags[$alias]);
+        }
+    }
+}
+// Re-sort by count descending after merging
+uasort($allTags, fn($a, $b) => $b['count'] - $a['count']);
+
 // Get filter parameter
 $filterType = $_GET['type'] ?? 'all';
 
@@ -183,6 +208,13 @@ foreach ($allTags as $tagLower => $data) {
                                 <?= $icon ?><?= htmlspecialchars($tagData['name']) ?>
                                 <span class="tag-count"><?= $count ?></span>
                             </a>
+                            <?php
+                            $tagAliases = $canonicalToAliases[strtolower($tagData['full'])] ?? [];
+                            if (!empty($tagAliases)):
+                                $aliasTitle = htmlspecialchars(implode(', ', $tagAliases));
+                            ?>
+                                <span class="tag-alias-badge" title="also: <?= $aliasTitle ?>">+<?= count($tagAliases) ?></span>
+                            <?php endif; ?>
                         </div>
                     <?php endforeach; ?>
                 </div>

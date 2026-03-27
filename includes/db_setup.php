@@ -101,6 +101,16 @@ class DatabaseSetup
                 UNIQUE(tag_from, tag_to)
             )
         ");
+
+        // Tag Aliases Table (alias -> canonical mappings, non-destructive synonym handling)
+        $this->db->exec("
+            CREATE TABLE IF NOT EXISTS tag_aliases (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                alias TEXT NOT NULL UNIQUE,
+                canonical TEXT NOT NULL,
+                created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+            )
+        ");
     }
 
     private function updateSchema()
@@ -133,7 +143,9 @@ class DatabaseSetup
             'idx_jobs_status_created' => 'CREATE INDEX IF NOT EXISTS idx_jobs_status_created ON jobs(status, created_at)',
             'idx_jobs_bookmark_id' => 'CREATE INDEX IF NOT EXISTS idx_jobs_bookmark_id ON jobs(bookmark_id)',
             'idx_tag_connections_from' => 'CREATE INDEX IF NOT EXISTS idx_tag_connections_from ON tag_connections(tag_from)',
-            'idx_tag_connections_to' => 'CREATE INDEX IF NOT EXISTS idx_tag_connections_to ON tag_connections(tag_to)'
+            'idx_tag_connections_to' => 'CREATE INDEX IF NOT EXISTS idx_tag_connections_to ON tag_connections(tag_to)',
+            'idx_tag_aliases_alias' => 'CREATE INDEX IF NOT EXISTS idx_tag_aliases_alias ON tag_aliases(alias)',
+            'idx_tag_aliases_canonical' => 'CREATE INDEX IF NOT EXISTS idx_tag_aliases_canonical ON tag_aliases(canonical)'
         ];
 
         foreach ($indexes as $sql) {

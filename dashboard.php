@@ -72,15 +72,14 @@ $isLoggedIn = is_logged_in();
         <div class="content-grid">
             <div class="panel" id="tagNetworkPanel">
                 <div class="panel-title">
-                    <span>Tag Co-occurrence Network</span>
+                    <span>Tag Co-occurrence Matrix</span>
                     <div class="panel-controls">
-                        <button class="download-btn" onclick="downloadTagNetwork()" title="Download as PNG">⬇</button>
                         <button class="fullscreen-btn" onclick="toggleFullscreen('tagNetworkPanel')"
                             title="Toggle fullscreen">⛶</button>
                     </div>
                 </div>
                 <div class="panel-content">
-                    <div class="loading">Loading tag network</div>
+                    <div class="loading">Loading tag matrix</div>
                     <svg class="network-container" id="tagNetwork"></svg>
                 </div>
             </div>
@@ -143,7 +142,7 @@ $isLoggedIn = is_logged_in();
         // Update all visualizations
         function updateDashboard(data) {
             updateStats(data);
-            renderTagNetwork(data);
+            renderTagCooccurrenceMatrix(data);
             renderVelocityChart(data);
             renderTagEvolution(data);
         }
@@ -191,243 +190,182 @@ $isLoggedIn = is_logged_in();
             document.getElementById('stat-active-sub').textContent = `${activePercent}% of ${totalDays} days`;
         }
 
-        // Render tag co-occurrence network
-        function renderTagNetwork(data) {
+        // Render tag co-occurrence matrix heatmap
+        function renderTagCooccurrenceMatrix(data) {
             const container = document.getElementById('tagNetwork');
             const parent = container.parentElement;
             parent.querySelector('.loading').style.display = 'none';
             container.style.display = 'block';
 
+            d3.select(container).selectAll('*').remove();
+
+            const isFullscreen = parent.closest('.panel').classList.contains('fullscreen');
+            const MAX_TAGS = isFullscreen ? 20 : 15;
+
+            const topTags = data.tag_stats.slice(0, MAX_TAGS);
+            if (topTags.length < 2) {
+                d3.select(container).append('text')
+                    .attr('x', 20).attr('y', 40)
+                    .attr('fill', getCSSVariable('--text-secondary'))
+                    .text('Not enough tag data');
+                return;
+            }
+
+            const tagNames = topTags.map(t => t.tag);
+            const tagAliases = topTags.map(t => t.aliases || []);
+            const tagNamesLower = tagNames.map(t => t.toLowerCase());
+
+            // Build symmetric co-occurrence lookup
+            const coMap = new Map();
+            data.tag_cooccurrence.forEach(c => {
+                coMap.set(`${c.source}|${c.target}`, c.count);
+                coMap.set(`${c.target}|${c.source}`, c.count);
+            });
+
+            // Build flat matrix (including diagonal as null)
+            const matrix = [];
+            tagNamesLower.forEach((row, ri) => {
+                tagNamesLower.forEach((col, ci) => {
+                    matrix.push({
+                        row: ri, col: ci,
+                        rowTag: tagNames[ri], colTag: tagNames[ci],
+                        rowAliases: tagAliases[ri], colAliases: tagAliases[ci],
+                        count: ri === ci ? null : (coMap.get(`${row}|${col}`) || 0)
+                    });
+                });
+            });
+
+            const maxCount = d3.max(matrix, d => d.count) || 1;
+
             const width = parent.clientWidth;
             const height = parent.clientHeight;
 
-            // Clear existing
-            d3.select(container).selectAll('*').remove();
+            const leftPad = 85;
+            const topPad = 85;
+            const rightPad = 10;
+            const bottomPad = 28;
+
+            const n = tagNames.length;
+            const cellSize = Math.floor(Math.min(
+                (width - leftPad - rightPad) / n,
+                (height - topPad - bottomPad) / n
+            ));
+
+            const matrixW = cellSize * n;
+            const matrixH = cellSize * n;
 
             const svg = d3.select(container)
                 .attr('width', width)
                 .attr('height', height);
 
-            // Detect if we're in fullscreen mode
-            const isFullscreen = parent.closest('.panel').classList.contains('fullscreen');
-            const area = width * height;
+            const g = svg.append('g').attr('transform', `translate(${leftPad}, ${topPad})`);
 
-            // Prepare nodes and links
-            const tagStats = data.tag_stats; // Use all tags from API
-            const nodes = tagStats.map(t => ({
-                id: t.tag.toLowerCase(),
-                label: t.tag,
-                count: t.count,
-                first_seen: t.first_seen
-            }));
-
-            const links = data.tag_cooccurrence
-                .map(c => ({
-                    source: c.source,
-                    target: c.target,
-                    value: c.count
-                }));
-
-            // Color scale based on count
-            const countExtent = d3.extent(nodes, d => d.count);
-            const colorScale = d3.scaleSequential(d3.interpolateBlues)
-                .domain(countExtent);
-
-            // Adaptive size scale based on space available
-            const nodeSizeRange = isFullscreen ? [8, 30] : [6, 20];
-            const sizeScale = d3.scaleSqrt()
-                .domain(countExtent)
-                .range(nodeSizeRange);
-
-            // Adaptive margins and sizing based on mode
-            const margin = isFullscreen ? 60 : 30;
-            const textPadding = isFullscreen ? 15 : 10;
-            const fontSize = isFullscreen ? '11px' : '9px';
-
-            // Draw links
-            const link = svg.append('g')
-                .selectAll('line')
-                .data(links)
-                .join('line')
-                .attr('class', 'network-link')
-                .attr('stroke-width', d => Math.sqrt(d.value));
-
-            // Draw nodes
-            const node = svg.append('g')
-                .selectAll('g')
-                .data(nodes)
-                .join('g')
-                .attr('class', 'network-node')
-                .call(d3.drag()
-                    .on('start', dragstarted)
-                    .on('drag', dragged)
-                    .on('end', dragended));
-
-            node.append('circle')
-                .attr('r', d => sizeScale(d.count))
-                .attr('fill', d => colorScale(d.count))
-                .attr('stroke', getCSSVariable('--bg-secondary'))
-                .attr('stroke-width', 2);
-
-            node.append('text')
-                .text(d => d.label)
-                .attr('x', 0)
-                .attr('y', d => sizeScale(d.count) + (isFullscreen ? 15 : 12))
-                .attr('text-anchor', 'middle')
-                .attr('fill', getCSSVariable('--text-primary'))
-                .attr('font-size', fontSize);
-
-            // Tooltip and click handling
+            const colorScale = d3.scaleSequential(d3.interpolateBlues).domain([0, maxCount]);
             const tooltip = document.getElementById('tooltip');
-            node.on('mouseenter', function (event, d) {
-                tooltip.innerHTML = `
-                    <strong>${d.label}</strong><br>
-                    Count: ${d.count} bookmarks<br>
-                    First used: ${new Date(d.first_seen).toLocaleDateString()}<br>
-                    First used: ${new Date(d.first_seen).toLocaleDateString()}<br>
-                    <em style="font-size: 10px; color: ${getCSSVariable('--text-secondary')};">Click to view bookmarks</em>
-                `;
-                tooltip.classList.add('visible');
 
-                // Highlight connected links
-                link.classed('highlighted', l =>
-                    l.source.id === d.id || l.target.id === d.id
-                );
-            })
+            // Cells
+            g.selectAll('.co-cell')
+                .data(matrix)
+                .join('rect')
+                .attr('class', 'co-cell')
+                .attr('x', d => d.col * cellSize)
+                .attr('y', d => d.row * cellSize)
+                .attr('width', cellSize - 1)
+                .attr('height', cellSize - 1)
+                .attr('rx', 2)
+                .attr('fill', d => {
+                    if (d.count === null) return getCSSVariable('--border-color');
+                    if (d.count === 0) return getCSSVariable('--bg-secondary');
+                    return colorScale(d.count);
+                })
+                .style('cursor', d => d.count > 0 ? 'pointer' : 'default')
+                .on('mouseenter', function (event, d) {
+                    if (!d.count) return;
+                    d3.select(this).attr('opacity', 0.75);
+                    const aliases = d.rowAliases && d.rowAliases.length ? ` (also: ${d.rowAliases.join(', ')})` : '';
+                    tooltip.innerHTML = `<strong>${d.rowTag}${aliases} + ${d.colTag}</strong><br>${d.count} shared bookmark${d.count !== 1 ? 's' : ''}`;
+                    tooltip.classList.add('visible');
+                })
                 .on('mousemove', function (event) {
                     tooltip.style.left = (event.pageX + 10) + 'px';
                     tooltip.style.top = (event.pageY + 10) + 'px';
                 })
                 .on('mouseleave', function () {
+                    d3.select(this).attr('opacity', 1);
                     tooltip.classList.remove('visible');
-                    link.classed('highlighted', false);
                 })
                 .on('click', function (event, d) {
-                    // Navigate to tag page
-                    window.location.href = `${BASE_PATH}/?tag=${encodeURIComponent(d.label)}`;
+                    if (d.count > 0) window.location.href = `${BASE_PATH}/?tag=${encodeURIComponent(d.rowTag)}`;
                 });
 
-            // Measure actual text widths for collision detection
-            const tempSvg = svg.append('g').attr('class', 'temp-measure');
-            nodes.forEach(d => {
-                const text = tempSvg.append('text')
-                    .text(d.label)
-                    .attr('font-size', fontSize)
-                    .attr('font-weight', '600');
-                d.textWidth = text.node().getComputedTextLength();
-                text.remove();
-            });
-            tempSvg.remove();
+            // Count labels inside cells (only if there's room)
+            if (cellSize >= 18) {
+                g.selectAll('.co-count')
+                    .data(matrix.filter(d => d.count > 0))
+                    .join('text')
+                    .attr('class', 'co-count')
+                    .attr('x', d => d.col * cellSize + cellSize / 2)
+                    .attr('y', d => d.row * cellSize + cellSize / 2 + 4)
+                    .attr('text-anchor', 'middle')
+                    .attr('pointer-events', 'none')
+                    .attr('font-size', Math.min(10, cellSize * 0.38) + 'px')
+                    .attr('fill', d => d.count > maxCount * 0.6 ? 'rgba(255,255,255,0.9)' : getCSSVariable('--text-secondary'))
+                    .text(d => d.count);
+            }
 
-            // Calculate collision radius for each node (node radius + text space)
-            nodes.forEach(d => {
-                d.collisionRadius = Math.max(
-                    sizeScale(d.count) + textPadding,
-                    (d.textWidth / 2) + textPadding
-                );
-            });
+            const labelFontSize = Math.max(9, Math.min(12, cellSize * 0.55)) + 'px';
 
-            // Adaptive force parameters based on mode
-            const linkDistance = isFullscreen ? 40 : 25;
-            const chargeStrength = isFullscreen ? 0.8 : 0.5;
-            const centerStrength = isFullscreen ? 0.05 : 0.15;
-            const collisionStrength = isFullscreen ? 1 : 0.9;
-
-            // Create force simulation with very strong collision prevention
-            const simulation = d3.forceSimulation(nodes)
-                .force('link', d3.forceLink(links)
-                    .id(d => d.id)
-                    .distance(d => {
-                        // Adaptive distance based on node sizes and mode
-                        const source = nodes.find(n => n.id === d.source.id || n.id === d.source);
-                        const target = nodes.find(n => n.id === d.target.id || n.id === d.target);
-                        const baseDistance = (source?.collisionRadius || 30) + (target?.collisionRadius || 30);
-                        return baseDistance + linkDistance;
-                    })
-                    .strength(isFullscreen ? 0.5 : 0.4))
-                .force('charge', d3.forceManyBody()
-                    .strength(d => -Math.pow(d.collisionRadius, 2) * chargeStrength)
-                    .distanceMax(isFullscreen ? 400 : 250))
-                .force('collision', d3.forceCollide()
-                    .radius(d => d.collisionRadius)
-                    .strength(collisionStrength)
-                    .iterations(5))
-                .force('center', d3.forceCenter(width / 2, height / 2).strength(centerStrength))
-                .force('boundary', () => {
-                    // Soft boundary force to prevent edge-hugging in widget mode
-                    if (!isFullscreen) {
-                        nodes.forEach(d => {
-                            const edgeBuffer = 40;
-                            const xPush = 0.5; // Strength of push
-                            const yPush = 0.5;
-
-                            // Push away from left edge
-                            if (d.x < edgeBuffer) d.vx += xPush;
-                            // Push away from right edge
-                            if (d.x > width - edgeBuffer) d.vx -= xPush;
-                            // Push away from top edge
-                            if (d.y < edgeBuffer) d.vy += yPush;
-                            // Push away from bottom edge
-                            if (d.y > height - edgeBuffer) d.vy -= yPush;
-                        });
+            // Row labels (left)
+            g.selectAll('.co-row-label')
+                .data(topTags)
+                .join('text')
+                .attr('class', 'co-row-label')
+                .attr('x', -6)
+                .attr('y', (d, i) => i * cellSize + cellSize / 2 + 4)
+                .attr('text-anchor', 'end')
+                .attr('font-size', labelFontSize)
+                .attr('fill', getCSSVariable('--text-primary'))
+                .style('cursor', 'pointer')
+                .text(d => d.tag)
+                .each(function(d) {
+                    if (d.aliases && d.aliases.length) {
+                        d3.select(this).append('title').text(`also: ${d.aliases.join(', ')}`);
                     }
                 })
-                .velocityDecay(0.6)
-                .alphaDecay(0.015)
-                .on('tick', ticked)
-                .on('end', () => {
-                    console.log('Simulation complete');
-                });
+                .on('click', (event, d) => window.location.href = `${BASE_PATH}/?tag=${encodeURIComponent(d.tag)}`);
 
-            // Track last update time to prevent constant re-rendering
-            let lastUpdate = Date.now();
-            let tickCount = 0;
+            // Column labels (top, rotated -45°)
+            g.selectAll('.co-col-label')
+                .data(topTags)
+                .join('text')
+                .attr('class', 'co-col-label')
+                .attr('transform', (d, i) => `translate(${i * cellSize + cellSize / 2}, -6) rotate(-45)`)
+                .attr('text-anchor', 'start')
+                .attr('font-size', labelFontSize)
+                .attr('fill', getCSSVariable('--text-primary'))
+                .style('cursor', 'pointer')
+                .text(d => d.tag)
+                .each(function(d) {
+                    if (d.aliases && d.aliases.length) {
+                        d3.select(this).append('title').text(`also: ${d.aliases.join(', ')}`);
+                    }
+                })
+                .on('click', (event, d) => window.location.href = `${BASE_PATH}/?tag=${encodeURIComponent(d.tag)}`);
 
-            function ticked() {
-                tickCount++;
+            // Color legend
+            const legendW = Math.min(130, matrixW * 0.55);
+            const legendX = matrixW - legendW;
+            const legendY = matrixH + 12;
 
-                // Only update DOM every 2 ticks for performance
-                if (tickCount % 2 !== 0 && simulation.alpha() > 0.1) return;
+            const defs = svg.append('defs');
+            const grad = defs.append('linearGradient').attr('id', 'co-legend-grad');
+            grad.append('stop').attr('offset', '0%').attr('stop-color', d3.interpolateBlues(0.05));
+            grad.append('stop').attr('offset', '100%').attr('stop-color', d3.interpolateBlues(1));
 
-                // Gentle boundary constraints - keep nodes mostly in view
-                nodes.forEach(d => {
-                    const buffer = 20; // Small buffer to keep nodes visible
-                    d.x = Math.max(buffer, Math.min(width - buffer, d.x));
-                    d.y = Math.max(buffer, Math.min(height - buffer, d.y));
-                });
-
-                link
-                    .attr('x1', d => d.source.x)
-                    .attr('y1', d => d.source.y)
-                    .attr('x2', d => d.target.x)
-                    .attr('y2', d => d.target.y);
-
-                node.attr('transform', d => `translate(${d.x},${d.y})`);
-
-                // Force stop after settling completely
-                if (simulation.alpha() < 0.005) {
-                    simulation.stop();
-                    console.log('Force stopped at alpha:', simulation.alpha());
-                }
-            }
-
-            // Drag functions
-            function dragstarted(event, d) {
-                if (!event.active) simulation.alphaTarget(0.3).restart();
-                d.fx = d.x;
-                d.fy = d.y;
-            }
-
-            function dragged(event, d) {
-                d.fx = event.x;
-                d.fy = event.y;
-            }
-
-            function dragended(event, d) {
-                if (!event.active) simulation.alphaTarget(0);
-                d.fx = null;
-                d.fy = null;
-            }
+            const lgnd = g.append('g').attr('transform', `translate(${legendX}, ${legendY})`);
+            lgnd.append('rect').attr('width', legendW).attr('height', 6).attr('rx', 2).attr('fill', 'url(#co-legend-grad)');
+            lgnd.append('text').attr('y', -3).attr('font-size', '9px').attr('fill', getCSSVariable('--text-secondary')).text('fewer');
+            lgnd.append('text').attr('x', legendW).attr('y', -3).attr('text-anchor', 'end').attr('font-size', '9px').attr('fill', getCSSVariable('--text-secondary')).text('more co-occurrences');
         }
 
         // Render velocity chart
@@ -720,7 +658,7 @@ $isLoggedIn = is_logged_in();
             setTimeout(() => {
                 if (dashboardData) {
                     if (panelId === 'tagNetworkPanel') {
-                        renderTagNetwork(dashboardData);
+                        renderTagCooccurrenceMatrix(dashboardData);
                     } else if (panelId === 'velocityPanel') {
                         renderVelocityChart(dashboardData);
                     } else if (panelId === 'tagEvolutionPanel') {
@@ -728,65 +666,6 @@ $isLoggedIn = is_logged_in();
                     }
                 }
             }, 100);
-        }
-
-        // Download Tag Network as Image
-        function downloadTagNetwork() {
-            const svg = document.getElementById('tagNetwork');
-            if (!svg) return;
-
-            // Get SVG data
-            const serializer = new XMLSerializer();
-            let source = serializer.serializeToString(svg);
-
-            // Add namespaces if missing
-            if (!source.match(/^<svg[^>]+xmlns="http\:\/\/www\.w3\.org\/2000\/svg"/)) {
-                source = source.replace(/^<svg/, '<svg xmlns="http://www.w3.org/2000/svg"');
-            }
-            if (!source.match(/^<svg[^>]+xmlns:xlink="http\:\/\/www\.w3\.org\/1999\/xlink"/)) {
-                source = source.replace(/^<svg/, '<svg xmlns:xlink="http://www.w3.org/1999/xlink"');
-            }
-
-            // Add font styles and line styles to ensure everything renders correctly
-            const style = `
-                <style>
-                    text { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif; fill: ${getCSSVariable('--text-primary')}; }
-                    .network-node text { font-weight: 600; text-shadow: 0 1px 4px ${getCSSVariable('--bg-secondary')}, 0 0 10px ${getCSSVariable('--bg-secondary')}; }
-                    .network-link { stroke: ${getCSSVariable('--border-color')}; stroke-opacity: 0.4; fill: none; }
-                </style>
-            `;
-            source = source.replace('</svg>', style + '</svg>');
-
-            // Create canvas
-            const canvas = document.createElement('canvas');
-            const rect = svg.getBoundingClientRect();
-            canvas.width = rect.width;
-            canvas.height = rect.height;
-            const ctx = canvas.getContext('2d');
-
-            // Fill background
-            ctx.fillStyle = getCSSVariable('--bg-secondary');
-            ctx.fillRect(0, 0, canvas.width, canvas.height);
-
-            // Create image from SVG
-            const img = new Image();
-            const svgBlob = new Blob([source], { type: 'image/svg+xml;charset=utf-8' });
-            const url = URL.createObjectURL(svgBlob);
-
-            img.onload = function () {
-                ctx.drawImage(img, 0, 0);
-                URL.revokeObjectURL(url);
-
-                // Trigger download
-                const a = document.createElement('a');
-                a.download = 'tag-network-' + new Date().toISOString().slice(0, 10) + '.png';
-                a.href = canvas.toDataURL('image/png');
-                document.body.appendChild(a);
-                a.click();
-                document.body.removeChild(a);
-            };
-
-            img.src = url;
         }
 
         // Allow ESC key to exit fullscreen
@@ -799,7 +678,7 @@ $isLoggedIn = is_logged_in();
                     setTimeout(() => {
                         if (dashboardData) {
                             if (fullscreenPanel.id === 'tagNetworkPanel') {
-                                renderTagNetwork(dashboardData);
+                                renderTagCooccurrenceMatrix(dashboardData);
                             } else if (fullscreenPanel.id === 'velocityPanel') {
                                 renderVelocityChart(dashboardData);
                             } else if (fullscreenPanel.id === 'tagEvolutionPanel') {

@@ -210,10 +210,20 @@ switch ($action) {
         }
 
         // Tag filter (comma-separated = AND logic)
+        // Each tag is expanded to its alias group; results matching any form count as a hit.
         $activeTags = !empty($tag) ? array_values(array_filter(array_map('trim', explode(',', $tag)))) : [];
         foreach ($activeTags as $activeTag) {
-            $whereConditions[] = "',' || REPLACE(LOWER(tags), ', ', ',') || ',' LIKE ? ESCAPE '\\'";
-            $params[] = '%,' . escapeLikePattern(strtolower($activeTag)) . ',%';
+            $group = expandTagGroup($db, strtolower($activeTag));
+            $likeClauses = [];
+            $likeParams = [];
+            foreach ($group as $t) {
+                $likeClauses[] = "',' || REPLACE(LOWER(tags), ', ', ',') || ',' LIKE ? ESCAPE '\\'";
+                $likeParams[] = '%,' . escapeLikePattern($t) . ',%';
+            }
+            $whereConditions[] = '(' . implode(' OR ', $likeClauses) . ')';
+            foreach ($likeParams as $lp) {
+                $params[] = $lp;
+            }
         }
 
         // Search filter
@@ -403,7 +413,18 @@ switch ($action) {
             return strcasecmp($a, $b);
         });
 
-        echo json_encode(['tags' => $allTags]);
+        // Include alias map so clients can warn when a known alias is typed
+        $aliasMap = [];
+        try {
+            $aliasRows = $db->query("SELECT alias, canonical FROM tag_aliases")->fetchAll(PDO::FETCH_ASSOC);
+            foreach ($aliasRows as $row) {
+                $aliasMap[$row['alias']] = $row['canonical'];
+            }
+        } catch (Exception $e) {
+            // tag_aliases table may not exist yet; return empty map
+        }
+
+        echo json_encode(['tags' => $allTags, 'aliases' => $aliasMap]);
         break;
 
     case 'queue_url_checks':
@@ -643,7 +664,8 @@ switch ($action) {
             $tagStats[] = [
                 'tag' => $data['display'],
                 'count' => $data['count'],
-                'first_seen' => $tagFirstSeen[$normalizedTag]
+                'first_seen' => $tagFirstSeen[$normalizedTag],
+                'aliases' => []
             ];
         }
 
@@ -660,6 +682,52 @@ switch ($action) {
                     'count' => $count
                 ];
             }
+        }
+
+        // Merge alias tags into their canonicals for matrix display
+        $aliasRows = $db->query("SELECT alias, canonical FROM tag_aliases")->fetchAll(PDO::FETCH_ASSOC);
+        $aliasMap = array_column($aliasRows, 'canonical', 'alias'); // alias => canonical
+
+        if (!empty($aliasMap)) {
+            // Build index by normalized tag name
+            $tagStatsByName = [];
+            foreach ($tagStats as &$stat) {
+                $tagStatsByName[strtolower($stat['tag'])] = &$stat;
+            }
+            unset($stat);
+
+            foreach ($aliasMap as $alias => $canonical) {
+                if (!isset($tagStatsByName[$alias])) continue;
+                $aliasEntry = $tagStatsByName[$alias];
+
+                if (isset($tagStatsByName[$canonical])) {
+                    // Add alias count to canonical
+                    $tagStatsByName[$canonical]['count'] += $aliasEntry['count'];
+                    // Track aliases for display
+                    $tagStatsByName[$canonical]['aliases'][] = $alias;
+                }
+                // Remove alias from tag stats
+                $tagStats = array_filter($tagStats, fn($s) => strtolower($s['tag']) !== $alias);
+            }
+            $tagStats = array_values($tagStats);
+
+            // Re-sort by count descending
+            usort($tagStats, fn($a, $b) => $b['count'] - $a['count']);
+
+            // Remap co-occurrence edges: replace alias source/target with canonical
+            $mergedCooccurrence = [];
+            foreach ($cooccurrenceData as $edge) {
+                $src = $aliasMap[$edge['source']] ?? $edge['source'];
+                $tgt = $aliasMap[$edge['target']] ?? $edge['target'];
+                if ($src === $tgt) continue; // drop self-loops
+                $key = $src < $tgt ? "$src|$tgt" : "$tgt|$src";
+                if (isset($mergedCooccurrence[$key])) {
+                    $mergedCooccurrence[$key]['count'] += $edge['count'];
+                } else {
+                    $mergedCooccurrence[$key] = ['source' => $src, 'target' => $tgt, 'count' => $edge['count']];
+                }
+            }
+            $cooccurrenceData = array_values($mergedCooccurrence);
         }
 
         // Domain statistics

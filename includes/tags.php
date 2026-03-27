@@ -501,3 +501,238 @@ function removeTagConnection($db, $tagA, $tagB) {
     $stmt->execute([$a, $b, $b, $a]);
     return $stmt->rowCount() > 0;
 }
+
+// ---------------------------------------------------------------------------
+// Tag Alias functions
+// ---------------------------------------------------------------------------
+
+/**
+ * Define an alias -> canonical mapping.
+ *
+ * Rules enforced:
+ * - alias and canonical must differ
+ * - alias cannot already be used as a canonical (no chaining)
+ * - canonical cannot itself be an alias of something else (no chaining)
+ *
+ * @param PDO $db
+ * @param string $alias   The variant form (e.g. "books")
+ * @param string $canonical The preferred form (e.g. "book")
+ * @return bool True if inserted, false if the alias already exists
+ */
+function defineAlias($db, $alias, $canonical) {
+    $alias     = strtolower(trim($alias));
+    $canonical = strtolower(trim($canonical));
+
+    if (empty($alias) || empty($canonical) || $alias === $canonical) return false;
+
+    // Prevent chaining: alias must not already be a canonical that other aliases point to
+    $isCanonical = $db->prepare("SELECT COUNT(*) FROM tag_aliases WHERE canonical = ?");
+    $isCanonical->execute([$alias]);
+    if ($isCanonical->fetchColumn() > 0) return false;
+
+    // Prevent chaining: canonical must not itself be an alias
+    $isAlias = $db->prepare("SELECT COUNT(*) FROM tag_aliases WHERE alias = ?");
+    $isAlias->execute([$canonical]);
+    if ($isAlias->fetchColumn() > 0) return false;
+
+    $stmt = $db->prepare("INSERT OR IGNORE INTO tag_aliases (alias, canonical) VALUES (?, ?)");
+    $stmt->execute([$alias, $canonical]);
+    return $stmt->rowCount() > 0;
+}
+
+/**
+ * Remove an alias mapping by alias name.
+ *
+ * @param PDO $db
+ * @param string $alias
+ * @return bool True if removed, false if not found
+ */
+function removeAlias($db, $alias) {
+    $alias = strtolower(trim($alias));
+    $stmt  = $db->prepare("DELETE FROM tag_aliases WHERE alias = ?");
+    $stmt->execute([$alias]);
+    return $stmt->rowCount() > 0;
+}
+
+/**
+ * Return the canonical form of a tag.
+ * If the tag is an alias, returns its canonical. Otherwise returns the tag unchanged.
+ *
+ * @param PDO $db
+ * @param string $tag
+ * @return string
+ */
+function getCanonical($db, $tag) {
+    $tag  = strtolower(trim($tag));
+    $stmt = $db->prepare("SELECT canonical FROM tag_aliases WHERE alias = ?");
+    $stmt->execute([$tag]);
+    $row = $stmt->fetch(PDO::FETCH_ASSOC);
+    return $row ? $row['canonical'] : $tag;
+}
+
+/**
+ * Return all aliases that point to the given canonical tag.
+ *
+ * @param PDO $db
+ * @param string $canonical
+ * @return string[]
+ */
+function getAliasesFor($db, $canonical) {
+    $canonical = strtolower(trim($canonical));
+    $stmt      = $db->prepare("SELECT alias FROM tag_aliases WHERE canonical = ? ORDER BY alias");
+    $stmt->execute([$canonical]);
+    return $stmt->fetchAll(PDO::FETCH_COLUMN);
+}
+
+/**
+ * Return the full group of tags to match when filtering by $tag:
+ * resolves to canonical first, then returns canonical + all its aliases.
+ *
+ * Example: expandTagGroup($db, 'books') -> ['book', 'books']  (if books->book)
+ *          expandTagGroup($db, 'book')  -> ['book', 'books']  (same result)
+ *          expandTagGroup($db, 'python')-> ['python']         (no aliases)
+ *
+ * @param PDO $db
+ * @param string $tag
+ * @return string[]
+ */
+function expandTagGroup($db, $tag) {
+    $canonical = getCanonical($db, $tag);
+    $aliases   = getAliasesFor($db, $canonical);
+    return array_unique(array_merge([$canonical], $aliases));
+}
+
+/**
+ * Suggest likely alias candidates using three heuristics:
+ *   1. Plural/singular suffix stripping
+ *   2. Levenshtein distance <= 2
+ *   3. High co-occurrence ratio (both tags present in >60% of bookmarks that have either)
+ *
+ * Skips pairs where either tag is already defined as an alias.
+ * Returns suggestions sorted by heuristic priority (plural first, then levenshtein, then co-occurrence).
+ *
+ * @param PDO $db
+ * @return array  Each entry: ['alias'=>string, 'canonical'=>string, 'reason'=>string,
+ *                             'alias_count'=>int, 'canonical_count'=>int]
+ */
+function getSuggestedAliases($db) {
+    // Load all tags with counts (include private so admin sees the full picture)
+    $allTags = getAllTagsWithCounts($db, true);
+    if (count($allTags) < 2) return [];
+
+    // Load existing aliases so we can skip already-defined ones
+    $existingAliases = $db->query("SELECT alias FROM tag_aliases")->fetchAll(PDO::FETCH_COLUMN);
+    $existingSet     = array_flip($existingAliases);
+
+    $tagList   = array_keys($allTags); // lowercase tag names
+    $tagCounts = array_map(fn($t) => $t['count'], $allTags);
+
+    $suggestions = [];
+    $seen        = []; // deduplicate pairs
+
+    // Helper: record a suggestion (smaller-count tag as alias of larger-count canonical)
+    $addSuggestion = function($a, $b, $reason) use (&$suggestions, &$seen, $tagCounts, $existingSet) {
+        $pairKey = $a < $b ? "$a|$b" : "$b|$a";
+        if (isset($seen[$pairKey])) return;
+        if (isset($existingSet[$a]) || isset($existingSet[$b])) return;
+        $seen[$pairKey] = true;
+
+        // Canonical = whichever has more bookmarks; alias = the other
+        $countA = $tagCounts[$a] ?? 0;
+        $countB = $tagCounts[$b] ?? 0;
+        [$alias, $canonical] = $countA <= $countB ? [$a, $b] : [$b, $a];
+
+        $suggestions[] = [
+            'alias'           => $alias,
+            'canonical'       => $canonical,
+            'reason'          => $reason,
+            'alias_count'     => $tagCounts[$alias] ?? 0,
+            'canonical_count' => $tagCounts[$canonical] ?? 0,
+        ];
+    };
+
+    // --- Heuristic 1: plural/singular ---
+    $pluralSuggestions = [];
+    foreach ($tagList as $tag) {
+        $candidates = [];
+        // Strip trailing 's'
+        if (strlen($tag) > 2 && substr($tag, -1) === 's') {
+            $candidates[] = substr($tag, 0, -1);
+        }
+        // Strip trailing 'es'
+        if (strlen($tag) > 3 && substr($tag, -2) === 'es') {
+            $candidates[] = substr($tag, 0, -2);
+        }
+        // Strip trailing 'ies', replace with 'y'
+        if (strlen($tag) > 4 && substr($tag, -3) === 'ies') {
+            $candidates[] = substr($tag, 0, -3) . 'y';
+        }
+        foreach ($candidates as $candidate) {
+            if (isset($allTags[$candidate])) {
+                $pluralSuggestions[] = [$tag, $candidate, 'plural/singular'];
+            }
+        }
+    }
+    foreach ($pluralSuggestions as [$a, $b, $reason]) {
+        $addSuggestion($a, $b, $reason);
+    }
+
+    // --- Heuristic 2: Levenshtein distance <= 2 (only tags with count >= 2) ---
+    $qualifiedTags = array_filter($tagList, fn($t) => ($tagCounts[$t] ?? 0) >= 2);
+    $qualifiedTags = array_values($qualifiedTags);
+    $n = count($qualifiedTags);
+    for ($i = 0; $i < $n; $i++) {
+        for ($j = $i + 1; $j < $n; $j++) {
+            $a = $qualifiedTags[$i];
+            $b = $qualifiedTags[$j];
+            // Skip if already found via plurals
+            $pairKey = $a < $b ? "$a|$b" : "$b|$a";
+            if (isset($seen[$pairKey])) continue;
+            if (levenshtein($a, $b) <= 2) {
+                $addSuggestion($a, $b, 'similar spelling');
+            }
+        }
+    }
+
+    // --- Heuristic 3: high co-occurrence ratio ---
+    // For each pair in tag_cooccurrence, check: count(both) / count(either) > 0.6
+    // We compute this from the bookmarks table directly (limit to top 50 tags for performance)
+    $topTags = array_slice($tagList, 0, 50);
+    // Build a lookup: for each top tag, which bookmarks contain it?
+    $bookmarkTags = $db->query(
+        "SELECT id, tags FROM bookmarks WHERE tags IS NOT NULL AND tags != ''"
+    )->fetchAll(PDO::FETCH_ASSOC);
+
+    // Index: tag -> set of bookmark IDs
+    $tagBookmarks = [];
+    foreach ($bookmarkTags as $row) {
+        $tags = array_map('strtolower', array_map('trim', explode(',', $row['tags'])));
+        foreach ($tags as $t) {
+            if (in_array($t, $topTags)) {
+                $tagBookmarks[$t][] = $row['id'];
+            }
+        }
+    }
+
+    $topN = count($topTags);
+    for ($i = 0; $i < $topN; $i++) {
+        for ($j = $i + 1; $j < $topN; $j++) {
+            $a = $topTags[$i];
+            $b = $topTags[$j];
+            $pairKey = $a < $b ? "$a|$b" : "$b|$a";
+            if (isset($seen[$pairKey])) continue;
+            if (!isset($tagBookmarks[$a]) || !isset($tagBookmarks[$b])) continue;
+
+            $setA  = array_flip($tagBookmarks[$a]);
+            $setB  = array_flip($tagBookmarks[$b]);
+            $both  = count(array_intersect_key($setA, $setB));
+            $either = count(array_unique(array_merge($tagBookmarks[$a], $tagBookmarks[$b])));
+
+            if ($either > 0 && ($both / $either) > 0.6) {
+                $addSuggestion($a, $b, 'high co-occurrence');
+            }
+        }
+    }
+
+    return $suggestions;
+}

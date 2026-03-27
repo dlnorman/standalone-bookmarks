@@ -45,6 +45,16 @@ $db->exec("CREATE TABLE IF NOT EXISTS tag_connections (
 $db->exec("CREATE INDEX IF NOT EXISTS idx_tag_connections_from ON tag_connections(tag_from)");
 $db->exec("CREATE INDEX IF NOT EXISTS idx_tag_connections_to ON tag_connections(tag_to)");
 
+// Ensure tag_aliases table exists (for existing installs that haven't re-run db_setup)
+$db->exec("CREATE TABLE IF NOT EXISTS tag_aliases (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    alias TEXT NOT NULL UNIQUE,
+    canonical TEXT NOT NULL,
+    created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+)");
+$db->exec("CREATE INDEX IF NOT EXISTS idx_tag_aliases_alias ON tag_aliases(alias)");
+$db->exec("CREATE INDEX IF NOT EXISTS idx_tag_aliases_canonical ON tag_aliases(canonical)");
+
 // Handle form submissions
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     csrf_require_valid_token();
@@ -129,6 +139,31 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                         exit;
                     }
                     break;
+
+                case 'define_alias':
+                    $alias = trim($_POST['alias_tag'] ?? '');
+                    $canonical = trim($_POST['canonical_tag'] ?? '');
+                    if (empty($alias) || empty($canonical)) {
+                        $error_msg = 'Both alias and canonical tag names are required.';
+                    } else {
+                        $result = defineAlias($db, $alias, $canonical);
+                        if ($result === false) {
+                            $error_msg = 'Could not define alias — it may already exist, or would create a chain (aliases cannot point to other aliases).';
+                        } else {
+                            $success_msg = "Alias defined: \"{$alias}\" → \"{$canonical}\".";
+                        }
+                    }
+                    break;
+
+                case 'remove_alias':
+                    $alias = trim($_POST['alias_tag'] ?? '');
+                    if (empty($alias)) {
+                        $error_msg = 'Alias name is required.';
+                    } else {
+                        $removed = removeAlias($db, $alias);
+                        $success_msg = $removed ? "Alias \"{$alias}\" removed." : "Alias not found.";
+                    }
+                    break;
             }
         } catch (Exception $e) {
             $error_msg = 'Operation failed: ' . htmlspecialchars($e->getMessage()) . '. No changes were made.';
@@ -138,7 +173,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
 // Determine active tab
 $activeTab = $_GET['tab'] ?? 'tags';
-if (!in_array($activeTab, ['tags', 'connections'])) $activeTab = 'tags';
+if (!in_array($activeTab, ['tags', 'connections', 'aliases'])) $activeTab = 'tags';
 
 // Pick up redirect messages
 if (!empty($_GET['msg']) && empty($success_msg)) {
@@ -867,6 +902,7 @@ foreach ($tagCooccurrence as $key => $count) {
                     <span style="font-size:11px; color:var(--text-tertiary);">(<?= count($allConnections) ?>)</span>
                 <?php endif; ?>
             </a>
+            <a href="?tab=aliases" class="page-tab <?= $activeTab === 'aliases' ? 'active' : '' ?>">Aliases</a>
         </nav>
 
         <?php if ($activeTab === 'connections'): ?>
@@ -977,6 +1013,151 @@ foreach ($tagCooccurrence as $key => $count) {
                         <?php endforeach; ?>
                         <?php else: ?>
                         <div class="connections-empty">No suggestions available.<br>Suggestions are based on tags that frequently appear together.</div>
+                        <?php endif; ?>
+                    </div>
+                </div>
+            </div>
+
+        </div>
+
+        <?php elseif ($activeTab === 'aliases'): ?>
+
+        <!-- Aliases Tab -->
+        <?php
+        $currentAliases = $db->query("SELECT alias, canonical, created_at FROM tag_aliases ORDER BY canonical, alias")->fetchAll(PDO::FETCH_ASSOC);
+
+        try {
+            $aliasSuggestions = getSuggestedAliases($db);
+            $aliasSuggestions = array_slice($aliasSuggestions, 0, 20);
+            $aliasSuggestionsError = false;
+        } catch (Exception $e) {
+            $aliasSuggestions = [];
+            $aliasSuggestionsError = 'Could not compute suggestions: ' . htmlspecialchars($e->getMessage());
+        }
+        ?>
+
+        <div class="connections-layout">
+
+            <!-- Left: Current aliases + Define new alias form -->
+            <div>
+                <!-- Current Aliases -->
+                <div class="connections-panel">
+                    <div class="connections-panel-header">Current Aliases (<?= count($currentAliases) ?>)</div>
+                    <div class="connections-panel-body">
+                        <?php if (!empty($currentAliases)): ?>
+                        <div class="tag-table-container" style="border:none; border-radius:0; overflow:visible;">
+                        <table class="tag-table" style="font-size:13px;">
+                            <thead>
+                                <tr>
+                                    <th>Alias</th>
+                                    <th>Canonical</th>
+                                    <th>Added</th>
+                                    <th>Action</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                <?php foreach ($currentAliases as $row): ?>
+                                <tr>
+                                    <td><span class="connection-tag"><?= htmlspecialchars($row['alias']) ?></span></td>
+                                    <td><span class="connection-tag" style="background:rgba(52,199,89,0.1); color:var(--accent-green);"><?= htmlspecialchars($row['canonical']) ?></span></td>
+                                    <td style="color:var(--text-tertiary); font-size:12px;"><?= htmlspecialchars(substr($row['created_at'], 0, 10)) ?></td>
+                                    <td>
+                                        <form method="post" style="display:inline;">
+                                            <?php csrf_field(); ?>
+                                            <input type="hidden" name="action" value="remove_alias">
+                                            <input type="hidden" name="alias_tag" value="<?= htmlspecialchars($row['alias']) ?>">
+                                            <button type="submit" class="btn-remove-connection" onclick="return confirm('Remove alias: <?= htmlspecialchars(addslashes($row['alias'])) ?> → <?= htmlspecialchars(addslashes($row['canonical'])) ?>?')">Remove</button>
+                                        </form>
+                                    </td>
+                                </tr>
+                                <?php endforeach; ?>
+                            </tbody>
+                        </table>
+                        </div>
+                        <?php else: ?>
+                        <div class="connections-empty">No aliases defined yet.<br>Add one using the form below.</div>
+                        <?php endif; ?>
+                    </div>
+                </div>
+
+                <!-- Define New Alias Form -->
+                <div class="connections-panel" style="margin-top: 16px;">
+                    <div class="connections-panel-header">Define New Alias</div>
+                    <div class="connections-panel-body">
+                        <form method="post" class="add-connection-form">
+                            <?php csrf_field(); ?>
+                            <input type="hidden" name="action" value="define_alias">
+                            <div class="form-row">
+                                <div class="form-group">
+                                    <label for="aliasTagInput">Alias (variant form)</label>
+                                    <input type="text" name="alias_tag" id="aliasTagInput" list="aliasTagList" placeholder="e.g. books" required autocomplete="off">
+                                    <datalist id="aliasTagList">
+                                        <?php foreach ($allTagsList as $t): ?>
+                                        <option value="<?= htmlspecialchars($t) ?>">
+                                        <?php endforeach; ?>
+                                    </datalist>
+                                </div>
+                                <div style="display:flex; align-items:center; padding-bottom:2px; color:var(--text-tertiary);">→</div>
+                                <div class="form-group">
+                                    <label for="canonicalTagInput">Canonical (preferred form)</label>
+                                    <input type="text" name="canonical_tag" id="canonicalTagInput" list="canonicalTagList" placeholder="e.g. book" required autocomplete="off">
+                                    <datalist id="canonicalTagList">
+                                        <?php foreach ($allTagsList as $t): ?>
+                                        <option value="<?= htmlspecialchars($t) ?>">
+                                        <?php endforeach; ?>
+                                    </datalist>
+                                </div>
+                            </div>
+                            <button type="submit" class="btn" style="background:var(--primary); color:white;">Define Alias</button>
+                        </form>
+                        <p style="margin-top:12px; font-size:12px; color:var(--text-tertiary);">To permanently merge tags instead of aliasing them, use the Merge tool on the Tags tab.</p>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Right: Suggestions -->
+            <div>
+                <div class="connections-panel">
+                    <div class="connections-panel-header">Alias Suggestions</div>
+                    <div class="connections-panel-body">
+                        <?php if ($aliasSuggestionsError): ?>
+                        <div class="connections-empty"><?= $aliasSuggestionsError ?></div>
+                        <?php elseif (!empty($aliasSuggestions)): ?>
+                        <table class="tag-table" style="font-size:13px;">
+                            <thead>
+                                <tr>
+                                    <th>Alias candidate</th>
+                                    <th></th>
+                                    <th>Canonical candidate</th>
+                                    <th>Reason</th>
+                                    <th>Counts</th>
+                                    <th>Actions</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                <?php foreach ($aliasSuggestions as $sug): ?>
+                                <tr>
+                                    <td><span class="connection-tag"><?= htmlspecialchars($sug['alias']) ?></span></td>
+                                    <td style="color:var(--text-tertiary);">→</td>
+                                    <td><span class="connection-tag" style="background:rgba(52,199,89,0.1); color:var(--accent-green);"><?= htmlspecialchars($sug['canonical']) ?></span></td>
+                                    <td style="color:var(--text-tertiary); font-size:12px;"><?= htmlspecialchars($sug['reason']) ?></td>
+                                    <td style="color:var(--text-tertiary); font-size:12px;"><?= (int)$sug['alias_count'] ?> / <?= (int)$sug['canonical_count'] ?></td>
+                                    <td style="white-space:nowrap;">
+                                        <form method="post" style="display:inline;">
+                                            <?php csrf_field(); ?>
+                                            <input type="hidden" name="action" value="define_alias">
+                                            <input type="hidden" name="alias_tag" value="<?= htmlspecialchars($sug['alias']) ?>">
+                                            <input type="hidden" name="canonical_tag" value="<?= htmlspecialchars($sug['canonical']) ?>">
+                                            <button type="submit" class="btn-connect">Accept</button>
+                                        </form>
+                                        <a href="#" style="font-size:12px; color:var(--text-tertiary); margin-left:6px;" onclick="this.closest('tr').remove(); return false;">Ignore</a>
+                                    </td>
+                                </tr>
+                                <?php endforeach; ?>
+                            </tbody>
+                        </table>
+                        <?php else: ?>
+                        <div class="connections-empty">No suggestions found — your tags look well-organised.</div>
                         <?php endif; ?>
                     </div>
                 </div>

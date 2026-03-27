@@ -72,11 +72,17 @@ if ($showBroken && $hasBrokenUrl) {
     }
 } elseif (!empty($activeTags)) {
     // Filter by tags (comma-separated = AND logic, case-insensitive)
+    // Each tag is expanded to its alias group; results matching any form count as a hit.
     $tagConditions = [];
     $tagParams = [];
     foreach ($activeTags as $activeTag) {
-        $tagConditions[] = "',' || REPLACE(LOWER(tags), ', ', ',') || ',' LIKE ? ESCAPE '\\'";
-        $tagParams[] = '%,' . escapeLikePattern(strtolower($activeTag)) . ',%';
+        $group = expandTagGroup($db, strtolower($activeTag));
+        $likeClauses = [];
+        foreach ($group as $t) {
+            $likeClauses[] = "',' || REPLACE(LOWER(tags), ', ', ',') || ',' LIKE ? ESCAPE '\\'";
+            $tagParams[] = '%,' . escapeLikePattern($t) . ',%';
+        }
+        $tagConditions[] = '(' . implode(' OR ', $likeClauses) . ')';
     }
     $tagWhere = implode(' AND ', $tagConditions);
 
@@ -186,6 +192,25 @@ if (!empty($activeTags)) {
     <title><?= htmlspecialchars($config['site_title']) ?></title>
     <?php render_nav_styles(); ?>
     <link rel="stylesheet" href="css/main.css">
+    <style>
+        .tag-alias-hint {
+            font-size: 0.82em;
+            color: var(--text-secondary, #888);
+            margin-top: 0.3em;
+            padding: 0.3em 0.5em;
+            background: var(--bg-popup, #f5f5f5);
+            border-radius: 4px;
+            border-left: 3px solid var(--accent-amber, #f0a500);
+        }
+        .tag-alias-hint a {
+            color: var(--accent-amber, #f0a500);
+            text-decoration: underline;
+            cursor: pointer;
+        }
+        .tag-alias-hint a:hover {
+            opacity: 0.8;
+        }
+    </style>
 </head>
 
 <body>
@@ -474,6 +499,7 @@ if (!empty($activeTags)) {
                             <label for="edit-tags-${id}">Tags (comma-separated)</label>
                             <input type="text" id="edit-tags-${id}" value="${escapeHtml(bookmark.tags || '')}" autocomplete="off">
                             <div class="tag-suggestions" id="edit-tags-suggestions-${id}"></div>
+                            <div class="tag-alias-hint" id="edit-tags-alias-hint-${id}" hidden></div>
                         </div>
                         <div class="form-group">
                             <div class="checkbox-group">
@@ -491,7 +517,7 @@ if (!empty($activeTags)) {
                     bookmarkElement.insertAdjacentHTML('beforeend', formHtml);
 
                     // Initialize tag autocomplete after the form is inserted
-                    initTagAutocomplete(`edit-tags-${id}`, `edit-tags-suggestions-${id}`);
+                    initTagAutocomplete(`edit-tags-${id}`, `edit-tags-suggestions-${id}`, `edit-tags-alias-hint-${id}`);
                 })
                 .catch(err => alert('Error loading bookmark: ' + err));
         }
@@ -653,6 +679,7 @@ if (!empty($activeTags)) {
 
         // Tag autocomplete functionality
         let allTagsCache = null;
+        let allAliasesCache = null;
 
         async function fetchAllTags() {
             if (allTagsCache) {
@@ -662,17 +689,27 @@ if (!empty($activeTags)) {
             try {
                 const response = await fetch(BASE_PATH + '/api.php?action=get_tags');
                 const data = await response.json();
-                allTagsCache = data.tags || [];
+                allTagsCache = data.tags ?? data;
+                allAliasesCache = data.aliases ?? {};
                 return allTagsCache;
             } catch (err) {
                 console.error('Error fetching tags:', err);
-                return [];
+                allTagsCache = [];
+                allAliasesCache = {};
+                return allTagsCache;
             }
         }
 
-        function initTagAutocomplete(inputId, suggestionsId) {
+        async function fetchAliases() {
+            if (allAliasesCache !== null) return allAliasesCache;
+            await fetchAllTags();
+            return allAliasesCache;
+        }
+
+        function initTagAutocomplete(inputId, suggestionsId, aliasHintId) {
             const input = document.getElementById(inputId);
             const suggestionsDiv = document.getElementById(suggestionsId);
+            const aliasHint = aliasHintId ? document.getElementById(aliasHintId) : null;
 
             if (!input || !suggestionsDiv) return;
 
@@ -683,6 +720,40 @@ if (!empty($activeTags)) {
                 suggestionsDiv.innerHTML = '';
                 suggestionsDiv.classList.remove('active');
                 selectedIndex = -1;
+            }
+
+            function dismissAliasHint() {
+                if (aliasHint) {
+                    aliasHint.hidden = true;
+                    aliasHint.innerHTML = '';
+                }
+            }
+
+            function escapeHtml(text) {
+                const div = document.createElement('div');
+                div.textContent = text;
+                return div.innerHTML;
+            }
+
+            async function checkAliasHint(committedTag) {
+                if (!aliasHint) return;
+                const aliases = await fetchAliases();
+                const key = committedTag.toLowerCase();
+                if (!aliases[key]) { dismissAliasHint(); return; }
+                const canonical = aliases[key];
+                aliasHint.innerHTML =
+                    `\u201c<em>${escapeHtml(committedTag)}</em>\u201d is an alias for \u201c<strong>${escapeHtml(canonical)}</strong>\u201d \u2014 ` +
+                    `<a href="#" class="tag-alias-accept">use canonical instead</a>`;
+                aliasHint.hidden = false;
+                aliasHint.querySelector('.tag-alias-accept').addEventListener('click', function(e) {
+                    e.preventDefault();
+                    // Replace the alias token with the canonical form
+                    const parts = input.value.split(',').map(t => t.trim());
+                    const replaced = parts.map(t => t.toLowerCase() === key ? canonical : t);
+                    input.value = replaced.join(', ');
+                    dismissAliasHint();
+                    input.focus();
+                });
             }
 
             input.addEventListener('input', async function () {
@@ -698,6 +769,17 @@ if (!empty($activeTags)) {
                 const nextComma = afterCursor.indexOf(',');
 
                 const currentTag = beforeCursor.substring(lastComma + 1).trim();
+
+                // If the user just typed a comma, check the token they just finished
+                if (currentTag.length === 0 && lastComma >= 0) {
+                    const finishedToken = value.substring(0, lastComma).split(',').pop().trim();
+                    if (finishedToken) checkAliasHint(finishedToken);
+                    closeSuggestions();
+                    return;
+                }
+
+                // Dismiss hint while user is actively typing a new token
+                dismissAliasHint();
 
                 if (currentTag.length === 0) {
                     closeSuggestions();
@@ -801,6 +883,8 @@ if (!empty($activeTags)) {
                 const newCursorPos = beforeTag.length + tag.length + (afterTag.length > 0 ? 2 : 0);
                 input.setSelectionRange(newCursorPos, newCursorPos);
                 input.focus();
+                // Check if the inserted tag is a known alias
+                checkAliasHint(tag);
             }
         }
 

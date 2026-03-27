@@ -1752,6 +1752,15 @@ body.diagnostics-page {
     color: var(--text-tertiary);
 }
 
+.tag-alias-badge {
+    font-size: 0.7em;
+    color: var(--text-secondary);
+    margin-left: 2px;
+    opacity: 0.7;
+    cursor: default;
+    vertical-align: middle;
+}
+
 /* Font sizes are set inline via logarithmic calculation in PHP */
 /* These classes control opacity, weight, and color based on relative frequency */
 .tag-size-1 {
