@@ -22,8 +22,9 @@ A powerful, self-hosted bookmark manager built for speed, privacy, and simplicit
     *   **Screenshots**: Visual gallery view of your saved pages.
 *   **Organization**:
     *   **Full-Text Search**: Instantly find anything across titles, URLs, descriptions, and tags.
-    *   **Tagging**: Flexible tagging system with tag prefixes (`person:`, `via:`) and a co-occurrence network graph.
-    *   **Tag Management**: Admin tools to rename, merge, and bulk-edit tags.
+    *   **Tagging**: Flexible tagging system with tag prefixes (`person:`, `via:`), a co-occurrence matrix, and an interactive network graph.
+    *   **Tag Aliases**: Define synonym/plural mappings (e.g. `books → book`) without rewriting bookmark data. Searches automatically expand to cover all aliases; the tag cloud groups them under their canonical form.
+    *   **Tag Management**: Admin tools to rename, merge, delete, and alias tags — with an auto-suggestion engine that detects likely duplicates.
     *   **Collections**: Public and private visibility settings.
 *   **Management**:
     *   **Multi-User**: Role-based access (Admin/User). Admins can manage users and system settings.
@@ -128,7 +129,7 @@ Standalone Bookmarks provides a simple API for your own scripts or static site g
 *   `gallery.php` - Grid view with screenshots.
 *   `dashboard.php` - Analytics and visualizations.
 *   `tags.php` - Tag cloud with logarithmic sizing.
-*   `tag-admin.php` - Tag management (rename, merge, delete).
+*   `tag-admin.php` - Tag management (rename, merge, delete, aliases).
 *   `tag-network.php` - Interactive tag relationship graph (Canvas-based for performance).
 *   `api.php` - REST API endpoints.
 *   `process_jobs.php` - Worker script for background tasks.
