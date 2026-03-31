@@ -14,6 +14,7 @@ require_once __DIR__ . '/includes/markdown.php';
 require_once __DIR__ . '/includes/csrf.php';
 require_once __DIR__ . '/includes/nav.php';
 require_once __DIR__ . '/includes/tags.php';
+require_once __DIR__ . '/includes/security.php';
 
 // Set timezone
 if (isset($config['timezone'])) {
@@ -32,6 +33,11 @@ try {
     $db->exec("PRAGMA temp_store = MEMORY");
 } catch (PDOException $e) {
     die('Database connection failed. Run init_db.php first.');
+}
+
+// Rate-limit anonymous visitors before doing any real work
+if (!$isLoggedIn) {
+    enforce_page_rate_limit($db);
 }
 
 // Get parameters

@@ -232,6 +232,123 @@ function get_lockout_time($identifier)
 }
 
 /**
+ * Enforce per-IP rate limiting for anonymous page requests.
+ * Sends HTTP 429 and exits if the caller has exceeded the threshold.
+ * Logged-in users are never rate-limited — call this only when !$isLoggedIn.
+ *
+ * Thresholds:
+ *   - 20 requests per minute
+ *   - 150 requests per hour
+ *
+ * @param PDO $db Active database connection
+ * @return void
+ */
+function enforce_page_rate_limit(PDO $db): void
+{
+    $ip = $_SERVER['REMOTE_ADDR'] ?? '0.0.0.0';
+    $now = time();
+
+    // Fixed-window buckets
+    $minWindow  = (int)($now / 60)   * 60;
+    $hourWindow = (int)($now / 3600) * 3600;
+
+    $limitPerMinute = 20;
+    $limitPerHour   = 150;
+
+    // Upsert both counters atomically
+    $upsert = $db->prepare("
+        INSERT INTO rate_limits (ip, window_type, window_start, hits)
+        VALUES (:ip, :type, :window, 1)
+        ON CONFLICT(ip, window_type, window_start) DO UPDATE SET hits = hits + 1
+    ");
+
+    $upsert->execute([':ip' => $ip, ':type' => 'min',  ':window' => $minWindow]);
+    $upsert->execute([':ip' => $ip, ':type' => 'hour', ':window' => $hourWindow]);
+
+    // Read current counts
+    $fetch = $db->prepare("
+        SELECT hits FROM rate_limits
+        WHERE ip = :ip AND window_type = :type AND window_start = :window
+    ");
+
+    $fetch->execute([':ip' => $ip, ':type' => 'min', ':window' => $minWindow]);
+    $minHits = (int)($fetch->fetchColumn() ?: 0);
+
+    $fetch->execute([':ip' => $ip, ':type' => 'hour', ':window' => $hourWindow]);
+    $hourHits = (int)($fetch->fetchColumn() ?: 0);
+
+    // Prune stale rows ~2% of requests (keep table from growing indefinitely)
+    if (mt_rand(1, 50) === 1) {
+        $cutoff = $now - 7200;
+        $db->prepare("DELETE FROM rate_limits WHERE window_start < :cutoff")
+           ->execute([':cutoff' => $cutoff]);
+    }
+
+    if ($minHits <= $limitPerMinute && $hourHits <= $limitPerHour) {
+        return; // Under limit — carry on
+    }
+
+    $retryAfter = ($minHits > $limitPerMinute)
+        ? (60   - ($now % 60))
+        : (3600 - ($now % 3600));
+
+    http_response_code(429);
+    header('Retry-After: ' . $retryAfter);
+    header('Content-Type: text/html; charset=utf-8');
+
+    echo '<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>429 — Too Many Requests</title>
+  <style>
+    body { font-family: monospace; max-width: 680px; margin: 4rem auto; padding: 0 1.5rem;
+           color: #222; line-height: 1.7; background: #fafafa; }
+    h1   { color: #c0392b; font-size: 1.4rem; margin-bottom: 0.25rem; }
+    h2   { font-size: 1rem; font-weight: normal; color: #555; margin-top: 0; }
+    .box { background: #fff8e1; border-left: 4px solid #e6a817;
+           padding: 1rem 1.25rem; margin: 1.75rem 0; border-radius: 0 4px 4px 0; }
+    .box strong { display: block; margin-bottom: 0.5rem; }
+    ul   { margin: 0.25rem 0 0 0; padding-left: 1.4rem; }
+    li   { margin: 0.35rem 0; }
+    code { background: #f0f0f0; padding: 0.1em 0.35em; border-radius: 3px; font-size: 0.92em; }
+    .retry { color: #666; font-size: 0.9em; margin-top: 2rem; }
+    .human { color: #888; font-size: 0.85em; }
+  </style>
+</head>
+<body>
+  <h1>HTTP 429 — Too Many Requests</h1>
+  <h2>Your software has been temporarily blocked for sending too many requests.</h2>
+
+  <div class="box">
+    <strong>To the developer responsible for this bot:</strong>
+    <ul>
+      <li>This is a <em>personal bookmarks page</em>. The data here has no commercial value
+          whatsoever. Whatever you are trying to accomplish, it is not worth this.</li>
+      <li>A <code>robots.txt</code> file specifying <code>Crawl-delay: 10</code> has been
+          served alongside every single response. Your software ignored it entirely.</li>
+      <li>Responsible crawlers implement exponential backoff, respect
+          <code>Retry-After</code> headers, and do not hammer small personal sites into
+          the ground. Yours does none of these things.</li>
+      <li>This is not a skill issue. This is a values issue. Please reconsider your
+          approach to other people\'s infrastructure.</li>
+    </ul>
+  </div>
+
+  <p class="retry">
+    Retry after <strong>' . $retryAfter . ' seconds</strong>. The counter resets automatically.
+  </p>
+  <p class="human">
+    If you are a human who somehow triggered this, please wait a moment and reload.
+  </p>
+</body>
+</html>';
+
+    exit;
+}
+
+/**
  * Fetch URL contents safely with SSRF protection
  *
  * @param string $url The URL to fetch

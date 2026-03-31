@@ -111,6 +111,17 @@ class DatabaseSetup
                 created_at DATETIME DEFAULT CURRENT_TIMESTAMP
             )
         ");
+
+        // Rate Limits Table (per-IP request tracking for anonymous visitors)
+        $this->db->exec("
+            CREATE TABLE IF NOT EXISTS rate_limits (
+                ip TEXT NOT NULL,
+                window_type TEXT NOT NULL,
+                window_start INTEGER NOT NULL,
+                hits INTEGER NOT NULL DEFAULT 1,
+                PRIMARY KEY (ip, window_type, window_start)
+            )
+        ");
     }
 
     private function updateSchema()
