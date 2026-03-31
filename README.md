@@ -32,7 +32,7 @@ A powerful, self-hosted bookmark manager built for speed, privacy, and simplicit
     *   **Import/Export**: seamless migration from Pinboard, Delicious, or browser exports (Netscape HTML format).
 *   **Performance**:
     *   **Caching**: HTTP ETag/Cache-Control caching on all public API endpoints and database indexing for high performance.
-    *   **Bot Protection**: `robots.txt` and `.htaccess` hard-block known AI crawlers and scrapers.
+    *   **Bot Protection**: `robots.txt` and `.htaccess` hard-block known AI crawlers and scrapers. Per-IP rate limiting (20 req/min, 150 req/hour) on the index page throttles bots that spoof legitimate user-agent strings.
     *   **Background Jobs**: Heavy tasks (archiving, screenshots) run in the background to keep the UI snappy.
 
 ---
