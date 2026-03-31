@@ -126,6 +126,17 @@ class DatabaseSetup
 
     private function updateSchema()
     {
+        // rate_limits table (added 2026-03-31 — CREATE IF NOT EXISTS handles existing DBs)
+        $this->db->exec("
+            CREATE TABLE IF NOT EXISTS rate_limits (
+                ip TEXT NOT NULL,
+                window_type TEXT NOT NULL,
+                window_start INTEGER NOT NULL,
+                hits INTEGER NOT NULL DEFAULT 1,
+                PRIMARY KEY (ip, window_type, window_start)
+            )
+        ");
+
         // Check users.role
         $columns = $this->db->query("PRAGMA table_info(users)")->fetchAll(PDO::FETCH_ASSOC);
         $hasRole = false;

@@ -248,6 +248,21 @@ function enforce_page_rate_limit(PDO $db): void
     $ip = $_SERVER['REMOTE_ADDR'] ?? '0.0.0.0';
     $now = time();
 
+    // Ensure the table exists (handles databases created before this feature was added)
+    try {
+        $db->exec("
+            CREATE TABLE IF NOT EXISTS rate_limits (
+                ip TEXT NOT NULL,
+                window_type TEXT NOT NULL,
+                window_start INTEGER NOT NULL,
+                hits INTEGER NOT NULL DEFAULT 1,
+                PRIMARY KEY (ip, window_type, window_start)
+            )
+        ");
+    } catch (PDOException $e) {
+        return; // Can't create table — skip rate limiting rather than crash
+    }
+
     // Fixed-window buckets
     $minWindow  = (int)($now / 60)   * 60;
     $hourWindow = (int)($now / 3600) * 3600;
@@ -255,33 +270,37 @@ function enforce_page_rate_limit(PDO $db): void
     $limitPerMinute = 20;
     $limitPerHour   = 150;
 
-    // Upsert both counters atomically
-    $upsert = $db->prepare("
-        INSERT INTO rate_limits (ip, window_type, window_start, hits)
-        VALUES (:ip, :type, :window, 1)
-        ON CONFLICT(ip, window_type, window_start) DO UPDATE SET hits = hits + 1
-    ");
+    try {
+        // Upsert both counters atomically
+        $upsert = $db->prepare("
+            INSERT INTO rate_limits (ip, window_type, window_start, hits)
+            VALUES (:ip, :type, :window, 1)
+            ON CONFLICT(ip, window_type, window_start) DO UPDATE SET hits = hits + 1
+        ");
 
-    $upsert->execute([':ip' => $ip, ':type' => 'min',  ':window' => $minWindow]);
-    $upsert->execute([':ip' => $ip, ':type' => 'hour', ':window' => $hourWindow]);
+        $upsert->execute([':ip' => $ip, ':type' => 'min',  ':window' => $minWindow]);
+        $upsert->execute([':ip' => $ip, ':type' => 'hour', ':window' => $hourWindow]);
 
-    // Read current counts
-    $fetch = $db->prepare("
-        SELECT hits FROM rate_limits
-        WHERE ip = :ip AND window_type = :type AND window_start = :window
-    ");
+        // Read current counts
+        $fetch = $db->prepare("
+            SELECT hits FROM rate_limits
+            WHERE ip = :ip AND window_type = :type AND window_start = :window
+        ");
 
-    $fetch->execute([':ip' => $ip, ':type' => 'min', ':window' => $minWindow]);
-    $minHits = (int)($fetch->fetchColumn() ?: 0);
+        $fetch->execute([':ip' => $ip, ':type' => 'min', ':window' => $minWindow]);
+        $minHits = (int)($fetch->fetchColumn() ?: 0);
 
-    $fetch->execute([':ip' => $ip, ':type' => 'hour', ':window' => $hourWindow]);
-    $hourHits = (int)($fetch->fetchColumn() ?: 0);
+        $fetch->execute([':ip' => $ip, ':type' => 'hour', ':window' => $hourWindow]);
+        $hourHits = (int)($fetch->fetchColumn() ?: 0);
 
-    // Prune stale rows ~2% of requests (keep table from growing indefinitely)
-    if (mt_rand(1, 50) === 1) {
-        $cutoff = $now - 7200;
-        $db->prepare("DELETE FROM rate_limits WHERE window_start < :cutoff")
-           ->execute([':cutoff' => $cutoff]);
+        // Prune stale rows ~2% of requests (keep table from growing indefinitely)
+        if (mt_rand(1, 50) === 1) {
+            $cutoff = $now - 7200;
+            $db->prepare("DELETE FROM rate_limits WHERE window_start < :cutoff")
+               ->execute([':cutoff' => $cutoff]);
+        }
+    } catch (PDOException $e) {
+        return; // DB error — skip rate limiting rather than crash
     }
 
     if ($minHits <= $limitPerMinute && $hourHits <= $limitPerHour) {
