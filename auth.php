@@ -50,6 +50,10 @@ function start_secure_session()
         header('Strict-Transport-Security: max-age=31536000; includeSubDomains');
     }
 
+    // Suppress PHP's default session cache headers (no-store, 1981 Expires, etc.)
+    // so we can set appropriate Cache-Control ourselves.
+    session_cache_limiter('');
+
     session_start();
 
     // Validate session integrity
@@ -67,6 +71,15 @@ function start_secure_session()
             $_SESSION['last_activity'] = time();
         }
     }
+
+    // Set cache headers for session-carrying requests.
+    // 'private, no-cache' lets the browser cache the page and send conditional
+    // requests (If-None-Match / If-Modified-Since), receiving a fast 304 when
+    // nothing changed. This is far better than 'no-store' which forces a full
+    // download on every visit.
+    header('Cache-Control: private, no-cache');
+    header_remove('Pragma');
+    header_remove('Expires');
 }
 
 // Determine if we should start the session

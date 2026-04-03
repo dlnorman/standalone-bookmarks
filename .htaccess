@@ -44,6 +44,22 @@
     </DirectoryMatch>
 </IfModule>
 
+# Block Google crawler IP range (66.249.x.x) - Googlebot hammering server
+<IfModule mod_authz_core.c>
+    Require not ip 66.249.0.0/16
+</IfModule>
+<IfModule !mod_authz_core.c>
+    Order allow,deny
+    Allow from all
+    Deny from 66.249.0.0/16
+</IfModule>
+
+# Block distributed crawlers that systematically enumerate tag combinations.
+# Legitimate users rarely combine more than 4-5 tags; bots generate 6-10+ tag URLs.
+# %2C is a URL-encoded comma; 2+ occurrences means 3+ tags in the query string.
+RewriteCond %{QUERY_STRING} (%2C.*){2} [NC]
+RewriteRule ^ - [G,L]
+
 # Block aggressive bots and AI crawlers by user-agent (hard block, ignores robots.txt)
 RewriteEngine On
 RewriteCond %{HTTP_USER_AGENT} (GPTBot|ChatGPT-User|anthropic-ai|Claude-Web|ClaudeBot|CCBot|Bytespider|Amazonbot|Diffbot|ImagesiftBot|omgili|AhrefsBot|SemrushBot|DotBot|MJ12bot|DataForSeoBot|PetalBot|BLEXBot|magpie-crawler) [NC]
