@@ -302,6 +302,7 @@ if (!empty($export) && !empty($bookmarks)) {
                 <div class="control-section">
                     <h3>Export</h3>
                     <div class="export-section">
+                        <button class="btn btn-secondary" onclick="copyAsMarkdown(this)">Copy as Markdown</button>
                         <button class="btn btn-secondary" onclick="exportAs('markdown')">Download as Markdown</button>
                         <button class="btn btn-secondary" onclick="exportAs('html')">Download as HTML</button>
                     </div>
@@ -403,6 +404,42 @@ if (!empty($export) && !empty($bookmarks)) {
     <?php render_nav_scripts(); ?>
     <script>
         const BASE_PATH = <?= json_encode($config['base_path']) ?>;
+        <?php if (!empty($bookmarks)):
+            $mdLines = [];
+            $mdLines[] = "# Bookmarks: $viewTitle";
+            $mdLines[] = "";
+            $mdLines[] = "Generated on " . date('F j, Y');
+            $mdLines[] = "";
+            $mdLines[] = "---";
+            $mdLines[] = "";
+            foreach ($groupedBookmarks as $group) {
+                $mdLines[] = "## " . $group['label'];
+                $mdLines[] = "";
+                foreach ($group['bookmarks'] as $bm) {
+                    $mdLines[] = "### [" . $bm['title'] . "](" . $bm['url'] . ")";
+                    $mdLines[] = "";
+                    if (!empty($bm['description'])) {
+                        $mdLines[] = $bm['description'];
+                        $mdLines[] = "";
+                    }
+                    if (!empty($bm['screenshot'])) {
+                        $screenshotPath = ltrim($bm['screenshot'], '/');
+                        $screenshotUrl = rtrim($config['site_url'], '/') . '/' . $screenshotPath;
+                        $mdLines[] = "![Screenshot](" . $screenshotUrl . ")";
+                        $mdLines[] = "";
+                    }
+                    if (!empty($bm['tags'])) {
+                        $mdLines[] = "**Tags:** " . $bm['tags'];
+                        $mdLines[] = "";
+                    }
+                    $mdLines[] = "*Added: " . date($config['date_format'], strtotime($bm['created_at'])) . "*";
+                    $mdLines[] = "";
+                    $mdLines[] = "---";
+                    $mdLines[] = "";
+                }
+            }
+            echo "const MARKDOWN_CONTENT = " . json_encode(implode("\n", $mdLines)) . ";\n";
+        endif; ?>
         const IS_LOGGED_IN = <?= json_encode($isLoggedIn) ?>;
         const CURRENT_VIEW = <?= json_encode($view) ?>;
         const CURRENT_DATE = <?= json_encode($date) ?>;
@@ -477,6 +514,17 @@ if (!empty($export) && !empty($bookmarks)) {
             const params = new URLSearchParams(window.location.search);
             params.set('export', format);
             window.location.href = '?' + params.toString();
+        }
+
+        function copyAsMarkdown(btn) {
+            if (typeof MARKDOWN_CONTENT === 'undefined') return;
+            navigator.clipboard.writeText(MARKDOWN_CONTENT).then(() => {
+                const orig = btn.textContent;
+                btn.textContent = 'Copied!';
+                setTimeout(() => { btn.textContent = orig; }, 2000);
+            }).catch(() => {
+                alert('Copy failed — try the Download button instead.');
+            });
         }
 
         function toggleGroup(header) {
