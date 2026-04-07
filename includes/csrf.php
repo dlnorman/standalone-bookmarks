@@ -48,12 +48,10 @@ function csrf_validate_token($token)
         return false;
     }
 
-    // Check if token has expired (1 hour)
-    if (isset($_SESSION['csrf_token_time']) && (time() - $_SESSION['csrf_token_time']) > 3600) {
-        return false;
-    }
-
-    // Use hash_equals to prevent timing attacks
+    // Use hash_equals to prevent timing attacks.
+    // No separate expiry check here — the session lifetime governs token lifetime,
+    // and csrf_generate_token() handles periodic rotation. A time check here
+    // would reject valid tokens submitted just after the rotation boundary.
     return hash_equals($_SESSION['csrf_token'], $token);
 }
 

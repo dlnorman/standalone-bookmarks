@@ -317,7 +317,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['submit'])) {
                     window.close();
                 }, 1500);
             </script>
-        <?php endif; ?>
+        <?php else: ?>
 
         <?php if (isset($error)): ?>
             <div class="error">
@@ -366,6 +366,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['submit'])) {
                 <button type="button" onclick="window.close()" class="btn-secondary">Cancel</button>
             </div>
         </form>
+        <?php endif; ?>
     </div>
 
     <script>
