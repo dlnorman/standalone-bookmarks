@@ -56,8 +56,9 @@
 
 # Block distributed crawlers that systematically enumerate tag combinations.
 # Legitimate users rarely combine more than 4-5 tags; bots generate 6-10+ tag URLs.
-# %2C is a URL-encoded comma; 2+ occurrences means 3+ tags in the query string.
-RewriteCond %{QUERY_STRING} (%2C.*){2} [NC]
+# Only match commas inside the `tag` parameter — avoids false-positive 410s when
+# the bookmarked URL itself contains commas (e.g. bookmarklet?url=...%2C...%2C...).
+RewriteCond %{QUERY_STRING} (?:^|&)tag=[^&]*%2C[^&]*%2C [NC]
 RewriteRule ^ - [G,L]
 
 # Block aggressive bots and AI crawlers by user-agent (hard block, ignores robots.txt)
