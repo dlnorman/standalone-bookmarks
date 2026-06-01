@@ -15,6 +15,86 @@ require_once __DIR__ . '/includes/markdown.php';
 require_once __DIR__ . '/includes/nav.php';
 require_once __DIR__ . '/includes/tags.php';
 
+/**
+ * Build a linkblog-friendly Markdown export of grouped bookmarks.
+ * Uses inline HTML (<img align="right">) so screenshots float right and
+ * text wraps around them — works in Markdown renderers and RSS feeds.
+ * Shared by the download export and the "Copy as Markdown" button so the
+ * two formats can't drift.
+ */
+function build_archive_markdown($groupedBookmarks, $viewTitle, $config) {
+    // Domain from a URL, www. stripped, for the "— example.com" source hint.
+    $domainOf = function ($url) {
+        $host = parse_url($url, PHP_URL_HOST);
+        if (!$host) {
+            return '';
+        }
+        return preg_replace('/^www\./', '', $host);
+    };
+
+    // "web design, AI" -> "#webdesign #ai" (spaces stripped so feeds/platforms
+    // treat each as a single tag).
+    $hashtags = function ($tags) {
+        $out = [];
+        foreach (explode(',', $tags) as $tag) {
+            $tag = trim($tag);
+            if ($tag === '') {
+                continue;
+            }
+            $out[] = '#' . preg_replace('/\s+/', '', $tag);
+        }
+        return implode(' ', $out);
+    };
+
+    $lines = [];
+    $lines[] = "# Bookmarks: $viewTitle";
+    $lines[] = "";
+    $lines[] = "Generated on " . date('F j, Y');
+    $lines[] = "";
+
+    foreach ($groupedBookmarks as $group) {
+        $lines[] = "## " . $group['label'];
+        $lines[] = "";
+
+        foreach ($group['bookmarks'] as $bm) {
+            if (!empty($bm['screenshot'])) {
+                $screenshotPath = ltrim($bm['screenshot'], '/');
+                $screenshotUrl = rtrim($config['site_url'], '/') . '/' . $screenshotPath;
+                $lines[] = '<img align="right" width="240" src="' . $screenshotUrl . '" alt="">';
+                $lines[] = "";
+            }
+
+            $domain = $domainOf($bm['url']);
+            $heading = "**[" . $bm['title'] . "](" . $bm['url'] . ")**";
+            if ($domain !== '') {
+                $heading .= " — " . $domain;
+            }
+            $lines[] = $heading;
+            $lines[] = "";
+
+            if (!empty($bm['description'])) {
+                $lines[] = $bm['description'];
+                $lines[] = "";
+            }
+
+            if (!empty($bm['tags'])) {
+                $tagLine = $hashtags($bm['tags']);
+                if ($tagLine !== '') {
+                    $lines[] = $tagLine;
+                    $lines[] = "";
+                }
+            }
+
+            // Reset the float so the next item starts on a fresh line even
+            // when its description is shorter than the screenshot.
+            $lines[] = '<br clear="all">';
+            $lines[] = "";
+        }
+    }
+
+    return implode("\n", $lines);
+}
+
 // Set timezone
 if (isset($config['timezone'])) {
     date_default_timezone_set($config['timezone']);
@@ -152,34 +232,7 @@ if (!empty($export) && !empty($bookmarks)) {
         header('Content-Type: text/markdown; charset=utf-8');
         header('Content-Disposition: attachment; filename="bookmarks-' . date('Y-m-d') . '.md"');
 
-        echo "# Bookmarks: $viewTitle\n\n";
-        echo "Generated on " . date('F j, Y') . "\n\n";
-        echo "---\n\n";
-
-        foreach ($groupedBookmarks as $group) {
-            echo "## " . $group['label'] . "\n\n";
-
-            foreach ($group['bookmarks'] as $bookmark) {
-                echo "### [" . $bookmark['title'] . "](" . $bookmark['url'] . ")\n\n";
-
-                if (!empty($bookmark['description'])) {
-                    echo $bookmark['description'] . "\n\n";
-                }
-
-                if (!empty($bookmark['screenshot'])) {
-                    $screenshotPath = ltrim($bookmark['screenshot'], '/');
-                    $screenshotUrl = rtrim($config['site_url'], '/') . '/' . $screenshotPath;
-                    echo "![Screenshot](" . $screenshotUrl . ")\n\n";
-                }
-
-                if (!empty($bookmark['tags'])) {
-                    echo "**Tags:** " . $bookmark['tags'] . "\n\n";
-                }
-
-                echo "*Added: " . date($config['date_format'], strtotime($bookmark['created_at'])) . "*\n\n";
-                echo "---\n\n";
-            }
-        }
+        echo build_archive_markdown($groupedBookmarks, $viewTitle, $config);
 
         exit;
     } elseif ($export === 'html') {
@@ -405,40 +458,7 @@ if (!empty($export) && !empty($bookmarks)) {
     <script>
         const BASE_PATH = <?= json_encode($config['base_path']) ?>;
         <?php if (!empty($bookmarks)):
-            $mdLines = [];
-            $mdLines[] = "# Bookmarks: $viewTitle";
-            $mdLines[] = "";
-            $mdLines[] = "Generated on " . date('F j, Y');
-            $mdLines[] = "";
-            $mdLines[] = "---";
-            $mdLines[] = "";
-            foreach ($groupedBookmarks as $group) {
-                $mdLines[] = "## " . $group['label'];
-                $mdLines[] = "";
-                foreach ($group['bookmarks'] as $bm) {
-                    $mdLines[] = "### [" . $bm['title'] . "](" . $bm['url'] . ")";
-                    $mdLines[] = "";
-                    if (!empty($bm['description'])) {
-                        $mdLines[] = $bm['description'];
-                        $mdLines[] = "";
-                    }
-                    if (!empty($bm['screenshot'])) {
-                        $screenshotPath = ltrim($bm['screenshot'], '/');
-                        $screenshotUrl = rtrim($config['site_url'], '/') . '/' . $screenshotPath;
-                        $mdLines[] = "![Screenshot](" . $screenshotUrl . ")";
-                        $mdLines[] = "";
-                    }
-                    if (!empty($bm['tags'])) {
-                        $mdLines[] = "**Tags:** " . $bm['tags'];
-                        $mdLines[] = "";
-                    }
-                    $mdLines[] = "*Added: " . date($config['date_format'], strtotime($bm['created_at'])) . "*";
-                    $mdLines[] = "";
-                    $mdLines[] = "---";
-                    $mdLines[] = "";
-                }
-            }
-            echo "const MARKDOWN_CONTENT = " . json_encode(implode("\n", $mdLines)) . ";\n";
+            echo "const MARKDOWN_CONTENT = " . json_encode(build_archive_markdown($groupedBookmarks, $viewTitle, $config)) . ";\n";
         endif; ?>
         const IS_LOGGED_IN = <?= json_encode($isLoggedIn) ?>;
         const CURRENT_VIEW = <?= json_encode($view) ?>;
