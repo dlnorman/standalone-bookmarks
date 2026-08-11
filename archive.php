@@ -32,18 +32,35 @@ function build_archive_markdown($groupedBookmarks, $viewTitle, $config) {
         return preg_replace('/^www\./', '', $host);
     };
 
-    // "web design, AI" -> "#webdesign #ai" (spaces stripped so feeds/platforms
-    // treat each as a single tag).
-    $hashtags = function ($tags) {
+    // "web design, AI" -> "[web design](…/?tag=web+design), [AI](…/?tag=AI)".
+    // Tags are emitted exactly as saved on the bookmark (no hashtag mangling, no
+    // prefix stripping) and each one links to its tag page here.
+    $tagLinks = function ($tags) use ($config) {
         $out = [];
         foreach (explode(',', $tags) as $tag) {
             $tag = trim($tag);
             if ($tag === '') {
                 continue;
             }
-            $out[] = '#' . preg_replace('/\s+/', '', $tag);
+            $url = rtrim($config['site_url'], '/') . '/?tag=' . urlencode($tag);
+            $out[] = '[' . $tag . '](' . $url . ')';
         }
-        return implode(' ', $out);
+        return implode(', ', $out);
+    };
+
+    // The description holds the already-composed entry body (my note, the
+    // source blurb as a blockquote, an optional "Selected text" section) as
+    // Markdown. It's emitted verbatim — the one safety net is demoting any
+    // top-level "#"/"##" heading to "###" so a heading in the body can't rival
+    // the document H1 or the "## [title]" entry headings.
+    $demoteHeadings = function ($text) {
+        return preg_replace_callback(
+            '/^(\s{0,3})(#{1,6})(?=\s)/m',
+            function ($m) {
+                return $m[1] . (strlen($m[2]) < 3 ? '###' : $m[2]);
+            },
+            $text
+        );
     };
 
     $lines = [];
@@ -51,12 +68,23 @@ function build_archive_markdown($groupedBookmarks, $viewTitle, $config) {
     $lines[] = "";
     $lines[] = "Generated on " . date('F j, Y');
     $lines[] = "";
+    // The header rule doubles as the separator before the first entry; each
+    // entry then emits its own trailing rule.
+    $lines[] = "---";
+    $lines[] = "";
 
     foreach ($groupedBookmarks as $group) {
-        $lines[] = "## " . $group['label'];
-        $lines[] = "";
-
         foreach ($group['bookmarks'] as $bm) {
+            // Title heading carries the link; domain follows on its own line.
+            $lines[] = "## [" . $bm['title'] . "](" . $bm['url'] . ")";
+            $lines[] = "";
+
+            $domain = $domainOf($bm['url']);
+            if ($domain !== '') {
+                $lines[] = "*" . $domain . "*";
+                $lines[] = "";
+            }
+
             if (!empty($bm['screenshot'])) {
                 $screenshotPath = ltrim($bm['screenshot'], '/');
                 $screenshotUrl = rtrim($config['site_url'], '/') . '/' . $screenshotPath;
@@ -64,35 +92,31 @@ function build_archive_markdown($groupedBookmarks, $viewTitle, $config) {
                 $lines[] = "";
             }
 
-            $domain = $domainOf($bm['url']);
-            $heading = "**[" . $bm['title'] . "](" . $bm['url'] . ")**";
-            if ($domain !== '') {
-                $heading .= " — " . $domain;
-            }
-            $lines[] = $heading;
-            $lines[] = "";
-
+            // The composed body (note, source blurb, selected text) lives in
+            // the description field as Markdown — emit it as-is.
             if (!empty($bm['description'])) {
-                $lines[] = $bm['description'];
+                $lines[] = $demoteHeadings($bm['description']);
                 $lines[] = "";
             }
 
             if (!empty($bm['tags'])) {
-                $tagLine = $hashtags($bm['tags']);
+                $tagLine = $tagLinks($bm['tags']);
                 if ($tagLine !== '') {
-                    $lines[] = $tagLine;
+                    $lines[] = "Tags: " . $tagLine;
                     $lines[] = "";
                 }
             }
 
-            // Reset the float so the next item starts on a fresh line even
-            // when its description is shorter than the screenshot.
+            // Reset the float so the rule starts on a fresh line even when the
+            // text is shorter than the screenshot.
             $lines[] = '<br clear="all">';
+            $lines[] = "";
+            $lines[] = "---";
             $lines[] = "";
         }
     }
 
-    return implode("\n", $lines);
+    return rtrim(implode("\n", $lines)) . "\n";
 }
 
 // Set timezone
@@ -257,6 +281,8 @@ if (!empty($export) && !empty($bookmarks)) {
         echo ".screenshot img { max-width: 100%; height: auto; border: 1px solid #ddd; border-radius: 4px; }\n";
         echo ".meta { font-size: 13px; color: #95a5a6; margin-top: 10px; }\n";
         echo ".tags { color: #27ae60; font-weight: 500; }\n";
+        echo ".tags a { color: #27ae60; text-decoration: none; border-bottom: 1px dotted #27ae60; }\n";
+        echo ".tags a:hover { border-bottom-style: solid; }\n";
         echo "hr { border: none; border-top: 1px solid #ecf0f1; margin: 30px 0; }\n";
         echo "</style>\n</head>\n<body>\n";
 
@@ -283,7 +309,19 @@ if (!empty($export) && !empty($bookmarks)) {
 
                 echo "<div class=\"meta\">\n";
                 if (!empty($bookmark['tags'])) {
-                    echo "<span class=\"tags\">Tags: " . htmlspecialchars($bookmark['tags']) . "</span> &middot; ";
+                    // Tags exactly as saved, each linking to its tag page on the site
+                    $tagAnchors = [];
+                    foreach (explode(',', $bookmark['tags']) as $tagItem) {
+                        $tagItem = trim($tagItem);
+                        if ($tagItem === '') {
+                            continue;
+                        }
+                        $tagUrl = rtrim($config['site_url'], '/') . '/?tag=' . urlencode($tagItem);
+                        $tagAnchors[] = '<a href="' . htmlspecialchars($tagUrl) . '">' . htmlspecialchars($tagItem) . '</a>';
+                    }
+                    if ($tagAnchors) {
+                        echo "<span class=\"tags\">Tags: " . implode(', ', $tagAnchors) . "</span> &middot; ";
+                    }
                 }
                 echo "Added: " . date($config['date_format'], strtotime($bookmark['created_at']));
                 echo "</div>\n";
@@ -435,7 +473,9 @@ if (!empty($export) && !empty($bookmarks)) {
                                     <div class="meta">
                                         <div class="bookmark-meta-left">
                                             <span class="bookmark-meta-item">
-                                                <?= date($config['date_format'], strtotime($bookmark['created_at'])) ?>
+                                                <a href="<?= $config['base_path'] ?>/bookmark.php?id=<?= $bookmark['id'] ?>"
+                                                    class="bookmark-permalink-link"
+                                                    title="Permalink to this bookmark entry"><?= date($config['date_format'], strtotime($bookmark['created_at'])) ?></a>
                                             </span>
                                             <?php if (!empty($bookmark['archive_url'])): ?>
                                                 <span class="bookmark-meta-item">

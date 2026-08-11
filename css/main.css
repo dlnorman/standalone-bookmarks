@@ -641,6 +641,18 @@ select:focus-visible {
     gap: 6px;
 }
 
+/* Permalink to a single bookmark entry (dotted underline on the date) */
+.bookmark-permalink-link {
+    color: inherit;
+    text-decoration: none;
+    border-bottom: 1px dotted currentColor;
+}
+
+.bookmark-permalink-link:hover {
+    color: var(--primary);
+    border-bottom-color: var(--primary);
+}
+
 /* Archive Link */
 .bookmark-archive-link {
     display: inline-flex;
@@ -2427,6 +2439,18 @@ a.nav-btn-primary:hover,
     border-top: 1px solid rgba(255, 255, 255, 0.1);
 }
 
+.modal-permalink {
+    display: inline-block;
+    margin-top: 15px;
+    font-size: 13px;
+    color: #a0b0ff;
+    text-decoration: none;
+}
+
+.modal-permalink:hover {
+    text-decoration: underline;
+}
+
 .modal-tag {
     font-size: 12px;
     padding: 4px 10px;
@@ -3071,5 +3095,84 @@ a.modal-tag:hover {
         animation-duration: 0.01ms !important;
         animation-iteration-count: 1 !important;
         transition-duration: 0.01ms !important;
+    }
+}
+/* ============================================
+   Single Bookmark Permalink Page (bookmark.php)
+   ============================================ */
+
+.bookmark-permalink-header {
+    margin-bottom: 16px;
+}
+
+.permalink-back {
+    font-size: 14px;
+    color: var(--text-tertiary);
+    text-decoration: none;
+}
+
+.permalink-back:hover {
+    color: var(--primary);
+}
+
+/* It's the only card on the page — no hover lift, no truncated URL */
+.bookmark.bookmark-permalink:hover {
+    transform: none;
+    box-shadow: var(--shadow-sm);
+    border-color: var(--border-color);
+}
+
+.bookmark-permalink .bookmark-screenshot-container {
+    width: 320px;
+    height: 230px;
+}
+
+.bookmark-permalink:hover .bookmark-screenshot-container img {
+    transform: none;
+}
+
+.bookmark-permalink h1 {
+    margin: 0 0 8px 0;
+    font-size: 26px;
+    font-weight: 700;
+    line-height: 1.3;
+    letter-spacing: -0.01em;
+}
+
+.bookmark-permalink h1 a {
+    color: var(--text-primary);
+    text-decoration: none;
+}
+
+.bookmark-permalink h1 a:hover {
+    color: var(--primary);
+}
+
+.bookmark-permalink .url {
+    white-space: normal;
+    overflow: visible;
+    word-break: break-all;
+}
+
+.bookmark-permalink .url a {
+    color: inherit;
+    text-decoration: none;
+}
+
+.bookmark-permalink .url a:hover {
+    text-decoration: underline;
+}
+
+.permalink-actions {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 10px;
+    margin-top: 16px;
+}
+
+@media (max-width: 768px) {
+    .bookmark-permalink .bookmark-screenshot-container {
+        width: 100%;
+        height: 200px;
     }
 }

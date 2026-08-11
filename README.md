@@ -126,6 +126,7 @@ Standalone Bookmarks provides a simple API for your own scripts or static site g
 
 ### Project Structure
 *   `index.php` - Main list view.
+*   `bookmark.php` - Single-bookmark permalink page (`bookmark.php?id=N`), shareable, with Open Graph preview tags. Private bookmarks return 404 to anonymous visitors.
 *   `gallery.php` - Grid view with screenshots.
 *   `dashboard.php` - Analytics and visualizations.
 *   `tags.php` - Tag cloud with logarithmic sizing.

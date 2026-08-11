@@ -337,7 +337,9 @@ if (!empty($activeTags)) {
                         <div class="meta">
                             <div class="bookmark-meta-left">
                                 <span class="bookmark-meta-item">
-                                    <?= date($config['date_format'], strtotime($bookmark['created_at'])) ?>
+                                    <a href="<?= $config['base_path'] ?>/bookmark.php?id=<?= $bookmark['id'] ?>"
+                                        class="bookmark-permalink-link"
+                                        title="Permalink to this bookmark entry"><?= date($config['date_format'], strtotime($bookmark['created_at'])) ?></a>
                                 </span>
                                 <?php if (!empty($bookmark['archive_url']) && !$isLoggedIn): ?>
                                     <span class="bookmark-meta-item">
@@ -350,6 +352,9 @@ if (!empty($activeTags)) {
                                 <div class="bookmark-actions-menu">
                                     <button class="bookmark-actions-trigger" onclick="toggleBookmarkMenu(event)" aria-haspopup="true" aria-expanded="false">⋯</button>
                                     <div class="bookmark-actions-dropdown">
+                                        <a href="<?= $config['base_path'] ?>/bookmark.php?id=<?= $bookmark['id'] ?>" class="dropdown-item">🔗 Permalink</a>
+                                        <a href="#" class="dropdown-item" onclick="copyBookmarkLink(<?= $bookmark['id'] ?>, this); return false;">Copy Link</a>
+                                        <div class="dropdown-divider"></div>
                                         <a href="#" class="dropdown-item bookmark-action-danger" onclick="deleteBookmark(<?= $bookmark['id'] ?>); return false;">Delete</a>
                                         <div class="dropdown-divider"></div>
                                         <?php if (!empty($bookmark['screenshot'])): ?>
@@ -445,6 +450,39 @@ if (!empty($activeTags)) {
             }
             if (newTags.length === 0) return BASE_PATH + '/';
             return BASE_PATH + '/?tag=' + encodeURIComponent(newTags.join(','));
+        }
+
+        // Permalink to a single bookmark entry (notes + tags + screenshot)
+        function bookmarkPermalink(id) {
+            return BASE_PATH + '/bookmark.php?id=' + id;
+        }
+
+        // Copy the absolute permalink to the clipboard, with feedback on the menu item
+        function copyBookmarkLink(id, el) {
+            const url = new URL(bookmarkPermalink(id), window.location.href).href;
+            const original = el ? el.textContent : null;
+            const done = (ok) => {
+                if (!el) return;
+                el.textContent = ok ? '✓ Link copied' : '✗ Copy failed';
+                setTimeout(() => { el.textContent = original; }, 2000);
+            };
+
+            if (navigator.clipboard && window.isSecureContext) {
+                navigator.clipboard.writeText(url).then(() => done(true), () => done(false));
+                return;
+            }
+
+            // Fallback for non-secure contexts (no navigator.clipboard)
+            const ta = document.createElement('textarea');
+            ta.value = url;
+            ta.style.position = 'fixed';
+            ta.style.opacity = '0';
+            document.body.appendChild(ta);
+            ta.select();
+            let ok = false;
+            try { ok = document.execCommand('copy'); } catch (e) { ok = false; }
+            document.body.removeChild(ta);
+            done(ok);
         }
 
         function toggleBookmarkMenu(event) {
@@ -1084,6 +1122,9 @@ if (!empty($activeTags)) {
                     <div class="bookmark-actions-menu">
                         <button class="bookmark-actions-trigger" onclick="toggleBookmarkMenu(event)" aria-haspopup="true" aria-expanded="false">⋯</button>
                         <div class="bookmark-actions-dropdown">
+                            <a href="${bookmarkPermalink(bookmark.id)}" class="dropdown-item">🔗 Permalink</a>
+                            <a href="#" class="dropdown-item" onclick="copyBookmarkLink(${bookmark.id}, this); return false;">Copy Link</a>
+                            <div class="dropdown-divider"></div>
                             <a href="#" class="dropdown-item bookmark-action-danger" onclick="deleteBookmark(${bookmark.id}); return false;">Delete</a>
                             <div class="dropdown-divider"></div>
                             ${deleteScreenshotItem}
@@ -1130,7 +1171,7 @@ if (!empty($activeTags)) {
                     <div class="meta">
                         <div class="bookmark-meta-left">
                             <span class="bookmark-meta-item">
-                                ${formatDate(bookmark.created_at)}
+                                <a href="${bookmarkPermalink(bookmark.id)}" class="bookmark-permalink-link" title="Permalink to this bookmark entry">${formatDate(bookmark.created_at)}</a>
                             </span>
                             ${archiveHTML}
                         </div>

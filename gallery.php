@@ -210,6 +210,7 @@ unset($bookmark); // Break reference
                 <a id="modalUrl" class="modal-url" href="" target="_blank" rel="noopener noreferrer"></a>
                 <div id="modalDescription" class="modal-description"></div>
                 <div id="modalTags" class="modal-tags"></div>
+                <a id="modalPermalink" class="modal-permalink" href="">🔗 Permalink to this bookmark</a>
             </div>
         </div>
     </div>
@@ -544,6 +545,7 @@ unset($bookmark); // Break reference
             modalTitle.textContent = bookmark.title;
             modalUrl.href = bookmark.url;
             modalUrl.textContent = bookmark.url;
+            document.getElementById('modalPermalink').href = basePath + '/bookmark.php?id=' + bookmark.id;
 
             // Handle description
             if (bookmark.description_html) {
