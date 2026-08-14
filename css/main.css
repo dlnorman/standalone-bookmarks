@@ -386,7 +386,14 @@ select:focus-visible {
     font-weight: 500;
 }
 
+/* Rendered as a <button> (no href) so crawlers can't walk tag combinations */
 .filter-tag-remove {
+    appearance: none;
+    background: none;
+    border: 0;
+    padding: 0;
+    font-family: inherit;
+    cursor: pointer;
     color: rgba(255, 255, 255, 0.8);
     text-decoration: none;
     font-size: 16px;
@@ -415,12 +422,16 @@ select:focus-visible {
     flex-shrink: 0;
 }
 
+/* Also a <button> — see .filter-tag-remove */
 .related-tag-chip {
     display: inline-block;
+    appearance: none;
     padding: 3px 10px;
     border-radius: 99px;
+    font-family: inherit;
     font-size: 12px;
     font-weight: 500;
+    cursor: pointer;
     background: rgba(0, 122, 255, 0.1);
     color: var(--primary);
     text-decoration: none;
@@ -433,6 +444,11 @@ select:focus-visible {
     background: var(--primary);
     color: white;
     border-color: var(--primary);
+}
+
+/* Tags rendered as filter toggles carry no href, so restore the link affordance */
+.tag-toggle {
+    cursor: pointer;
 }
 
 /* =================================================================

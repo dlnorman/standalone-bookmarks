@@ -107,19 +107,17 @@ function renderTag($tag, $basePath = '', $additionalClasses = 'bookmark-tag', $a
     $classes = trim($additionalClasses . ' ' . $typeClass . $activeClass);
     $displayName = htmlspecialchars($parsed['name']);
 
-    // Compute href: if activeTags provided, toggle this tag in/out of the set
+    // When a filter is already active, this tag becomes a toggle rather than a
+    // plain link. Toggles are rendered WITHOUT an href and resolved in JS: a real
+    // link would publish a new tag combination on every filtered page, giving
+    // crawlers an unbounded (and combinatorial) URL space to enumerate. Only the
+    // unfiltered case emits a crawlable single-tag URL.
     if (!empty($activeTags)) {
-        if (in_array($lowerTag, $lowerActive)) {
-            $newTags = array_values(array_filter($activeTags, function($t) use ($lowerTag) {
-                return strtolower(trim($t)) !== $lowerTag;
-            }));
-            $href = empty($newTags) ? $basePath . '/' : $basePath . '/?tag=' . urlencode(implode(',', $newTags));
-        } else {
-            $href = $basePath . '/?tag=' . urlencode(implode(',', array_merge($activeTags, [$tag])));
-        }
-    } else {
-        $href = $basePath . '/?tag=' . urlencode($tag);
+        return '<a role="button" tabindex="0" data-tag-filter="' . htmlspecialchars($tag, ENT_QUOTES) . '"'
+            . ' class="' . $classes . ' tag-toggle">' . $icon . $displayName . '</a>';
     }
+
+    $href = $basePath . '/?tag=' . urlencode($tag);
 
     return '<a href="' . $href . '" class="' . $classes . '">' . $icon . $displayName . '</a>';
 }

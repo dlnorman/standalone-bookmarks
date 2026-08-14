@@ -54,15 +54,20 @@
     Deny from 66.249.0.0/16
 </IfModule>
 
+RewriteEngine On
+
 # Block distributed crawlers that systematically enumerate tag combinations.
-# Legitimate users rarely combine more than 4-5 tags; bots generate 6-10+ tag URLs.
+# Legitimate users rarely combine more than 3 tags; bots generate 7-13 tag URLs.
+# Matches BOTH literal commas and %2C — Apache exposes QUERY_STRING undecoded, so
+# a rule written against %2C alone lets `?tag=a,b,c,d` straight through.
 # Only match commas inside the `tag` parameter — avoids false-positive 410s when
 # the bookmarked URL itself contains commas (e.g. bookmarklet?url=...%2C...%2C...).
-RewriteCond %{QUERY_STRING} (?:^|&)tag=[^&]*%2C[^&]*%2C [NC]
+# Threshold (3 commas = 4+ tags) must stay in sync with the MAX_ACTIVE_TAGS
+# backstop in index.php, or normalized redirects will land on a 410.
+RewriteCond %{QUERY_STRING} (?:^|&)tag=[^&]*(?:,|%2C)[^&]*(?:,|%2C)[^&]*(?:,|%2C) [NC]
 RewriteRule ^ - [G,L]
 
 # Block aggressive bots and AI crawlers by user-agent (hard block, ignores robots.txt)
-RewriteEngine On
 RewriteCond %{HTTP_USER_AGENT} (GPTBot|ChatGPT-User|anthropic-ai|Claude-Web|ClaudeBot|CCBot|Bytespider|Amazonbot|Diffbot|ImagesiftBot|omgili|AhrefsBot|SemrushBot|DotBot|MJ12bot|DataForSeoBot|PetalBot|BLEXBot|magpie-crawler) [NC]
 RewriteRule ^ - [F,L]
 

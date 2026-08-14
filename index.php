@@ -9,6 +9,56 @@ if (!file_exists(__DIR__ . '/config.php')) {
 }
 
 $config = require __DIR__ . '/config.php';
+
+// ---------------------------------------------------------------------------
+// Tag filter guard — deliberately placed before auth.php (which starts a
+// session), before the includes, and before the DB connection, so an abusive
+// request costs a regex and nothing else.
+//
+// Distributed crawlers enumerate tag permutations (?tag=a,b,c,d,e,...), an
+// unbounded URL space. Two defences here:
+//   1. Cap the tag count. Mirrors the .htaccess rule; this is the backstop for
+//      hosts without mod_rewrite, or if that rule is ever edited out. The two
+//      thresholds MUST agree or a normalized redirect can land on a 410.
+//   2. Collapse multi-tag URLs to one canonical spelling (de-duplicated,
+//      lowercased, sorted) so ?tag=b,a and ?tag=A,B stop being N! separate
+//      crawlable URLs pointing at identical content.
+// ---------------------------------------------------------------------------
+const MAX_ACTIVE_TAGS = 3;
+
+$tag = $_GET['tag'] ?? '';
+$activeTags = $tag !== '' ? array_values(array_filter(array_map('trim', explode(',', $tag)))) : [];
+
+// Collapse case-insensitive duplicates (?tag=ai,AI), keeping one spelling each
+$dedupedTags = [];
+foreach ($activeTags as $activeTagCandidate) {
+    $dedupedTags[strtolower($activeTagCandidate)] = $activeTagCandidate;
+}
+$activeTags = array_values($dedupedTags);
+
+if (count($activeTags) > MAX_ACTIVE_TAGS) {
+    http_response_code(410);
+    header('X-Robots-Tag: noindex, nofollow');
+    exit;
+}
+
+// Single-tag URLs keep their original casing so existing links stay readable;
+// only multi-tag combinations get rewritten to the canonical form.
+if (count($activeTags) > 1) {
+    $canonicalTags = array_map('strtolower', $activeTags);
+    sort($canonicalTags, SORT_STRING);
+
+    if ($canonicalTags !== $activeTags) {
+        $redirectParams = $_GET;
+        $redirectParams['tag'] = implode(',', $canonicalTags);
+        // http_build_query escapes the separator commas; restore them so the
+        // canonical URL reads the same way the app writes its own links.
+        $redirectQuery = str_replace('%2C', ',', http_build_query($redirectParams));
+        header('Location: ' . $config['base_path'] . '/?' . $redirectQuery, true, 301);
+        exit;
+    }
+}
+
 require_once __DIR__ . '/auth.php';
 require_once __DIR__ . '/includes/markdown.php';
 require_once __DIR__ . '/includes/csrf.php';
@@ -40,14 +90,29 @@ if (!$isLoggedIn) {
     enforce_page_rate_limit($db);
 }
 
-// Get parameters
+// Get parameters ($tag / $activeTags are already parsed and normalized above)
 $search = $_GET['q'] ?? '';
-$tag = $_GET['tag'] ?? '';
-$activeTags = !empty($tag) ? array_values(array_filter(array_map('trim', explode(',', $tag)))) : [];
 $showBroken = isset($_GET['broken']) && $_GET['broken'] === '1';
 $page = max(1, intval($_GET['page'] ?? 1));
 $limit = $config['items_per_page'];
 $offset = ($page - 1) * $limit;
+
+// Robots policy. A single-tag page is real content and stays indexable; every
+// other filtered permutation (tag combinations, searches, paged views) is
+// noindex so well-behaved crawlers stop expanding the URL space. Sent as a
+// header as well as a meta tag so it also applies to the 410s and redirects.
+$robotsPolicy = null;
+if (count($activeTags) > 1 || $search !== '' || $showBroken || $page > 1) {
+    $robotsPolicy = 'noindex, nofollow';
+    header('X-Robots-Tag: ' . $robotsPolicy);
+}
+
+// Canonical URL: filtered permutations point back at the unfiltered index,
+// single-tag pages point at themselves.
+$canonicalUrl = rtrim($config['site_url'] ?? $config['base_path'], '/') . '/';
+if (count($activeTags) === 1) {
+    $canonicalUrl .= '?tag=' . urlencode($activeTags[0]);
+}
 
 // broken_url column is part of the schema (added in db_setup.php)
 $hasBrokenUrl = true;
@@ -196,6 +261,10 @@ if (!empty($activeTags)) {
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title><?= htmlspecialchars($config['site_title']) ?></title>
+    <?php if ($robotsPolicy !== null): ?>
+    <meta name="robots" content="<?= htmlspecialchars($robotsPolicy) ?>">
+    <?php endif; ?>
+    <link rel="canonical" href="<?= htmlspecialchars($canonicalUrl) ?>">
     <?php render_nav_styles(); ?>
     <link rel="stylesheet" href="css/main.css">
     <style>
@@ -239,23 +308,23 @@ if (!empty($activeTags)) {
             <?php if (!empty($activeTags)): ?>
                 <div class="filter-notice">
                     Showing bookmarks tagged:
-                    <?php foreach ($activeTags as $activeTag):
-                        $removeUrl = count($activeTags) === 1
-                            ? $config['base_path'] . '/'
-                            : $config['base_path'] . '/?tag=' . urlencode(implode(',', array_filter($activeTags, fn($t) => strtolower(trim($t)) !== strtolower(trim($activeTag)))));
-                    ?>
+                    <?php /* Toggle controls carry no href: a real link here would hand
+                             crawlers a fresh tag combination on every filtered page,
+                             which is what made this URL space unbounded. */ ?>
+                    <?php foreach ($activeTags as $activeTag): ?>
                         <span class="filter-tag-chip">
                             <?= htmlspecialchars($activeTag) ?>
-                            <a href="<?= $removeUrl ?>" class="filter-tag-remove" title="Remove tag">×</a>
+                            <button type="button" class="filter-tag-remove" data-tag-filter="<?= htmlspecialchars($activeTag) ?>" title="Remove tag">×</button>
                         </span>
                     <?php endforeach; ?>
                     <a href="<?= $config['base_path'] ?>" class="btn">Clear all</a>
                 </div>
-                <?php if (!empty($relatedTags)): ?>
+                <?php /* Hide the related bar at the cap — adding another tag would 410 */ ?>
+                <?php if (!empty($relatedTags) && count($activeTags) < MAX_ACTIVE_TAGS): ?>
                 <div class="related-tags-bar">
                     <span class="related-tags-label">Related:</span>
                     <?php foreach ($relatedTags as $relatedTag): ?>
-                        <a href="<?= $config['base_path'] ?>/?tag=<?= urlencode(implode(',', array_merge($activeTags, [$relatedTag]))) ?>" class="related-tag-chip"><?= htmlspecialchars($relatedTag) ?></a>
+                        <button type="button" class="related-tag-chip" data-tag-filter="<?= htmlspecialchars($relatedTag) ?>"><?= htmlspecialchars($relatedTag) ?></button>
                     <?php endforeach; ?>
                 </div>
                 <?php endif; ?>
@@ -438,7 +507,9 @@ if (!empty($activeTags)) {
             }
         }
 
-        // Build a URL that toggles a tag in/out of the current active tag set
+        // Build a URL that toggles a tag in/out of the current active tag set.
+        // Multi-tag results are lowercased and sorted to match the canonical form
+        // index.php redirects to — otherwise every click would cost a 301.
         function buildTagUrl(tag) {
             const lowerTag = tag.trim().toLowerCase();
             const lowerActive = CURRENT_TAGS.map(t => t.toLowerCase());
@@ -449,8 +520,32 @@ if (!empty($activeTags)) {
                 newTags = [...CURRENT_TAGS, tag.trim()];
             }
             if (newTags.length === 0) return BASE_PATH + '/';
-            return BASE_PATH + '/?tag=' + encodeURIComponent(newTags.join(','));
+            if (newTags.length === 1) {
+                return BASE_PATH + '/?tag=' + encodeURIComponent(newTags[0]);
+            }
+            const canonical = newTags.map(t => t.toLowerCase()).sort();
+            return BASE_PATH + '/?tag=' + canonical.map(encodeURIComponent).join(',');
         }
+
+        // Tag toggles are rendered without an href (see renderTag() and the filter
+        // bar) so crawlers can't walk the combinatorial tag space. Navigation is
+        // delegated here instead.
+        document.addEventListener('click', (event) => {
+            const toggle = event.target.closest('[data-tag-filter]');
+            if (!toggle) return;
+            event.preventDefault();
+            event.stopPropagation();
+            window.location.href = buildTagUrl(toggle.dataset.tagFilter);
+        });
+
+        // Keyboard parity for the hrefless toggles
+        document.addEventListener('keydown', (event) => {
+            if (event.key !== 'Enter' && event.key !== ' ') return;
+            const toggle = event.target.closest('[data-tag-filter]');
+            if (!toggle) return;
+            event.preventDefault();
+            window.location.href = buildTagUrl(toggle.dataset.tagFilter);
+        });
 
         // Permalink to a single bookmark entry (notes + tags + screenshot)
         function bookmarkPermalink(id) {

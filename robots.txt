@@ -1,5 +1,10 @@
-# General crawlers: allow index page only, no search/filter pages
+# General crawlers: allow the index and single-tag pages only.
+# Multi-tag combinations are additionally noindex via meta/X-Robots-Tag, and
+# 410 past 3 tags — robots.txt can't express "one ?tag= value but not four".
 User-agent: *
+Disallow: /*?*q=
+Disallow: /*?*broken=
+Disallow: /*?*page=
 Disallow: /api.php
 Disallow: /add-bookmark.php
 Disallow: /edit-bookmark.php
