@@ -361,17 +361,17 @@ if (!empty($export) && !empty($bookmarks)) {
                 </div>
 
                 <div class="date-navigation">
-                    <button class="btn" onclick="navigateDate(-1)">← Previous</button>
+                    <button class="btn btn-secondary" onclick="navigateDate(-1)">← Previous</button>
                     <input type="date" id="datePicker" value="<?= htmlspecialchars($date) ?>"
                         onchange="goToDate(this.value)">
-                    <button class="btn" onclick="navigateDate(1)">Next →</button>
+                    <button class="btn btn-secondary" onclick="navigateDate(1)">Next →</button>
                     <button class="btn btn-secondary" onclick="goToToday()">Today</button>
                 </div>
 
                 <div class="custom-range" style="margin-top: 15px;">
-                    <span style="font-size: 14px; color: #7f8c8d;">Custom Range:</span>
+                    <span>Custom Range:</span>
                     <input type="date" id="startDate" value="<?= htmlspecialchars($startDate) ?>">
-                    <span style="color: #7f8c8d;">to</span>
+                    <span>to</span>
                     <input type="date" id="endDate" value="<?= htmlspecialchars($endDate) ?>">
                     <button class="btn btn-secondary" onclick="applyCustomRange()">Apply</button>
                 </div>
