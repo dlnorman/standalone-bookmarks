@@ -142,3 +142,51 @@ Contributions are welcome! Please feel free to submit a Pull Request.
 ## License
 
 Public Domain. Free to use, modify, and distribute.
+
+## PrivacyLib GDPR integration
+
+Original GDPR framework: **[PrivacyLib-REGO](https://github.com/CS-UCY-SEIT-lab/PrivacyLib-REGO)**. Its unchanged PHP router and eleven OPA/Rego policies are bundled in `integration/privacy-lib/`.
+
+### Setup
+
+Use PHP 8.2+ with PDO SQLite, cURL and sessions, and [OPA 1.x](https://www.openpolicyagent.org/docs). No Composer or npm package is needed. Follow the original config/installer steps above; create a dummy administrator through the original installer. Keep local config, databases and sessions out of Git.
+
+Add the separate consent table once after installing the original app:
+
+```sh
+php integration/migrate.php
+```
+
+This CLI-only script preserves existing users/bookmarks. GDPR requests never create tables. Start OPA from the repository directory:
+
+```sh
+opa run --server --addr 127.0.0.1:8181 integration/privacy-lib/gdpr
+```
+
+`OPA_QUERY_URL` defaults to `http://localhost:8181/v1/query`. Configure it in the PHP server environment for another address. Edit synthetic controller, retention, purpose and service metadata in `integration/privacy-config.json` for the intended use; the retention demonstration protects display_name.
+
+For local testing start:
+
+```sh
+php -S 127.0.0.1:8033 server.php
+```
+
+Configure `site_url` and `base_path` in ignored `config.php` consistently with this address. Sign in through the original login form and click **Privacy checks** in the top bar. Use the same browser tab/origin. The new built-in-server router allows only public entry points and static assets; config, SQLite, session and helper files are blocked. Apache rules additionally deny the integration directory; Apache behavior was not exercised in the local checks.
+
+### Scope
+
+The existing SQLite bookmarks table has no author/owner user_id. Shared bookmarks, tags, archive content and jobs therefore cannot be attributed to a data subject and are **excluded** from GDPR exports. The mapped data is the authenticated account's stored username and display_name. No email field is invented. Password hashes, role metadata and session tokens are not exported. The original bookmark CRUD and sharing behavior is unchanged.
+
+The adapter uses the original native login/session and CSRF token functions, resolves the current database account on every request, and checks both the existing administrator session role and persisted administrator role for breach assessment. Ordinary users cannot assess breaches. Client IDs/roles/trusted policy checks are rejected. Rectification accepts username/display_name only.
+
+Routes are `GET /gdpr.php`, `GET /gdpr.php?policy=csrf`, `PATCH /gdpr.php?policy=consent`, and eleven POST operations via `?policy=`: consent, lawful, information, access, rectification, erasure, restriction, portability, objection, complaint and breach. These are 14 HTTP method/operation pairs. Mutations require JSON and `X-CSRF-Token`.
+
+Consent writes persist. Other results are decisions and proposed plans; account changes, erasure, transfers, complaints, audit writes and notifications are not executed. Access returns metadata; portability returns selected stored profile values. Synthetic metadata and passing tests do not establish legal compliance.
+
+### Verify independently
+
+```sh
+php integration/test.php
+```
+
+Optional `PHP_BINARY`, `PHP_INI` and `OPA_BINARY` select runtimes. The native PHP runner copies only source into a temporary fixture, creates an independent SQLite/config/session setup and local PHP/OPA ports, and uses the original installer, native administrator user-management form, original login/logout and bookmark API. It checks all policies, native administrator permissions, two-user isolation, shared-bookmark exclusion, CSRF, strict inputs and OPA outage handling. It never copies or uses your ignored database/config/session files. Original background archive/screenshot jobs are only queued in the fixture and never executed. Fixture files/processes are cleaned afterward. No repository evaluation report files are generated.

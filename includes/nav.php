@@ -69,6 +69,9 @@ function render_nav($config, $isLoggedIn, $current_page, $page_title = null)
                 </a>
             </div>
 
+            <?php if ($isLoggedIn): ?>
+                <a href="<?= htmlspecialchars($config['base_path'].'/gdpr.php', ENT_QUOTES, 'UTF-8') ?>" class="nav-link" data-gdpr-entry="header">Privacy checks</a>
+            <?php endif; ?>
             <div class="nav-content">
                 <!-- Primary Navigation -->
                 <div class="nav-primary">

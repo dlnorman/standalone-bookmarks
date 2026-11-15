@@ -1,0 +1,1 @@
+The unmodified PHP router and eleven Rego policy modules are copied from https://github.com/CS-UCY-SEIT-lab/PrivacyLib-REGO. Host authentication, validation and consent persistence are implemented separately in gdpr.php.

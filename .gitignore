@@ -10,3 +10,7 @@ sessions/
 # System files
 .DS_Store
 Thumbs.db
+
+# SQLite runtime sidecars
+*.db-wal
+*.db-shm

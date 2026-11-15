@@ -55,6 +55,7 @@
 </IfModule>
 
 RewriteEngine On
+RewriteRule ^integration(?:/|$) - [F,L]
 
 # Block distributed crawlers that systematically enumerate tag combinations.
 # Legitimate users rarely combine more than 3 tags; bots generate 7-13 tag URLs.
